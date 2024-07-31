@@ -9,7 +9,10 @@ from mmcv.ops import (
 )
 
 from .ball_query import ball_query
-from .feature_decorator import feature_decorator
+# FIX: 临时解决循环导入错误
+# 错误: cannot import name 'feature_decorator_ext' from partially initialized module
+# 日期: 2025-10-09, xmy
+# from .feature_decorator import feature_decorator  # xmy-
 from .furthest_point_sample import (
     Points_Sampler,
     furthest_point_sample,
