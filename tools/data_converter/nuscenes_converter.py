@@ -95,12 +95,13 @@ def create_nuscenes_infos(root_path,
         # FIX: 找不到pkl文件
         # 错误: NuScenesDataset: [Errno 2] No such file or directory: './data/nuscenes/nuscenes_infos_train.pkl
         # 日期: 2025-10-09, xmy
-        # 修改：删除_radar后缀
-        info_path = osp.join(info_prefix,
+        # 修改1：删除_radar后缀
+        # 修改2：osp.join(info_prefix 改成 osp.join(root_path
+        info_path = osp.join(root_path,
                              '{}_infos_train_radar.pkl'.format(info_prefix))
         mmcv.dump(data, info_path)
         data['infos'] = val_nusc_infos
-        info_val_path = osp.join(info_prefix,
+        info_val_path = osp.join(root_path,
                                  '{}_infos_val_radar.pkl'.format(info_prefix))
         mmcv.dump(data, info_val_path)
 
