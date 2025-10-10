@@ -35,7 +35,10 @@ class BaseTransform(nn.Module):
         use_points='lidar', 
         depth_input='scalar',
         height_expand=True,
-        add_depth_features=True,
+        # Fix(mmdet3d)：RuntimeError: Given groups=1, weight of size [8, 1, 1, 1], expected input[6, 6, 256, 704] to have 1 channels, but got 6 channels instead
+        # 日期: 2025-10-10, xmy
+        # 修改：将 mmdet3d/models/vtransforms/base 中第38行: add_depth_features=True 改为 False ,37行也改为 False
+        add_depth_features=False,
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
