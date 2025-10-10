@@ -20,7 +20,11 @@ def train_model(
     model,
     dataset,
     cfg,
-    distributed=False,
+    # Fix(mmdet3d): CUDA out of memory. Tried to allocate 56.00 MiB (GPU 0; 7.62 GiB total capacity; 5.54 GiB already allocated; 3.19 MiB free; 5.68 GiB reserved in total by PyTorch)
+    # 日期: 2025-10-10, xmy
+    # 修改：单卡gpu不能满足，采用分布式训练，在mmdet3d/apis/train.py文件中把distributed参数设置为True
+    # https://blog.csdn.net/Chenqinghe528/article/details/150921963
+    distributed=True,
     validate=False,
     timestamp=None,
 ):
