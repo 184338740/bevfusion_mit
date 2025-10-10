@@ -45,7 +45,7 @@ struct CreateConvIndicePairFunctorP1<tv::GPU, Index, IndexGrid, NDim> {
     if (numActIn == 0) return 0;
     // auto timer = spconv::CudaContextTimer<>();
 
-    // tmpFix(mmdet3d): 临时修改，更改indice_cuda.cu， 否则会爆显存
+    // tmpFix(python setup.py develop运行之前修改 ): 临时修改，更改indice_cuda.cu， 否则会爆显存
     // 日期: 2025-10-10, xmy
     // 修改：在mmdet3d/ops/spconv/src/indice_cuda.cu下，将里面的4096都改成256，否则会爆显存
     if (transpose)

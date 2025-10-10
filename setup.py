@@ -15,6 +15,10 @@ def make_cuda_ext(
     if (torch.cuda.is_available() and torch.version.cuda is not None) or os.getenv("FORCE_CUDA", "0") == "1":
         define_macros += [("WITH_CUDA", None)]
         extension = CUDAExtension
+        # tmpFix(python setup.py develop运行之前修改): 算力修改， 本地是4060， 算力是89； setup.py文件中第22行左右，只保留一行 "-gencode=arch=compute_89,code=sm_89"
+        # 但CUDA版本不支持 89,  还是使用86
+        # https://blog.csdn.net/Chenqinghe528/article/details/150921963
+        # https://developer.nvidia.com/cuda-gpus
         extra_compile_args["nvcc"] = extra_args + [
             "-D__CUDA_NO_HALF_OPERATORS__",
             "-D__CUDA_NO_HALF_CONVERSIONS__",
@@ -23,6 +27,7 @@ def make_cuda_ext(
             "-gencode=arch=compute_75,code=sm_75",
             "-gencode=arch=compute_80,code=sm_80",
             "-gencode=arch=compute_86,code=sm_86",
+            # "-gencode=arch=compute_89,code=sm_89",
         ]
         sources += sources_cuda
     elif (torch.cuda.is_available() and torch.version.hip is not None) or os.getenv("FORCE_ROCM", "0") == 1:
