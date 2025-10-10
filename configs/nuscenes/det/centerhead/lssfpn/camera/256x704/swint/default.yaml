@@ -82,4 +82,10 @@ momentum_config:
   step_ratio_up: 0.4
 
 data:
-  samples_per_gpu: 4
+  # tmpFix(configs): CUDA out of memory. Tried to allocate 56.00 MiB (GPU 0; 7.62 GiB total capacity; 5.54 GiB already allocated; 3.19 MiB free; 5.68 GiB reserved in total by PyTorch)
+  # 日期: 2025-10-10, xmy
+  # https://blog.csdn.net/Chenqinghe528/article/details/150921963
+  # 修改 1）configs/default.yaml中修改epoch：max_epochs: 2(先跑2个周期试试)
+  # 修改 2）configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/default.yaml文件中，测试是否能够跑通时，建议设置samples_per_gpu: 1，这个参数代表每个GPU处理的样本数量（batch_size），后期训练根据硬件配置修改。
+  # 修改 3）测试环境时，configs/nuscenes/default.yaml中 参数修改：workers_per_gpu: 0（4改为0为单线程），samples_per_gpu: 4改为1
+  samples_per_gpu: 1
