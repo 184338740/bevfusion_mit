@@ -19,7 +19,11 @@ model:
         convert_weights: true
         init_cfg:
           type: Pretrained
+          # tmpFix(pretrained model): 每次从github下载模型速度太慢，还容易卡死，直接预先下载，改成加载本地
+          # 日期: 2025-10-10, xmy
+          # https://blog.csdn.net/Chenqinghe528/article/details/150921963
           checkpoint: https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth
+          # checkpoint: pretrained/swin_tiny_patch4_window7_224.pth
       neck:
         type: GeneralizedLSSFPN
         in_channels: [192, 384, 768]
