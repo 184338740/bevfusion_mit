@@ -48,4 +48,8 @@ lr_config:
   warmup: linear
   warmup_iters: 500
   warmup_ratio: 0.33333333
-  min_lr_ratio: 1.0e-3
+  # Fix(configs)：训练camera_only遇到TypeError: CyclicLrUpdaterHook: __init__() got an unexpected keyword argument 'min_lr_ratio
+  # 日期: 2025-10-10, xmy
+  # 原因：CyclicLrUpdaterHook 在新版本中移除了 min_lr_ratio 参数
+  # 修改：删除 configs/nuscenes/det/centerhead/lssfpn/default.yaml 中最后一行的 min_lr_ratio: 1.0e-3 
+  # min_lr_ratio: 1.0e-3
