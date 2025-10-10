@@ -30,7 +30,12 @@ train_pipeline:
     load_augmented: ${load_augmented}
   -
     type: LoadPointsFromMultiSweeps
-    sweeps_num: 0
+    # fix(config): 新代码训练精度不高
+    # 日期：2025-10-10，xmy
+    # https://blog.csdn.net/weixin_62497890/article/details/131999972
+    # 修改L 新代码和原代码相比有一处错误，要将 bevfusion/configs/nuscenes/det/default.yaml 中第33行 sweeps_num = 0 改为9
+    # 目的：将 sweeps_num 从 0 改为 9，主要是为了引入历史帧的点云数据，这通常能提升模型感知的鲁棒性和精度。原代码设置为 0 意味着只使用当前帧的点云，忽略了可能有用的时序信息。
+    sweeps_num: 9
     load_dim: ${load_dim}
     use_dim: ${use_dim}
     reduce_beams: ${reduce_beams}
