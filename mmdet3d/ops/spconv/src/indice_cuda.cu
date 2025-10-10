@@ -44,14 +44,18 @@ struct CreateConvIndicePairFunctorP1<tv::GPU, Index, IndexGrid, NDim> {
     auto numActIn = indicesIn.dim(0);
     if (numActIn == 0) return 0;
     // auto timer = spconv::CudaContextTimer<>();
+
+    // tmpFix(mmdet3d): 临时修改，更改indice_cuda.cu， 否则会爆显存
+    // 日期: 2025-10-10, xmy
+    // 修改：在mmdet3d/ops/spconv/src/indice_cuda.cu下，将里面的4096都改成256，否则会爆显存
     if (transpose)
-      prepareDeConvIndicePairsKernel<Index, IndexGrid, NDim, 4096>
+      prepareDeConvIndicePairsKernel<Index, IndexGrid, NDim, 256>
           <<<tv::launch::getBlocks(numActIn), tv::launch::CUDA_NUM_THREADS, 0,
              d.getStream()>>>(indicesIn, indicesOut, gridsOut, indicePairs,
                               indiceNum, indicePairUnique, kernelSize, stride,
                               padding, dilation, outSpatialShape);
     else
-      prepareIndicePairsKernel<Index, IndexGrid, NDim, 4096>
+      prepareIndicePairsKernel<Index, IndexGrid, NDim, 256>
           <<<tv::launch::getBlocks(numActIn), tv::launch::CUDA_NUM_THREADS, 0,
              d.getStream()>>>(indicesIn, indicesOut, gridsOut, indicePairs,
                               indiceNum, indicePairUnique, kernelSize, stride,
@@ -116,7 +120,7 @@ struct CreateSubMIndicePairFunctor<tv::GPU, Index, IndexGrid, NDim> {
         <<<tv::launch::getBlocks(numActIn), tv::launch::CUDA_NUM_THREADS, 0,
            d.getStream()>>>(indicesIn, gridsOut, outSpatialShape);
     TV_CHECK_CUDA_ERR();
-    getSubMIndicePairsKernel<Index, IndexGrid, NDim, 4096>
+    getSubMIndicePairsKernel<Index, IndexGrid, NDim, 256>
         <<<tv::launch::getBlocks(numActIn), tv::launch::CUDA_NUM_THREADS, 0,
            d.getStream()>>>(indicesIn, gridsOut, indicePairs, indiceNum,
                             kernelSize, stride, padding, dilation,
