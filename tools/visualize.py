@@ -10,7 +10,12 @@ from mmcv.parallel import MMDistributedDataParallel
 from mmcv.runner import load_checkpoint
 from torchpack import distributed as dist
 from torchpack.utils.config import configs
-from torchpack.utils.tqdm import tqdm
+# fix(visualize Bug， tqdm): ModuleNotFoundError: No module named 'torchpack.utils.tqdm'
+# 日期：2025-10-10，xmy
+# https://blog.csdn.net/Chenqinghe528/article/details/150921963
+# 修改：将 from torchpack.utils.tqdm import tqdm 改为 from tqdm import tqdm
+from tqdm import tqdm
+
 
 from mmdet3d.core import LiDARInstance3DBoxes
 from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map
