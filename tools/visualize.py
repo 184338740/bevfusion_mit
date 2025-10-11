@@ -7,7 +7,13 @@ import numpy as np
 import torch
 from mmcv import Config
 from mmcv.parallel import MMDistributedDataParallel
-from mmcv.runner import load_checkpoint
+# fix(visualized-pred Bug): TypeError: get_cam_feats() takes 2 positional arguments but 3 were given 或   takes 3 positional arguments but 4 were given
+# 日期：2025-10-11，xmy
+# https://github.com/mit-han-lab/bevfusion/issues/519
+# https://blog.csdn.net/Chenqinghe528/article/details/150921963
+# 修改： 仿照 bevfusion_mit/tools/test.py 进行，代码修改
+# 修改1： 添加import wrap_fp16_model
+from mmcv.runner import load_checkpoint, wrap_fp16_model
 from torchpack import distributed as dist
 from torchpack.utils.config import configs
 # fix(visualize Bug， tqdm): ModuleNotFoundError: No module named 'torchpack.utils.tqdm'
@@ -75,6 +81,17 @@ def main() -> None:
     # build the model and load checkpoint
     if args.mode == "pred":
         model = build_model(cfg.model)
+
+        # fix(visualized-pred Bug): TypeError: get_cam_feats() takes 2 positional arguments but 3 were given 或   takes 3 positional arguments but 4 were given
+        # 日期：2025-10-11，xmy
+        # https://github.com/mit-han-lab/bevfusion/issues/519
+        # https://blog.csdn.net/Chenqinghe528/article/details/150921963
+        # 修改： 仿照 bevfusion_mit/tools/test.py 进行，代码修改
+        # 修改2： 添加 fp16_cfg
+        fp16_cfg = cfg.get("fp16", None)
+        if fp16_cfg is not None:
+            wrap_fp16_model(model)
+
         load_checkpoint(model, args.checkpoint, map_location="cpu")
 
         model = MMDistributedDataParallel(
