@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html><head><base href="/unlocked/"/><title>【MIT-BEVFusion代码解读】第四篇：融合特征fuser和解码特征decoder</title><link href="https://csdnimg.cn/release/blogv2/dist/pc/css/detail_enter-2569705caf.min.css" rel="stylesheet" type="text/css"/><link href="https://csdnimg.cn/release/blogv2/dist/pc/themesSkin/skin-blackboard/skin-blackboard-3adcc2c475.min.css" rel="stylesheet" type="text/css"/><link href="https://csdnimg.cn/public/sandalstrap/1.4/css/sandalstrap.min.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/common/csdn-toolbar/csdn-toolbar-default.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/collection-box/2.1.2/collection-box.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/user-tooltip/2.6/user-tooltip.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/user-medal/2.0.0/user-medal.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/user-accusation/1.0.5/user-accusation.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/user-ordertip/5.0.3/user-ordertip.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/order-payment/4.0.5/order-payment.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/side-toolbar/3.6/side-toolbar.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/common/csdn-footer/csdn-footer.css" rel="stylesheet" type="text/css"/><link href="https://g.csdnimg.cn/user-login/3.0.0/user-login.css" rel="stylesheet" type="text/css"/><link href="https://csdnimg.cn/release/blogv2/dist/pc/css/blog_code-01256533b5.min.css" rel="stylesheet"/><link href="https://csdnimg.cn/release/blogv2/dist/mdeditor/css/editerView/chart-3456820cac.css" rel="stylesheet"/><link href="https://g.csdnimg.cn/lib/swiper/6.0.4/css/swiper.css" rel="stylesheet"/><link href="https://csdnimg.cn/release/blogv2/dist/mdeditor/css/editerView/kdoc_html_views-1a98987dfd.css" rel="stylesheet"/><link href="https://csdnimg.cn/release/blogv2/dist/mdeditor/css/editerView/ck_htmledit_views-10bf609291.css" rel="stylesheet"/><link href="https://csdnimg.cn/release/blogv2/dist/mdeditor/css/editerView/markdown_views-375c595788.css" rel="stylesheet"/><link href="https://csdnimg.cn/release/blogv2/dist/mdeditor/css/style-e504d6a974.css" rel="stylesheet"/><link href="https://g.csdnimg.cn/lib/cboxEditor/1.1.6/embed-editor.min.css" rel="stylesheet"/><link href="https://csdnimg.cn/release/blog_editor_html/release1.6.12/ckeditor/plugins/codesnippet/lib/highlight/styles/atom-one-dark.css" rel="stylesheet"/><style>
+        .MathJax, .MathJax_Message, .MathJax_Preview{
+            display: none
+        }
+    </style><style></style><style type="text/css">.hljs-ln{border-collapse:collapse}            .hljs-ln td{padding:0}            .hljs-ln-n{text-align: right;padding-right: 8px;}            .hljs-ln-n:before{content:attr(data-line-number)}</style><style type="text/css">pre{position: relative}pre:hover .code-full-screen{display:none !important;}.code-full-screen{display: none !important;position: absolute;right: 4px;top: 3px;width: 24px !important;height: 24px !important;margin: 4px !important;z-index: 20;}pre:hover .hljs-button{display: block}.hljs-button{display: none;position: absolute;right: 4px;top: 4px;font-size: 12px;color: #ffffff;background-color: #9999AA;width:58px;text-align: center;padding:2px 0;z-index: 20;margin: 8px;border-radius: 4px;cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.05);}.hljs-button:after{content: attr(data-title)}code .hljs-button{margin: 2px 8px;}</style><style type="text/css">
+    .ins-code-runner-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+    }
+    .runner-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.7);
+      z-index: 2000;
+    }
+
+    .runner-re-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex
+      flex-direction: column;
+      z-index: 2002;
+      width: 417px;
+      min-height: 320px;
+      background-color: #fff;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .runner-re-modal .title-box {
+      padding: 24px;
+      text-align: center;
+      color: #1A1A1A;
+    }
+    .runner-re-modal .title-box h2{
+      font-size: 20px;
+      line-height: 26px;
+      font-weight: 500;
+    }
+    .runner-re-modal .title-box p{
+      margin-top: 8px;
+      font-size: 16px;
+      line-height: 26px;
+    }
+
+    .runner-re-modal iframe {
+      padding: 0 24px;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border: none;
+    }
+
+    .runner-re-modal .bottom-box {
+      padding: 24px;
+      padding-bottom: 20px;
+    }
+
+    .runner-re-modal .pos-box {
+      position: relative;
+    }
+
+    .runner-re-modal .btn-inscode-modal-close {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      display: block;
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+    .runner-re-modal .btn-inscode-modal-close img{
+      display: block;
+      width: 16px;
+      height: 16px;
+    }
+
+    .runner-re-modal .bottom-box .link-show-more{
+      display: flex;
+      font-size: 14px;
+      color: #1A1A1A;
+      align-items: center;
+      justify-content: center;
+    }
+    .runner-re-modal .bottom-box .link-show-more img{
+      width: 16px;
+      height: 16px;
+    }
+    .runner-re-modal .bottom-box .link-show-more img.normal{
+      display: block;
+    }
+    .runner-re-modal .bottom-box .link-show-more img.hover{
+      display: none;
+    }
+    .runner-re-modal .bottom-box .link-show-more:hover{
+      color: #006FFF;
+    }
+    .runner-re-modal .bottom-box .link-show-more:hover img.normal{
+      display: none;
+    }
+    .runner-re-modal .bottom-box .link-show-more:hover img.hover{
+      display: block;
+    }
+
+    .runner-dialog {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 2001;
+      pointer-events: none;
+    }
+
+    .runner-dialog  .runner-box {
+      width: 100%;
+      height: calc(100% - 56px);
+      background: #f9f9f9;
+      box-sizing: border-box;
+      position: relative;
+      pointer-events: auto;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+    }
+
+    .runner-dialog  .runner-close-btn {
+      position: absolute;
+      top: -45px;
+      right: 15px;
+      width: 32px;
+      height: 32px;
+      background: url('https://i-operation.csdnimg.cn/images/293653aac4f24696a04c4e63df9d72c5.png') center center no-repeat;
+      background-size: 32px 32px;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    .runner-dialog .runner-close-btn:hover {
+      opacity: 0.8;
+    }
+    .vip-guide-dialog {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 400px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 2001;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .vip-guide-dialog .pos-box {
+      position: relative;
+      padding: 32px;
+      padding-top: 52px;
+    }
+    .vip-guide-dialog .runner-close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 24px;
+      height: 24px;
+      background: url('https://csdnimg.cn/release/blogv2/dist/pc/img/vip-limited-close-newWhite.png') center center no-repeat;
+      background-size: 24px 24px;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    .vip-guide-dialog .runner-close-btn:hover {
+      opacity: 0.8;
+    }
+    .vip-guide-dialog p {
+      color: #1A1A1A;
+      text-align: center;
+    }
+    .vip-guide-dialog .title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .vip-guide-dialog .content {
+      margin-top: 16px;
+      font-size: 16px;
+      font-weight: 400;
+    }
+    .vip-guide-dialog a {
+      margin-top: 40px;
+      display: block;
+      padding: 14px 0;
+      background-color: #F9E5CA;
+      color: #5E3A1A;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: background-color 0.3s ease;
+      cursor: pointer;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .vip-guide-dialog a:hover {
+      background-color: #E9D4B8;
+    }
+  </style><style type="text/css">.caption{box-sizing:content-box;}</style><style type="text/css">.MathJax_Hover_Frame {border-radius: .25em; -webkit-border-radius: .25em; -moz-border-radius: .25em; -khtml-border-radius: .25em; box-shadow: 0px 0px 15px #83A; -webkit-box-shadow: 0px 0px 15px #83A; -moz-box-shadow: 0px 0px 15px #83A; -khtml-box-shadow: 0px 0px 15px #83A; border: 1px solid #A6D ! important; display: inline-block; position: absolute}
+.MathJax_Menu_Button .MathJax_Hover_Arrow {position: absolute; cursor: pointer; display: inline-block; border: 2px solid #AAA; border-radius: 4px; -webkit-border-radius: 4px; -moz-border-radius: 4px; -khtml-border-radius: 4px; font-family: 'Courier New',Courier; font-size: 9px; color: #F0F0F0}
+.MathJax_Menu_Button .MathJax_Hover_Arrow span {display: block; background-color: #AAA; border: 1px solid; border-radius: 3px; line-height: 0; padding: 4px}
+.MathJax_Hover_Arrow:hover {color: white!important; border: 2px solid #CCC!important}
+.MathJax_Hover_Arrow:hover span {background-color: #CCC!important}
+</style><style type="text/css">#MathJax_About {position: fixed; left: 50%; width: auto; text-align: center; border: 3px outset; padding: 1em 2em; background-color: #DDDDDD; color: black; cursor: default; font-family: message-box; font-size: 120%; font-style: normal; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; z-index: 201; border-radius: 15px; -webkit-border-radius: 15px; -moz-border-radius: 15px; -khtml-border-radius: 15px; box-shadow: 0px 10px 20px #808080; -webkit-box-shadow: 0px 10px 20px #808080; -moz-box-shadow: 0px 10px 20px #808080; -khtml-box-shadow: 0px 10px 20px #808080; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+#MathJax_About.MathJax_MousePost {outline: none}
+.MathJax_Menu {position: absolute; background-color: white; color: black; width: auto; padding: 2px; border: 1px solid #CCCCCC; margin: 0; cursor: default; font: menu; text-align: left; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; z-index: 201; box-shadow: 0px 10px 20px #808080; -webkit-box-shadow: 0px 10px 20px #808080; -moz-box-shadow: 0px 10px 20px #808080; -khtml-box-shadow: 0px 10px 20px #808080; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+.MathJax_MenuItem {padding: 2px 2em; background: transparent}
+.MathJax_MenuArrow {position: absolute; right: .5em; padding-top: .25em; color: #666666; font-size: .75em}
+.MathJax_MenuActive .MathJax_MenuArrow {color: white}
+.MathJax_MenuArrow.RTL {left: .5em; right: auto}
+.MathJax_MenuCheck {position: absolute; left: .7em}
+.MathJax_MenuCheck.RTL {right: .7em; left: auto}
+.MathJax_MenuRadioCheck {position: absolute; left: 1em}
+.MathJax_MenuRadioCheck.RTL {right: 1em; left: auto}
+.MathJax_MenuLabel {padding: 2px 2em 4px 1.33em; font-style: italic}
+.MathJax_MenuRule {border-top: 1px solid #CCCCCC; margin: 4px 1px 0px}
+.MathJax_MenuDisabled {color: GrayText}
+.MathJax_MenuActive {background-color: Highlight; color: HighlightText}
+.MathJax_MenuDisabled:focus, .MathJax_MenuLabel:focus {background-color: #E8E8E8}
+.MathJax_ContextMenu:focus {outline: none}
+.MathJax_ContextMenu .MathJax_MenuItem:focus {outline: none}
+#MathJax_AboutClose {top: .2em; right: .2em}
+.MathJax_Menu .MathJax_MenuClose {top: -10px; left: -10px}
+.MathJax_MenuClose {position: absolute; cursor: pointer; display: inline-block; border: 2px solid #AAA; border-radius: 18px; -webkit-border-radius: 18px; -moz-border-radius: 18px; -khtml-border-radius: 18px; font-family: 'Courier New',Courier; font-size: 24px; color: #F0F0F0}
+.MathJax_MenuClose span {display: block; background-color: #AAA; border: 1.5px solid; border-radius: 18px; -webkit-border-radius: 18px; -moz-border-radius: 18px; -khtml-border-radius: 18px; line-height: 0; padding: 8px 0 6px}
+.MathJax_MenuClose:hover {color: white!important; border: 2px solid #CCC!important}
+.MathJax_MenuClose:hover span {background-color: #CCC!important}
+.MathJax_MenuClose:hover:focus {outline: none}
+</style><style type="text/css">.MathJax_Preview .MJXf-math {color: inherit!important}
+</style><style type="text/css">.MJX_Assistive_MathML {position: absolute!important; top: 0; left: 0; clip: rect(1px, 1px, 1px, 1px); padding: 1px 0 0 0!important; border: 0!important; height: 1px!important; width: 1px!important; overflow: hidden!important; display: block!important; -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none}
+.MJX_Assistive_MathML.MJX_Assistive_MathML_Block {width: 100%!important}
+</style><style type="text/css">#MathJax_Zoom {position: absolute; background-color: #F0F0F0; overflow: auto; display: block; z-index: 301; padding: .5em; border: 1px solid black; margin: 0; font-weight: normal; font-style: normal; text-align: left; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; -webkit-box-sizing: content-box; -moz-box-sizing: content-box; box-sizing: content-box; box-shadow: 5px 5px 15px #AAAAAA; -webkit-box-shadow: 5px 5px 15px #AAAAAA; -moz-box-shadow: 5px 5px 15px #AAAAAA; -khtml-box-shadow: 5px 5px 15px #AAAAAA; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+#MathJax_ZoomOverlay {position: absolute; left: 0; top: 0; z-index: 300; display: inline-block; width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background-color: white; opacity: 0; filter: alpha(opacity=0)}
+#MathJax_ZoomFrame {position: relative; display: inline-block; height: 0; width: 0}
+#MathJax_ZoomEventTrap {position: absolute; left: 0; top: 0; z-index: 302; display: inline-block; border: 0; padding: 0; margin: 0; background-color: white; opacity: 0; filter: alpha(opacity=0)}
+</style><style type="text/css">.MathJax_Preview {color: #888}
+#MathJax_Message {position: fixed; left: 1em; bottom: 1.5em; background-color: #E6E6E6; border: 1px solid #959595; margin: 0px; padding: 2px 8px; z-index: 102; color: black; font-size: 80%; width: auto; white-space: nowrap}
+#MathJax_MSIE_Frame {position: absolute; top: 0; left: 0; width: 0px; z-index: 101; border: 0px; margin: 0px; padding: 0px}
+.MathJax_Error {color: #CC0000; font-style: italic}
+</style><style type="text/css">.MJXp-script {font-size: .8em}
+.MJXp-right {-webkit-transform-origin: right; -moz-transform-origin: right; -ms-transform-origin: right; -o-transform-origin: right; transform-origin: right}
+.MJXp-bold {font-weight: bold}
+.MJXp-italic {font-style: italic}
+.MJXp-scr {font-family: MathJax_Script,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-frak {font-family: MathJax_Fraktur,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-sf {font-family: MathJax_SansSerif,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-cal {font-family: MathJax_Caligraphic,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-mono {font-family: MathJax_Typewriter,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-largeop {font-size: 150%}
+.MJXp-largeop.MJXp-int {vertical-align: -.2em}
+.MJXp-math {display: inline-block; line-height: 1.2; text-indent: 0; font-family: 'Times New Roman',Times,STIXGeneral,serif; white-space: nowrap; border-collapse: collapse}
+.MJXp-display {display: block; text-align: center; margin: 1em 0}
+.MJXp-math span {display: inline-block}
+.MJXp-box {display: block!important; text-align: center}
+.MJXp-box:after {content: " "}
+.MJXp-rule {display: block!important; margin-top: .1em}
+.MJXp-char {display: block!important}
+.MJXp-mo {margin: 0 .15em}
+.MJXp-mfrac {margin: 0 .125em; vertical-align: .25em}
+.MJXp-denom {display: inline-table!important; width: 100%}
+.MJXp-denom > * {display: table-row!important}
+.MJXp-surd {vertical-align: top}
+.MJXp-surd > * {display: block!important}
+.MJXp-script-box > *  {display: table!important; height: 50%}
+.MJXp-script-box > * > * {display: table-cell!important; vertical-align: top}
+.MJXp-script-box > *:last-child > * {vertical-align: bottom}
+.MJXp-script-box > * > * > * {display: block!important}
+.MJXp-mphantom {visibility: hidden}
+.MJXp-munderover {display: inline-table!important}
+.MJXp-over {display: inline-block!important; text-align: center}
+.MJXp-over > * {display: block!important}
+.MJXp-munderover > * {display: table-row!important}
+.MJXp-mtable {vertical-align: .25em; margin: 0 .125em}
+.MJXp-mtable > * {display: inline-table!important; vertical-align: middle}
+.MJXp-mtr {display: table-row!important}
+.MJXp-mtd {display: table-cell!important; text-align: center; padding: .5em 0 0 .5em}
+.MJXp-mtr > .MJXp-mtd:first-child {padding-left: 0}
+.MJXp-mtr:first-child > .MJXp-mtd {padding-top: 0}
+.MJXp-mlabeledtr {display: table-row!important}
+.MJXp-mlabeledtr > .MJXp-mtd:first-child {padding-left: 0}
+.MJXp-mlabeledtr:first-child > .MJXp-mtd {padding-top: 0}
+.MJXp-merror {background-color: #FFFF88; color: #CC0000; border: 1px solid #CC0000; padding: 1px 3px; font-style: normal; font-size: 90%}
+.MJXp-scale0 {-webkit-transform: scaleX(.0); -moz-transform: scaleX(.0); -ms-transform: scaleX(.0); -o-transform: scaleX(.0); transform: scaleX(.0)}
+.MJXp-scale1 {-webkit-transform: scaleX(.1); -moz-transform: scaleX(.1); -ms-transform: scaleX(.1); -o-transform: scaleX(.1); transform: scaleX(.1)}
+.MJXp-scale2 {-webkit-transform: scaleX(.2); -moz-transform: scaleX(.2); -ms-transform: scaleX(.2); -o-transform: scaleX(.2); transform: scaleX(.2)}
+.MJXp-scale3 {-webkit-transform: scaleX(.3); -moz-transform: scaleX(.3); -ms-transform: scaleX(.3); -o-transform: scaleX(.3); transform: scaleX(.3)}
+.MJXp-scale4 {-webkit-transform: scaleX(.4); -moz-transform: scaleX(.4); -ms-transform: scaleX(.4); -o-transform: scaleX(.4); transform: scaleX(.4)}
+.MJXp-scale5 {-webkit-transform: scaleX(.5); -moz-transform: scaleX(.5); -ms-transform: scaleX(.5); -o-transform: scaleX(.5); transform: scaleX(.5)}
+.MJXp-scale6 {-webkit-transform: scaleX(.6); -moz-transform: scaleX(.6); -ms-transform: scaleX(.6); -o-transform: scaleX(.6); transform: scaleX(.6)}
+.MJXp-scale7 {-webkit-transform: scaleX(.7); -moz-transform: scaleX(.7); -ms-transform: scaleX(.7); -o-transform: scaleX(.7); transform: scaleX(.7)}
+.MJXp-scale8 {-webkit-transform: scaleX(.8); -moz-transform: scaleX(.8); -ms-transform: scaleX(.8); -o-transform: scaleX(.8); transform: scaleX(.8)}
+.MJXp-scale9 {-webkit-transform: scaleX(.9); -moz-transform: scaleX(.9); -ms-transform: scaleX(.9); -o-transform: scaleX(.9); transform: scaleX(.9)}
+.MathJax_PHTML .noError {vertical-align: ; font-size: 90%; text-align: left; color: black; padding: 1px 3px; border: 1px solid}
+</style><style>
+    .print_watermark, .print_watermark_info {
+      display: none
+    }
+    @media print {
+      body {
+        -webkit-print-color-adjust: exact; /* Chrome, Safari */
+        color-adjust: exact; /* Firefox */
+        background-image: none !important;
+      }
+      * {
+        -webkit-print-color-adjust: exact;
+      }
+      .blog-content-box {
+        padding: 0;
+      }
+      .blog-content-box .article-header .article-info-box > div:not(.article-bar-top){
+        display: none !important;
+      }
+      .blog-content-box .article-header .article-info-box  .article-bar-top img{
+          display:none
+      }
+      .blog-content-box .article-header .article-info-box > .article-bar-top .bar-content > *:not(.follow-nickName):not(.time){
+          display: none !important;
+      }
+      .print_watermark {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        z-index: 999;
+        background-image: url('https://img-home.csdnimg.cn/images/20211209110851.png');
+        background-size: 180px auto;
+        background-repeat: repeat;
+      }
+      .print_watermark_info {
+        display: block;
+        position: fixed;
+        bottom: 16px;
+        right: 0;
+        z-index: 1000;
+        color: #e8e8ed;
+        font-size: 12px;
+        ocapity: .5
+      }
+      @page {
+        margin: 0 10mm 10mm;
+        size: landscape;
+      }
+      body, article {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      #csdn-toolbar,.main_father > *:not(#mainBox), .csdn-side-toolbar, .main_father aside {
+        display: none !important;
+      }
+      .main_father > #mainBox {
+        width: unset
+      }
+      .main_father > #mainBox > main > *:not(.blog-content-box){
+        display: none !important;
+      }
+    }
+  </style><style type="text/css"></style><style>
+        * {
+            box-sizing: border-box;
+        }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            padding: 0;
+            margin: 0;
+            color: #333;
+            background-color: #f9f9f9; /* 1. 页面背景设为浅灰色 */
+        }
+        .csdn-article-container {
+            background-color: #ffffff; /* 2. 正文内容区设为白色 */
+            padding: 40px;
+            margin: 20px auto;
+            max-width: 1200px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        /* 文章顶部栏样式修复 - 横向排列 */
+        .article-bar-top-box {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 8px 0;
+            margin-bottom: 8px;
+        }
+        .article-bar-top-box > * {
+            margin-right: 15px;
+        }
+        
+        /* 文章标题和信息区域样式优化 */
+        .article-title-box {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 文章信息区域横向布局 */
+        .article-info-box {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9; /* 3. 文章信息区设为浅灰色 */
+            padding: 10px 15px;
+            border-radius: 4px;
+        }
+        
+        .article-info-box .article-bar-top {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .article-info-box .bar-content {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        
+        .article-header-box {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+        
+        /* 阅读、点赞、收藏数据横向布局 */
+        .read-count-box {
+            display: flex;
+            align-items: center;
+        }
+        .read-count-box > * {
+            margin-right: 15px;
+        }
+        .read-count-box .is-like {
+            display: flex;
+            align-items: center;
+        }
+        
+        /* 作者信息及数据统计横向布局 */
+        .article-info-box .author-info, 
+        .article-info-box .blog-info-box {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        
+        .blog-content-box .article-header .article-info-box .info-box {
+            display: flex;
+            align-items: center;
+        }
+        
+        .blog-content-box .article-header .article-info-box .info-box > div {
+            margin-right: 15px;
+        }
+        
+        /* 标签样式修复 - 添加白色边框 */
+        .tags-box.artic-tag-box {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .tags-box.artic-tag-box .tag-link {
+            display: inline-block;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            padding: 0 10px;
+            height: 24px;
+            line-height: 24px;
+            font-size: 12px;
+            color: #4c4c4c;
+            border: 1px solid #fff;
+            border-radius: 12px;
+            background-color: #f5f5f5;
+        }
+        /* 防止布局偏移(CLS)的优化 */
+        .layout-fixed {
+            overflow: hidden;
+            display: block;
+        }
+        .layout-fixed img {
+            display: block;
+            margin: 0 auto;
+        }
+        pre {
+            background-color: #2d2d2d; /* 深灰色背景 */
+            color: #f8f8f2; /* 浅色文字 */
+            border-radius: 5px;
+            padding: 16px;
+            overflow: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            position: relative;
+            margin: 15px 0;
+        }
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #e7e7e7;
+            padding: 3px 5px;
+            border-radius: 3px;
+            color: #333;
+        }
+        pre code {
+            background-color: transparent !important;
+            padding: 0;
+            border-radius: 0;
+            color: #f8f8f2 !important; /* 强制使用浅色文字 */
+            font-family: inherit;
+        }
+        /* 代码块统一样式 */
+        pre.code-block {
+            background-color: #2d2d2d !important; /* 强制深灰色背景 */
+            color: #f8f8f2 !important; /* 强制浅色文字 */
+            border: 1px solid #444 !important;
+            counter-reset: line; /* 重置行计数器，确保没有行号 */
+        }
+        code.code-content {
+            background-color: transparent !important;
+            color: #f8f8f2 !important;
+            font-size: 14px !important;
+            display: block !important; /* 确保代码是块级显示 */
+            white-space: pre !important; /* 保持原始格式 */
+            word-break: normal !important; /* 不强制断词 */
+            word-wrap: normal !important; /* 不强制换行 */
+            tab-size: 4 !important; /* 设置tab宽度 */
+        }
+        code.inline-code {
+            background-color: #e7e7e7 !important;
+            color: #333 !important;
+            padding: 2px 5px !important;
+            border-radius: 3px !important;
+            font-size: 0.9em !important;
+        }
+        /* 代码高亮样式重置 */
+        .hljs, .prism {
+            background-color: #2d2d2d !important;
+            color: #f8f8f2 !important;
+        }
+        /* 针对CSDN特殊的代码块样式重置 */
+        .prettyprint, .prettyprinted {
+            background-color: #2d2d2d !important;
+            color: #f8f8f2 !important;
+        }
+        /* 所有代码标签内的span元素样式 */
+        pre code span {
+            color: inherit !important;
+        }
+        
+        /* 自定义代码高亮配色 - 基于流行的暗色主题 */
+        .code-content .keyword, 
+        .code-content span[class*="keyword"],
+        .code-content .hljs-keyword {
+            color: #f92672 !important; /* 粉红色 - 关键字 */
+        }
+        .code-content .string, 
+        .code-content span[class*="string"],
+        .code-content .hljs-string {
+            color: #a6e22e !important; /* 亮绿色 - 字符串 */
+        }
+        .code-content .comment, 
+        .code-content span[class*="comment"],
+        .code-content .hljs-comment {
+            color: #75715e !important; /* 灰褐色 - 注释 */
+        }
+        .code-content .number,
+        .code-content span[class*="number"],
+        .code-content .hljs-number {
+            color: #ae81ff !important; /* 紫色 - 数字 */
+        }
+        .code-content .function,
+        .code-content span[class*="function"],
+        .code-content .hljs-function {
+            color: #66d9ef !important; /* 淡蓝色 - 函数 */
+        }
+        .code-content .operator,
+        .code-content span[class*="operator"],
+        .code-content .hljs-operator {
+            color: #f8f8f2 !important; /* 白色 - 运算符 */
+        }
+        .code-content .variable, 
+        .code-content span[class*="variable"],
+        .code-content .hljs-variable {
+            color: #fd971f !important; /* 橙色 - 变量 */
+        }
+        /* 给暗色代码块添加顶部标识 */
+        pre.code-block::before {
+            content: "代码";
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #444;
+            color: white;
+            padding: 2px 8px;
+            font-size: 12px;
+            border-bottom-left-radius: 5px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 16px;
+        }
+        td, th {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+        .hljs {
+            display: block;
+            overflow-x: auto;
+            padding: 0.5em;
+            background: #f0f0f0;
+        }
+        .markdown_views {
+            max-width: 100%;
+            word-break: break-word;
+        }
+        a {
+            color: #0969da;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 600;
+            line-height: 1.25;
+            margin-top: 24px;
+            margin-bottom: 16px;
+        }
+        h1 {
+            font-size: 2em;
+            border-bottom: 1px solid #eaecef;
+            padding-bottom: 0.3em;
+        }
+        h2 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #eaecef;
+            padding-bottom: 0.3em;
+        }
+        h3 {
+            font-size: 1.25em;
+        }
+        blockquote {
+            margin: 0;
+            padding: 0 1em;
+            color: #6a737d;
+            border-left: 0.25em solid #dfe2e5;
+        }
+        hr {
+            height: 0.25em;
+            padding: 0;
+            margin: 24px 0;
+            background-color: #e1e4e8;
+            border: 0;
+        }
+        /* 删除禁止复制文字的CSS属性，让页面可以复制 */
+        * {
+            -webkit-touch-callout: auto !important;
+            -webkit-user-select: auto !important;
+            -khtml-user-select: auto !important;
+            -moz-user-select: auto !important;
+            -ms-user-select: auto !important;
+            user-select: auto !important;
+        }
+        #content_views {
+            -webkit-touch-callout: auto !important;
+            -webkit-user-select: auto !important;
+            -khtml-user-select: auto !important;
+            -moz-user-select: auto !important;
+            -ms-user-select: auto !important;
+            user-select: auto !important;
+        }
+        </style></head><body><div class="csdn-article-container"><div class="filtered-blog-content"><div class="article-header-box">
+<div class="article-header">
+<div class="article-title-box">
+<h1 class="title-article" id="articleContentId">【MIT-BEVFusion代码解读】第四篇：融合特征fuser和解码特征decoder</h1>
+</div>
+<div class="article-info-box">
+<div class="article-bar-top-box">
+<div class="article-bar-top">
+<img alt="" class="article-type-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAAgCAMAAABNTyq8AAADAFBMVEUAAAD/////gID/VVW/QED/QEDMZjP/ZjPVVVX/VVXbSUnfQEDmTTPqQEDrTjvtSTfdRDPfQDDhSzzjRznkQzbmQDPnPTHfQDXqQDXiRTvjQjnlPjXlRjXmRDPnQDjgPjbjQDLkQzblQTTmQDPmPjLnQzfiQDTjQzLkQTblPjTiQDbmQDbiPzXjQjTnQjTjQTPlQjXlQTTmQDPiPzLmPzLmQjXjQTXnQTXjQDTkPzPkQjLlQDXiPjPjQDLmQDXjPzTjQTTnQTTkQTPkQDLiPjTlQTTlQTTmQDPjPzLjPjLmQTXkQDTkPjLkQTLlQDLiPzTjPjPmQTPjQDLkQTTkQDPiQDLkQDLlPzLlPjTlQTTlQDTjQDPjPzLkPzLkQDTkQzbkRTjkRjrkST3lSz/nTUHlT0PlUETnUEflUknoVEnmV0zmW1DoXVLoX1PmYFXpYFfpZFvpZl7paV7pal/qb2Tqb2bscmnqc2vqdGzsdm7qd2/tenDre3HtfHTtgHjrgHntgnvtg3zthX7thn/uh4DwioLuj4fwlIzuk43wlY/xmJHxmZHxm5TxnpfxnZfxnpnxn5rxopvzpJ3xpZ7xpaDzp6Lyq6bzrKfzraj0r6j0rqn0r6v0sq30s671tK/0tbD2t7L0uLP0urX2u7f2vLf0vLj2vrn2vrr2vrv2wbz2w772xMD2xcL2x8T3ycX3y8f4zcr4zcr4zsz4z8z40Mz40c7409D61NH41NL41dL41tP61tT41tT62df62df629j63Nr629r63dr73tz63tz64N364N374d/64N/64N/74eD74+L64+H75OL75OL75uP75uX75+b75+b76ef76eb76ej96un86un86+r87ez97u397u397+797+798O/98fH98vH+8/L98/L+9fT+9fT99PT+9fX99fX++Pf++Pf++fj++fj++Pj/+vr++vr++vr++/v+/Pv//Pz+/Pz//f3//f3+/f3//v7//v7////////////8/Pz9/f3+/v7///+0pB6MAAAA+3RSTlMAAQIDBAQFBQYGBwgKDA0ODxAREhMUFRgYGhsdHR4gISQmJygpKiwuLzE0NDU2Njc6Ozw9PT4/P0BBQkRGSEhJSkpLTE5OT1BRUlJUVlZXWVpaXF5fYGBhYmJjZGVmZ2doaWlqamtsbG1tb3BwcXJyc3V1dnh4eXp7e3x9fn+AgYGCgoOEhYiKi4uNjo+QkZGSlJSWl5eampucnZ2foKCio6WmpqeoqKmprK2usLK0tbe4uLq6u76+v8DBwsPExcbHycrKy8zNzc7Pz9DS0tPT1dfY2Nna29zd3+Di4uPk5+jo6uvs7e3u8PHx8vP09fb3+Pn6+vv8/P39/rqVuoYAAAEkSURBVHjaY2BgUHS1UeZlwA9iYSDGSUMYh5rIWHTgoS2B0yB04Gcgy0xQERT4ixGhKDbWnhhFsfzEKPIlRlEsDkX7IFTPRiRFR38jAIj/afdlILkwdtpxZEVzQORvmDmHjsWeXgvioytCMmjVJyDxphObIoghQGrBDygLi6KTYABUVBz7+8WLF18wrDsxM/Z3Jhj8hjkOU9H1jtjfXWCAR9HrotitW7deuQskoIra3mMoAoqmHoxduiP2KZT78GklNkXf60CK1jyDB9jv2BQURWWvYq/fiAUpin09H6EoNnYOkqK9dbFHgKK/24HsJUD8AxSq+0Dh24IvgolKBaQrCiNGkQ4xiojICGH4s5SPmTI035tjkxNCz+eWeOSQABOBcocBAK9ArOcemH07AAAAAElFTkSuQmCC" style="max-width: min(36px, 100%); height: auto; width: auto; display: block;" width="36"/>
+<div class="bar-content">
+<a class="follow-nickName" href="https://blog.csdn.net/QLeelq" rel="noopener" target="_blank" title="非晚非晚">非晚非晚</a>
+<img alt="" class="article-time-img article-heard-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAADAFBMVEUAAAD///////+ZzMyiormbm7Ghoaqbm62bm6qZoK+amq6bm66cnKydnaybm6uZnKqZnKuanKuamqqZnKuZnKqZnKuamqubm6uamqqam6uZm6qam6uamquZmquZmqqZmquam6qam6uZmqqZm6uam6qam6uZmquZm6qam6qam6qZmqqZmquZmquam6qZmqovLy8wMDAxMTEyMjIzMzM0NDQ1NTU2NjY3Nzc4ODg5OTk6Ojo7Ozs8PDw9PT0+Pj4/Pz9AQEBBQUFCQkJDQ0NERERFRUVGRkZHR0dISEhJSUlKSkpLS0tMTExNTU1OTk5PT09QUFBRUVFSUlJTU1NUVFRVVVVWVlZXV1dYWFhZWVlaWlpbW1tcXFxdXV1eXl5fX19gYGBhYWFiYmJjY2NkZGRlZWVmZmZnZ2doaGhpaWlqampra2tsbGxtbW1ubm5vb29wcHBxcXFycnJzc3N0dHR1dXV2dnZ3d3d4eHh5eXl6enp7e3t8fHx9fX1+fn5/f3+AgICBgYGCgoKDg4OEhISFhYWGhoaHh4eIiIiJiYmKioqLi4uMjIyNjY2Ojo6Pj4+QkJCRkZGSkpKTk5OUlJSVlZWWlpaXl5eYmJiZmZmampqbm5ucnJydnZ2enp6fn5+goKChoaGioqKjo6OkpKSlpaWmpqanp6eoqKipqamqqqqrq6usrKytra2urq6vr6+wsLCxsbGysrKzs7O0tLS1tbW2tra3t7e4uLi5ubm6urq7u7u8vLy9vb2+vr6/v7/AwMDBwcHCwsLDw8PExMTFxcXGxsbHx8fIyMjJycnKysrLy8vMzMzNzc3Ozs7Pz8/Q0NDR0dHS0tLT09PU1NTV1dXW1tbX19fY2NjZ2dna2trb29vc3Nzd3d3e3t7f39/g4ODh4eHi4uLj4+Pk5OTl5eXm5ubn5+fo6Ojp6enq6urr6+vs7Ozt7e3u7u7v7+/w8PDx8fHy8vLz8/P09PT19fX29vb39/f4+Pj5+fn6+vr7+/v8/Pz9/f3+/v7///8kFZuXAAAALnRSTlMAAQIFCxcbHCEjJikxNEBLVVhgZ2x2d3qTpKWmp7m+yMnU3N3e4Obn6O3x+Pv81jEx4gAAAEFJREFUeNpjYMAE0nowoMaOygcCkIAeVgFONAFmIVQBfojpkrjNEIOoUEJVocqgjiKgy6CFyx1q6ALsSHxNBiIAAMdDGkvMADqIAAAAAElFTkSuQmCC" style="max-width: min(16px, 100%); height: auto; width: auto; display: block;" width="16"/>
+<span class="time">已于 2024-08-29 13:43:06 修改</span>
+<div class="read-count-box">
+<img alt="" class="article-read-img article-heard-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAADAFBMVEUAAAD///+qqqqfn7+qqqqiormZprObm7Gfn6qZo62bm62cnKqfn6yenqqamqycnK2Znaqanqqbm6uZna2bm6qcnKuanq2ZnKqamqucnKyanaqZnKuamqyanKuZm6qamquZm6uanKuZm6uZm6uanKqamqqZm6uamqqZmqqZmqqam6qZmquam6qZm6uam6qam6uam6qam6uZmqqam6qZmquZmquZm6qam6qZmquZmqqam6qZmqqZmqqZmqqam6uam6qZmquZmquam6qZmqqZmquam6qZmqpHR0dISEhJSUlKSkpLS0tMTExNTU1OTk5PT09QUFBRUVFSUlJTU1NUVFRVVVVWVlZXV1dYWFhZWVlaWlpbW1tcXFxdXV1eXl5fX19gYGBhYWFiYmJjY2NkZGRlZWVmZmZnZ2doaGhpaWlqampra2tsbGxtbW1ubm5vb29wcHBxcXFycnJzc3N0dHR1dXV2dnZ3d3d4eHh5eXl6enp7e3t8fHx9fX1+fn5/f3+AgICBgYGCgoKDg4OEhISFhYWGhoaHh4eIiIiJiYmKioqLi4uMjIyNjY2Ojo6Pj4+QkJCRkZGSkpKTk5OUlJSVlZWWlpaXl5eYmJiZmZmampqbm5ucnJydnZ2enp6fn5+goKChoaGioqKjo6OkpKSlpaWmpqanp6eoqKipqamqqqqrq6usrKytra2urq6vr6+wsLCxsbGysrKzs7O0tLS1tbW2tra3t7e4uLi5ubm6urq7u7u8vLy9vb2+vr6/v7/AwMDBwcHCwsLDw8PExMTFxcXGxsbHx8fIyMjJycnKysrLy8vMzMzNzc3Ozs7Pz8/Q0NDR0dHS0tLT09PU1NTV1dXW1tbX19fY2NjZ2dna2trb29vc3Nzd3d3e3t7f39/g4ODh4eHi4uLj4+Pk5OTl5eXm5ubn5+fo6Ojp6enq6urr6+vs7Ozt7e3u7u7v7+/w8PDx8fHy8vLz8/P09PT19fX29vb39/f4+Pj5+fn6+vr7+/v8/Pz9/f3+/v7////WqwHDAAAARnRSTlMAAgMICQsUFxgZHCQlKis7PD9AQUJDREtMTU5VVlh7fIKDhYyNkJGsr7S1ubq8vcLP0dXW1+bn6Onr7e7w8fL09fj5+vv8FkqdHwAAAGdJREFUeNpjYCAKKLuBgCU7lMvtBgNGYL6kGwK4AvnsYJY+J0TcioEBwgfKMIJZQhABTpBeMMsMQknCBTQYtMA0IwODEpgBlHBCssVNAqTUFsGXgbhMHsq1Z4W7XVDb1liNiTh/MgAABQcg+s1nz0UAAAAASUVORK5CYII=" style="max-width: min(16px, 100%); height: auto; width: auto; display: block;" width="16"/>
+<span class="read-count">阅读量2.2k</span>
+<a class="un-collection" data-report-click='{"mod":"popu_823","spm":"1001.2101.3001.4232","ab":"new"}' id="blog_detail_zk_collection">
+<img alt="" class="article-collect-img article-heard-img un-collect-status isdefault" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAADAFBMVEUAAAD///////+qqqq/v7+ZzMyqqqq2trafn7+Zs7OqqqqdnbGkpLaZqqqfn6+cnKqhoa6ZprOenqqioq6fn6qZo62bm62enrCZoqqfn6+enq2ZoK+fn6yamq6dnaqZn6ybm6ydna6amqqcnKqbm62dnaqcnK2Zna2bm6qbm6qcnKyanaqbm6uamqqbm6qanKqZnKyamqqbm6uanKybm6qZnKuamqybm6qanKubm6yZnKqZm6yanKqZnKyamqqanKuZnKubm6uZm6qbm6qZm6uZm6uamqqZm6uam6uamquanKuZm6uZm6uZm6qam6uZm6uam6qZm6qam6qamquZm6qZm6uam6uamqqZm6qZmqqam6qamqqZm6uZmqqZm6uam6qZmqqam6uZmqqam6uZmqqam6qam6qZmquZmqqZm6uZmqqZmqqZm6qam6uam6qZm6qam6qZmqqZm6uZmqqam6uam6uam6qZmqqam6qZmqqZmquam6qZmqqam6uZmqp/f3+AgICBgYGCgoKDg4OEhISFhYWGhoaHh4eIiIiJiYmKioqLi4uMjIyNjY2Ojo6Pj4+QkJCRkZGSkpKTk5OUlJSVlZWWlpaXl5eYmJiZmZmampqbm5ucnJydnZ2enp6fn5+goKChoaGioqKjo6OkpKSlpaWmpqanp6eoqKipqamqqqqrq6usrKytra2urq6vr6+wsLCxsbGysrKzs7O0tLS1tbW2tra3t7e4uLi5ubm6urq7u7u8vLy9vb2+vr6/v7/AwMDBwcHCwsLDw8PExMTFxcXGxsbHx8fIyMjJycnKysrLy8vMzMzNzc3Ozs7Pz8/Q0NDR0dHS0tLT09PU1NTV1dXW1tbX19fY2NjZ2dna2trb29vc3Nzd3d3e3t7f39/g4ODh4eHi4uLj4+Pk5OTl5eXm5ubn5+fo6Ojp6enq6urr6+vs7Ozt7e3u7u7v7+/w8PDx8fHy8vLz8/P09PT19fX29vb39/f4+Pj5+fn6+vr7+/v8/Pz9/f3+/v7///+69HqHAAAAfnRSTlMAAQIDBAUGBwgKDA0ODxASExQVFhgZHB0eICIjJSYnKC4vMDY4OTtBQkVNTk9RVF1fYGFiY2RlZmprbG5vcXJ0dnp7hIWPkJGSlZqeoKWpqquytba3vL/AwcPJysvNzs/Q0dLU1dbZ2tzd3+Hi4+Xn6uvs7u/y9Pb3+vv8/f4nQpgoAAAAdElEQVR42mNgwA5M6sxRBerq6lD4xkABSyQ+Vx0I8EA4nLVgHlMUmOJlYLAHM+qiGfJBlB1QSQpEJJJBr64uHawptg4GkqBm1oB5AcZlSI6oq1NPqtMJrdNHCHBCdMEFCiHCpVCBQCCpBFfAIAil6oqw+RsANPg1KZJH1KQAAAAASUVORK5CYII=" style="display:inline-block; max-width: min(16px, 100%); height: auto; width: auto; display: block;" width="16"/>
+
+<span class="name">收藏</span>
+<span class="get-collection" style="color: rgb(153, 154, 170);">
+                                13
+                            </span>
+</a>
+<div class="read-count-box is-like" data-type="top">
+
+<img alt="" class="article-read-img article-heard-img" id="is-like-img-new" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAADAFBMVEUAAAD///+OjqqSkqSdnaebm62VnqeXl6ecnKqamqiamqybm6yamqqamqiYmKqZmamYmKuYnKmZmamamqmamquamqmYmqmZmauZm6mZmamZm6qZmauYmquZm6mZmamZmqmYmqmamqqYmqqZmqqZm6qYmqqZmqqamqqZmqqZmqqZm6qZmqqZmqqZmqqZmqqZmqqZmqqZmqqZmqqZmqqZmqqZmqqZmqqZmqqZmqqZmqo6Ojo7Ozs8PDw9PT0+Pj4/Pz9AQEBBQUFCQkJDQ0NERERFRUVGRkZHR0dISEhJSUlKSkpLS0tMTExNTU1OTk5PT09QUFBRUVFSUlJTU1NUVFRVVVVWVlZXV1dYWFhZWVlaWlpbW1tcXFxdXV1eXl5fX19gYGBhYWFiYmJjY2NkZGRlZWVmZmZnZ2doaGhpaWlqampra2tsbGxtbW1ubm5vb29wcHBxcXFycnJzc3N0dHR1dXV2dnZ3d3d4eHh5eXl6enp7e3t8fHx9fX1+fn5/f3+AgICBgYGCgoKDg4OEhISFhYWGhoaHh4eIiIiJiYmKioqLi4uMjIyNjY2Ojo6Pj4+QkJCRkZGSkpKTk5OUlJSVlZWWlpaXl5eYmJiZmZmampqbm5ucnJydnZ2enp6fn5+goKChoaGioqKjo6OkpKSlpaWmpqanp6eoqKipqamqqqqrq6usrKytra2urq6vr6+wsLCxsbGysrKzs7O0tLS1tbW2tra3t7e4uLi5ubm6urq7u7u8vLy9vb2+vr6/v7/AwMDBwcHCwsLDw8PExMTFxcXGxsbHx8fIyMjJycnKysrLy8vMzMzNzc3Ozs7Pz8/Q0NDR0dHS0tLT09PU1NTV1dXW1tbX19fY2NjZ2dna2trb29vc3Nzd3d3e3t7f39/g4ODh4eHi4uLj4+Pk5OTl5eXm5ubn5+fo6Ojp6enq6urr6+vs7Ozt7e3u7u7v7+/w8PDx8fHy8vLz8/P09PT19fX29vb39/f4+Pj5+fn6+vr7+/v8/Pz9/f3+/v7////aRM+WAAAAOXRSTlMAAQkOGhwdICQmKy4wNTlBQ01QVlhiaHN6fYSFi4yPmKSruLm8vb6/w8XL0NXc4O7w8vT4+vv8/f5KXnQcAAAAT0lEQVR42mNgwA7kLM1R+IyWlpbiyAJqQAEJZAEg35IZic8LEjAAAn0BII+Pj0/HEg4gyo1JENBCF5BEF+BGF2DAJqCqqqqkCgEqnFj8DQCEUR48+OTjFwAAAABJRU5ErkJggg==" style="display:block; max-width: min(16px, 100%); height: auto; width: auto; display: block;" width="16"/>
+<span class="read-count" id="blog-digg-num">点赞数
+                              6
+                          </span>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<div class="blog-tags-box">
+<div class="tags-box artic-tag-box">
+<span class="label">分类专栏：</span>
+<a class="tag-link" href="https://blog.csdn.net/qleelq/category_11443584.html" rel="noopener" target="_blank">目标检测实战</a>
+<span class="label">文章标签：</span>
+<a class="tag-link" data-report-click='{"mod":"popu_626","spm":"1001.2101.3001.4223","strategy":"BEVFusion","ab":"new","extra":"{\"searchword\":\"BEVFusion\"}"}' data-report-query="spm=1001.2101.3001.4223" href="https://so.csdn.net/so/search/s.do?q=BEVFusion&amp;t=all&amp;o=vip&amp;s=&amp;l=&amp;f=&amp;viparticle=&amp;from_tracking_code=tag_word&amp;from_code=app_blog_art" rel="nofollow" target="_blank">BEVFusion</a>
+<a class="tag-link" data-report-click='{"mod":"popu_626","spm":"1001.2101.3001.4223","strategy":"目标检测","ab":"new","extra":"{\"searchword\":\"目标检测\"}"}' data-report-query="spm=1001.2101.3001.4223" href="https://so.csdn.net/so/search/s.do?q=%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B&amp;t=all&amp;o=vip&amp;s=&amp;l=&amp;f=&amp;viparticle=&amp;from_tracking_code=tag_word&amp;from_code=app_blog_art" rel="nofollow" target="_blank">目标检测</a>
+<a class="tag-link" data-report-click='{"mod":"popu_626","spm":"1001.2101.3001.4223","strategy":"3D目标检测","ab":"new","extra":"{\"searchword\":\"3D目标检测\"}"}' data-report-query="spm=1001.2101.3001.4223" href="https://so.csdn.net/so/search/s.do?q=3D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B&amp;t=all&amp;o=vip&amp;s=&amp;l=&amp;f=&amp;viparticle=&amp;from_tracking_code=tag_word&amp;from_code=app_blog_art" rel="nofollow" target="_blank">3D目标检测</a>
+<a class="tag-link" data-report-click='{"mod":"popu_626","spm":"1001.2101.3001.4223","strategy":"mmdet","ab":"new","extra":"{\"searchword\":\"mmdet\"}"}' data-report-query="spm=1001.2101.3001.4223" href="https://so.csdn.net/so/search/s.do?q=mmdet&amp;t=all&amp;o=vip&amp;s=&amp;l=&amp;f=&amp;viparticle=&amp;from_tracking_code=tag_word&amp;from_code=app_blog_art" rel="nofollow" target="_blank">mmdet</a>
+<a class="tag-link" data-report-click='{"mod":"popu_626","spm":"1001.2101.3001.4223","strategy":"BEV","ab":"new","extra":"{\"searchword\":\"BEV\"}"}' data-report-query="spm=1001.2101.3001.4223" href="https://so.csdn.net/so/search/s.do?q=BEV&amp;t=all&amp;o=vip&amp;s=&amp;l=&amp;f=&amp;viparticle=&amp;from_tracking_code=tag_word&amp;from_code=app_blog_art" rel="nofollow" target="_blank">BEV</a>
+</div>
+</div>
+<div class="up-time"><span>于 2024-08-29 13:33:54 首次发布</span></div>
+
+</div>
+</div>
+</div><article class="baidu_pl">
+<div class="article_content clearfix" id="article_content" style="height:auto; overflow:visible;">
+
+
+<div class="markdown_views prism-atom-one-dark" id="content_views">
+<svg style="display: none;" xmlns="http://www.w3.org/2000/svg">
+<path d="M5,0 0,2.5 5,5z" id="raphael-marker-block" stroke-linecap="round" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+</svg>
+<p></p>
+<div class="toc">
+<h4><a name="t0"></a>文章目录</h4>
+<ul><li><a href="#1_fuser_12" target="_self">1. fuser模块</a></li><li><a href="#2_decoder_46" target="_self">2. decoder模块</a></li><li><ul><li><a href="#21_backbone_49" target="_self">2.1 backbone模块</a></li><li><a href="#22_neck_111" target="_self">2.2 neck模块</a></li></ul>
+</li></ul>
+</div>
+<p></p>
+<hr/>
+<p><code class="inline-code">BEVFusion</code>相关的其他文章链接：</p>
+<blockquote>
+<ol><li><a href="https://blog.csdn.net/QLeelq/article/details/128546707?spm=1001.2014.3001.5501">【论文阅读】ICRA 2023|BEVFusion：Multi-Task Multi-Sensor Fusion with Unified Bird‘s-Eye View Representation</a></li><li><a href="https://blog.csdn.net/QLeelq/article/details/127073831?spm=1001.2014.3001.5501">MIT-BEVFusion训练环境安装以及问题解决记录</a></li><li><a href="https://blog.csdn.net/QLeelq/article/details/126550794?spm=1001.2014.3001.5501">【MIT-BEVFusion代码解读】第一篇：整体结构与config参数说明</a></li><li><a href="https://blog.csdn.net/QLeelq/article/details/118058211?spm=1001.2014.3001.5501">【MIT-BEVFusion代码解读】第二篇：LiDAR的encoder部分</a></li><li><a href="https://blog.csdn.net/QLeelq/article/details/122580875?csdn_share_tail=%7B%22type%22%3A%22blog%22%2C%22rType%22%3A%22article%22%2C%22rId%22%3A%22122580875%22%2C%22source%22%3A%22QLeelq%22%7D">【MIT-BEVFusion代码解读】第三篇：camera的encoder部分</a></li><li><a href="https://blog.csdn.net/QLeelq/article/details/121668780?csdn_share_tail=%7B%22type%22%3A%22blog%22%2C%22rType%22%3A%22article%22%2C%22rId%22%3A%22121668780%22%2C%22source%22%3A%22QLeelq%22%7D">【MIT-BEVFusion代码解读】第四篇：融合特征fuser和解码特征decoder</a></li></ol>
+</blockquote>
+<hr/>
+<h2><a name="t1"></a><a id="1_fuser_12"></a>1. fuser模块</h2>
+<p><code class="inline-code">fuser</code>模块的作用是将<code class="inline-code">LiDAR</code>和<code class="inline-code">camera</code>得到的<code class="inline-code">BEV</code>特征进行融合，这里使用的<code class="inline-code">ConvFuser</code>方法将两个<code class="inline-code">BEV</code>特征融合。</p>
+<pre class="code-block" data-index="0" name="code"><code class="code-content">x <span class="token operator">=</span> self<span class="token punctuation">.</span>fuser<span class="token punctuation">(</span>features<span class="token punctuation">)</span>
+</code></pre>
+<p>将<code class="inline-code">LiDAR</code>=&gt;<code class="inline-code">[4, 256, 180, 180]</code>和<code class="inline-code">camera</code> =&gt; <code class="inline-code">[4, 80, 180, 180]</code>进行<code class="inline-code">concat</code>得到 =&gt; <code class="inline-code">[4, 336, 180, 180]</code>，然后再卷积得到 =&gt;<code class="inline-code">[4, 256, 180, 180]</code>，具体代码如下。</p>
+<pre class="code-block" data-index="1" name="code"><code class="code-content"><span class="token keyword">class</span> <span class="token class-name">ConvFuser</span><span class="token punctuation">(</span>nn<span class="token punctuation">.</span>Sequential<span class="token punctuation">)</span><span class="token punctuation">:</span>
+    <span class="token keyword">def</span> <span class="token function">__init__</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> in_channels<span class="token punctuation">:</span> <span class="token builtin">int</span><span class="token punctuation">,</span> out_channels<span class="token punctuation">:</span> <span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">&gt;</span> <span class="token boolean">None</span><span class="token punctuation">:</span>
+        self<span class="token punctuation">.</span>in_channels <span class="token operator">=</span> in_channels <span class="token comment"># [80, 256]</span>
+        self<span class="token punctuation">.</span>out_channels <span class="token operator">=</span> out_channels <span class="token comment"># 256</span>
+        <span class="token builtin">super</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>__init__<span class="token punctuation">(</span>
+            nn<span class="token punctuation">.</span>Conv2d<span class="token punctuation">(</span><span class="token builtin">sum</span><span class="token punctuation">(</span>in_channels<span class="token punctuation">)</span><span class="token punctuation">,</span> out_channels<span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            nn<span class="token punctuation">.</span>BatchNorm2d<span class="token punctuation">(</span>out_channels<span class="token punctuation">)</span><span class="token punctuation">,</span>
+            nn<span class="token punctuation">.</span>ReLU<span class="token punctuation">(</span><span class="token boolean">True</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token punctuation">)</span>
+
+    <span class="token keyword">def</span> <span class="token function">forward</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> inputs<span class="token punctuation">:</span> List<span class="token punctuation">[</span>torch<span class="token punctuation">.</span>Tensor<span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">&gt;</span> torch<span class="token punctuation">.</span>Tensor<span class="token punctuation">:</span>
+        <span class="token comment"># 先进行concat，然后调用父类的卷积模块</span>
+        <span class="token keyword">return</span> <span class="token builtin">super</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>forward<span class="token punctuation">(</span>torch<span class="token punctuation">.</span>cat<span class="token punctuation">(</span>inputs<span class="token punctuation">,</span> dim<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+</code><div class="hide-preCode-box"><span class="hide-preCode-bt" data-report-view='{"spm":"1001.2101.3001.7365"}'><img alt="" class="look-more-preCode contentImg-no-view" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAMFBMVEUAAABgYGBoaGhlZWVnZ2dmZmZmZmZmZmYICAgJCQkKCgoLCwsMDAwNDQ0ODg4PDw8f29kFAAAAB3RSTlMAICBvb3DfipQdkQAAAFtJREFUeNpjYBjKwBDBFAERrGUCMD5jegCQZEpPhAmIlSmAKDWYEsb0JDANVwJVAFcCUwBXAlcAVYJQAFWCpACsBFkBWAmKApASFAUgJagKgEqS0LzMpEDXEAYAa+4Rvc+MTHYAAAAASUVORK5CYII=" style="max-width: min(32px, 100%); height: auto; width: auto; display: block;" title="" width="32"/></span></div></pre>
+<p>融合的结构如下所示：</p>
+<pre class="code-block" data-index="2" name="code"><code class="code-content">ConvFuser<span class="token punctuation">(</span>
+  <span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">336</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">1e-05</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.1</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span>
+</code></pre>
+<h2><a name="t2"></a><a id="2_decoder_46"></a>2. decoder模块</h2>
+<p><code class="inline-code">decoder</code>部分由两部分组成，分别是<code class="inline-code">backbone</code>和<code class="inline-code">neck</code>，其中<code class="inline-code">backbone</code>使用的是<code class="inline-code">SECOND</code>，<code class="inline-code">neck</code>部分使用的是<code class="inline-code">SECONDFPN</code>。<br/> <img alt="在这里插入图片描述" src="data:image/png;base64,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" style="max-width: min(469px, 100%); height: auto; width: auto; display: block;" width="469"/></p>
+<h3><a name="t3"></a><a id="21_backbone_49"></a>2.1 backbone模块</h3>
+<p><code class="inline-code">backbone</code>使用的<code class="inline-code">SECOND</code>，和默认的<code class="inline-code">layer_nums=[3, 5, 5]</code>结构不一样，<code class="inline-code">BEVFusion</code>中使用的<code class="inline-code">layer_nums=[5, 5]</code>。所以backbone只有两个分支，都是5个卷积模块组成。</p>
+<pre class="code-block" data-index="3" name="code"><code class="code-content">        outs <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+        <span class="token keyword">for</span> i <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span><span class="token builtin">len</span><span class="token punctuation">(</span>self<span class="token punctuation">.</span>blocks<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+            x <span class="token operator">=</span> self<span class="token punctuation">.</span>blocks<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+            outs<span class="token punctuation">.</span>append<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token builtin">tuple</span><span class="token punctuation">(</span>outs<span class="token punctuation">)</span>
+</code></pre>
+<ul><li>分支一：</li></ul>
+<p>第一个分支的输入是<code class="inline-code">fuser</code>的输出，它的大小为<code class="inline-code">[4, 256, 180, 180]</code>，首先经过第一个<code class="inline-code">Con2d</code>将通道降至128，后面再接5个相同的<code class="inline-code">Con2d</code>提取特征，得到<code class="inline-code">outs[0]</code>的大小为<code class="inline-code">[4, 128, 180, 180]</code>。</p>
+<pre class="code-block" data-index="4" name="code"><code class="code-content">Sequential<span class="token punctuation">(</span>
+  <span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">128</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> <span class="token number">128</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">4</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">6</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> <span class="token number">128</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">7</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">8</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">9</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> <span class="token number">128</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">11</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">12</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> <span class="token number">128</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">13</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">14</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">15</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> <span class="token number">128</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">17</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span>
+</code><div class="hide-preCode-box"><span class="hide-preCode-bt" data-report-view='{"spm":"1001.2101.3001.7365"}'><img alt="" class="look-more-preCode contentImg-no-view" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAMFBMVEUAAABgYGBoaGhlZWVnZ2dmZmZmZmZmZmYICAgJCQkKCgoLCwsMDAwNDQ0ODg4PDw8f29kFAAAAB3RSTlMAICBvb3DfipQdkQAAAFtJREFUeNpjYBjKwBDBFAERrGUCMD5jegCQZEpPhAmIlSmAKDWYEsb0JDANVwJVAFcCUwBXAlcAVYJQAFWCpACsBFkBWAmKApASFAUgJagKgEqS0LzMpEDXEAYAa+4Rvc+MTHYAAAAASUVORK5CYII=" style="max-width: min(32px, 100%); height: auto; width: auto; display: block;" title="" width="32"/></span></div></pre>
+<ul><li>分支二：</li></ul>
+<p>第二个分支的输入是<code class="inline-code">out[0]</code>，这个分支首先经过第一个<code class="inline-code">Conv2d</code>，将通道数128上至256，并且将<code class="inline-code">feature map</code>的长和宽都减半至90，然后在经过5个相同的<code class="inline-code">Conv2d</code>提取特征，最后得到特征<code class="inline-code">outs[1]</code>的大小为<code class="inline-code">[4, 256, 90, 90]</code>。</p>
+<pre class="code-block" data-index="5" name="code"><code class="code-content">Sequential<span class="token punctuation">(</span>
+  <span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">4</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">6</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">7</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">8</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">9</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">11</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">12</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">13</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">14</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">15</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> padding<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">17</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span>
+</code><div class="hide-preCode-box"><span class="hide-preCode-bt" data-report-view='{"spm":"1001.2101.3001.7365"}'><img alt="" class="look-more-preCode contentImg-no-view" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAMFBMVEUAAABgYGBoaGhlZWVnZ2dmZmZmZmZmZmYICAgJCQkKCgoLCwsMDAwNDQ0ODg4PDw8f29kFAAAAB3RSTlMAICBvb3DfipQdkQAAAFtJREFUeNpjYBjKwBDBFAERrGUCMD5jegCQZEpPhAmIlSmAKDWYEsb0JDANVwJVAFcCUwBXAlcAVYJQAFWCpACsBFkBWAmKApASFAUgJagKgEqS0LzMpEDXEAYAa+4Rvc+MTHYAAAAASUVORK5CYII=" style="max-width: min(32px, 100%); height: auto; width: auto; display: block;" title="" width="32"/></span></div></pre>
+<h3><a name="t4"></a><a id="22_neck_111"></a>2.2 neck模块</h3>
+<p><code class="inline-code">neck</code>的作用是将<code class="inline-code">backbone</code>得到的<code class="inline-code">feature map</code>调整至指定大小<code class="inline-code">[4, 256, 180, 180]</code>。</p>
+<p>由于<code class="inline-code">backbone</code>得到了两个大小<span class="words-blog hl-git-1" data-pretit="不同的" data-report-view='{"spm":"1001.2101.3001.10283","extra":"{\"words\":\"不同的\"}"}' data-tit="不同的">不同的</span><code class="inline-code">feature map</code>，分别为<code class="inline-code">[4, 128, 180, 180]</code>和<code class="inline-code">[4, 256, 90, 90]</code>，第一个特征使用卷积降低通道数即可，第二个则需要反卷积来提升<code class="inline-code">feature map</code>的大小，实际上<span class="words-blog hl-git-1" data-pretit="源代码" data-report-view='{"spm":"1001.2101.3001.10283","extra":"{\"words\":\"源代码\"}"}' data-tit="源代码">源代码</span>也是这么做的。最后将得到两个分支的特征进行<code class="inline-code">concat</code>即可。</p>
+<pre class="code-block" data-index="6" name="code"><code class="code-content">        <span class="token keyword">assert</span> <span class="token builtin">len</span><span class="token punctuation">(</span>x<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token builtin">len</span><span class="token punctuation">(</span>self<span class="token punctuation">.</span>in_channels<span class="token punctuation">)</span>
+        <span class="token comment"># self.deblocks一共有两个，一个是卷积，一个是反卷积</span>
+        ups <span class="token operator">=</span> <span class="token punctuation">[</span>deblock<span class="token punctuation">(</span>x<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token keyword">for</span> i<span class="token punctuation">,</span> deblock <span class="token keyword">in</span> <span class="token builtin">enumerate</span><span class="token punctuation">(</span>self<span class="token punctuation">.</span>deblocks<span class="token punctuation">)</span><span class="token punctuation">]</span>
+		
+		<span class="token comment"># concat两个分支feature</span>
+        <span class="token keyword">if</span> <span class="token builtin">len</span><span class="token punctuation">(</span>ups<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">1</span><span class="token punctuation">:</span>
+            out <span class="token operator">=</span> torch<span class="token punctuation">.</span>cat<span class="token punctuation">(</span>ups<span class="token punctuation">,</span> dim<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">)</span>
+        <span class="token keyword">else</span><span class="token punctuation">:</span>
+            out <span class="token operator">=</span> ups<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>
+        <span class="token keyword">return</span> <span class="token punctuation">[</span>out<span class="token punctuation">]</span>
+</code><div class="hide-preCode-box"><span class="hide-preCode-bt"><img alt="" class="look-more-preCode contentImg-no-view" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAMFBMVEUAAABgYGBoaGhlZWVnZ2dmZmZmZmZmZmYICAgJCQkKCgoLCwsMDAwNDQ0ODg4PDw8f29kFAAAAB3RSTlMAICBvb3DfipQdkQAAAFtJREFUeNpjYBjKwBDBFAERrGUCMD5jegCQZEpPhAmIlSmAKDWYEsb0JDANVwJVAFcCUwBXAlcAVYJQAFWCpACsBFkBWAmKApASFAUgJagKgEqS0LzMpEDXEAYAa+4Rvc+MTHYAAAAASUVORK5CYII=" style="max-width: min(32px, 100%); height: auto; width: auto; display: block;" title="" width="32"/></span></div></pre>
+<p><code class="inline-code">self.deblocks</code>中第一个元素的卷积结构如下：</p>
+<pre class="code-block" data-index="7" name="code"><code class="code-content">Sequential<span class="token punctuation">(</span>
+  <span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">:</span> Conv2d<span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span>
+</code></pre>
+<p>self.deblocks中第二个元素的反卷积结构如下：</p>
+<pre class="code-block" data-index="8" name="code"><code class="code-content">Sequential<span class="token punctuation">(</span>
+  <span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ConvTranspose2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> kernel_size<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">,</span> stride<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bias<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">:</span> BatchNorm2d<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> eps<span class="token operator">=</span><span class="token number">0.001</span><span class="token punctuation">,</span> momentum<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">,</span> affine<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">,</span> track_running_stats<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+  <span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">:</span> ReLU<span class="token punctuation">(</span>inplace<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span>
+</code></pre>
+<p>将两个分支<code class="inline-code">concat</code>得到的<code class="inline-code">feature map</code>大小为：<code class="inline-code">[4, 512, 180, 180]</code>。</p>
+</div><div><div></div></div>
+
+
+</div>
+</article></div><div class="article-footer" style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; color: #999; font-size: 14px; text-align: center;"><p>此内容由文章解锁工具提供，仅供学习和参考。</p></div></div></body></html>
