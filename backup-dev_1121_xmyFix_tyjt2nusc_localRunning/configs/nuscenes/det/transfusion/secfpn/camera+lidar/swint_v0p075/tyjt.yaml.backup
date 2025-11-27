@@ -1,0 +1,67 @@
+# 基于官方配置的TYJT适配版本
+_base_: ['./default.yaml']
+
+model:
+  fuser:
+    type: ConvFuser
+    in_channels: [80, 256]
+    out_channels: 256
+
+# 数据路径
+dataset_root: '/mnt/dataset/tyjt_RawData'
+
+data:
+  train:
+    dataset:
+      ann_file: "/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_train.pkl"
+      dataset_root: '/mnt/dataset/tyjt_RawData'
+  val:
+    ann_file: "/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_val.pkl"
+    dataset_root: '/mnt/dataset/tyjt_RawData'
+  test:
+    ann_file: "/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_val.pkl"
+    dataset_root: '/mnt/dataset/tyjt_RawData'
+
+# 类别配置
+object_classes:
+- car
+- truck
+- bus
+- pedestrian
+- bicycle
+- motorcycle
+- traffic_cone
+
+# 模型配置
+model:
+  heads:
+    object:
+      num_classes: 7
+
+# 输入模态
+input_modality:
+  use_radar: false
+
+# 训练配置
+optimizer:
+  lr: 0.0001
+
+runner:
+  max_epochs: 10
+
+load_from: 'pretrained/bevfusion-det.pth'
+run_dir: 'runs/train-bevfusion-tyjt'
+
+# 覆盖点云加载配置
+train_pipeline_override:
+  - type: LoadPointsFromFile
+    coord_type: LIDAR
+    load_dim: 4
+    use_dim: [0, 1, 2, 3]
+    file_client_args:
+      backend: disk
+
+data:
+  train:
+    dataset:
+      pipeline: ${train_pipeline_override}

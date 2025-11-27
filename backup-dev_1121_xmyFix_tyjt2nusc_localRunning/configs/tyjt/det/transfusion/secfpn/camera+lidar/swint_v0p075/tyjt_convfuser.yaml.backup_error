@@ -1,0 +1,165 @@
+# 修复版配置 - 移除了有问题的GlobalRotScaleTrans
+
+# 数据路径
+dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+
+# 数据配置
+data:
+  samples_per_gpu: 1
+  workers_per_gpu: 4
+  train:
+    type: NuScenesDataset
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/tyjt_infos_train.pkl
+    pipeline:
+      - type: LoadMultiViewImageFromFiles
+        to_float32: true
+      - type: LoadPointsFromFile
+        coord_type: LIDAR
+        load_dim: 5
+        use_dim: 5
+      - type: LoadPointsFromMultiSweeps
+        sweeps_num: 0
+        use_dim: 5
+        pad_empty_sweeps: true
+        remove_close: true
+      - type: LoadAnnotations3D
+        with_bbox_3d: true
+        with_label_3d: true
+      # 简化数据增强，避免有问题的transform
+      - type: RandomFlip3D
+        flip_ratio_bev_horizontal: 0.5
+      - type: PointsRangeFilter
+        point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+      - type: ObjectRangeFilter
+        point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+      - type: PointShuffle
+      - type: DefaultFormatBundle3D
+        class_names: ['car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
+      - type: Collect3D
+        keys: ['points', 'img', 'gt_bboxes_3d', 'gt_labels_3d']
+        meta_keys: ['camera_intrinsics', 'camera2ego', 'lidar2ego', 'lidar2camera', 'lidar2image', 'camera2lidar', 'img_aug_matrix', 'lidar_aug_matrix']
+    classes: ['car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
+    modality:
+      use_camera: true
+      use_lidar: true
+      use_radar: false
+    test_mode: false
+    use_valid_flag: true
+  val:
+    type: NuScenesDataset
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/tyjt_infos_val.pkl
+    pipeline:
+      - type: LoadMultiViewImageFromFiles
+        to_float32: true
+      - type: LoadPointsFromFile
+        coord_type: LIDAR
+        load_dim: 5
+        use_dim: 5
+      - type: LoadPointsFromMultiSweeps
+        sweeps_num: 0
+        use_dim: 5
+        pad_empty_sweeps: true
+        remove_close: true
+      - type: LoadAnnotations3D
+        with_bbox_3d: true
+        with_label_3d: true
+      - type: PointsRangeFilter
+        point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+      - type: DefaultFormatBundle3D
+        class_names: ['car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
+      - type: Collect3D
+        keys: ['points', 'img', 'gt_bboxes_3d', 'gt_labels_3d']
+        meta_keys: ['camera_intrinsics', 'camera2ego', 'lidar2ego', 'lidar2camera', 'lidar2image', 'camera2lidar', 'img_aug_matrix', 'lidar_aug_matrix']
+    classes: ['car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
+    modality:
+      use_camera: true
+      use_lidar: true
+      use_radar: false
+    test_mode: false
+
+# 模型配置（使用您之前能工作的配置）
+model:
+  type: BEVFusion
+  encoders:
+    camera:
+      backbone:
+        type: SwinTransformer
+        embed_dims: 96
+        depths: [2, 2, 6, 2]
+        num_heads: [3, 6, 12, 24]
+        window_size: 7
+      neck:
+        type: GeneralizedLSSFPN
+        in_channels: [192, 384, 768]
+        out_channels: 256
+      vtransform:
+        type: DepthLSSTransform
+        in_channels: 256
+        out_channels: 80
+        image_size: [256, 704]
+        feature_size: [32, 88]
+        xbound: [-54.0, 54.0, 0.3]
+        ybound: [-54.0, 54.0, 0.3]
+        zbound: [-10.0, 10.0, 20.0]
+        dbound: [1.0, 60.0, 0.5]
+    lidar:
+      voxelize:
+        max_num_points: 10
+        point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+        voxel_size: [0.075, 0.075, 0.2]
+      backbone:
+        type: SparseEncoder
+        in_channels: 5
+        sparse_shape: [1440, 1440, 41]
+  fuser:
+    type: ConvFuser
+    in_channels: [80, 256]
+    out_channels: 256
+  heads:
+    object:
+      type: CenterHead
+      in_channels: 512
+      tasks: [
+        dict(num_class=1, class_names=['car']),
+        dict(num_class=2, class_names=['truck', 'construction_vehicle']),
+        dict(num_class=2, class_names=['bus', 'trailer']),
+        dict(num_class=1, class_names=['barrier']),
+        dict(num_class=2, class_names=['motorcycle', 'bicycle']),
+        dict(num_class=2, class_names=['pedestrian', 'traffic_cone'])
+      ]
+      common_heads:
+        reg: [2, 2]
+        height: [1, 2]
+        dim: [3, 2]
+        rot: [2, 2]
+      train_cfg:
+        point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+        grid_size: [1440, 1440, 41]
+        out_size_factor: 8
+      test_cfg:
+        post_center_limit_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
+        max_per_img: 500
+
+# 训练配置
+optimizer:
+  type: AdamW
+  lr: 0.0002
+  weight_decay: 0.01
+lr_config:
+  policy: CosineAnnealing
+  warmup: linear
+  warmup_iters: 500
+  warmup_ratio: 0.33333333
+runner:
+  type: EpochBasedRunner
+  max_epochs: 20
+checkpoint_config:
+  interval: 1
+log_config:
+  interval: 50
+evaluation:
+  interval: 5
+load_from: pretrained/bevfusion-det.pth
+work_dir: ./runs/train-tyjt-fixed

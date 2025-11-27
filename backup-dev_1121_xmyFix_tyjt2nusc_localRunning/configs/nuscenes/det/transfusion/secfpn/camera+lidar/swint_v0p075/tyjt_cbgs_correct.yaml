@@ -1,0 +1,92 @@
+_base_: ['./convfuser.yaml']
+
+# 覆盖数据路径
+dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/
+
+# 正确使用CBGSDataset包装
+data:
+  samples_per_gpu: 1
+  workers_per_gpu: 4
+  train:
+    type: CBGSDataset
+    dataset:
+      type: NuScenesDataset
+      dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/
+      ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_train_correct.pkl
+      pipeline:
+        - type: LoadMultiViewImageFromFiles
+          to_float32: true
+        - type: LoadPointsFromFile
+          coord_type: LIDAR
+          load_dim: 5
+          use_dim: [0, 1, 2, 3, 4]
+        - type: LoadAnnotations3D
+          with_bbox_3d: true
+          with_label_3d: true
+        - type: ObjectRangeFilter
+          point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+        - type: PointShuffle
+        - type: ImageNormalize
+          mean: [123.675, 116.28, 103.53]
+          std: [58.395, 57.12, 57.375]
+        - type: DefaultFormatBundle3D
+          classes:
+            - car
+            - truck
+            - construction_vehicle
+            - bus
+            - trailer
+            - pedestrian
+            - motorcycle
+            - bicycle
+            - traffic_cone
+            - barrier
+        - type: Collect3D
+          keys: ['points', 'img', 'gt_bboxes_3d', 'gt_labels_3d']
+      modality:
+        use_lidar: true
+        use_camera: true
+        use_radar: false
+        use_map: false
+        use_external: false
+      test_mode: false
+      box_type_3d: LiDAR
+      filter_empty_gt: true
+      use_valid_flag: false  # 关键：禁用valid_flag检查
+
+  val:
+    type: NuScenesDataset
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_val_correct.pkl
+    pipeline:
+      - type: LoadMultiViewImageFromFiles
+        to_float32: true
+      - type: LoadPointsFromFile
+        coord_type: LIDAR
+        load_dim: 5
+        use_dim: [0, 1, 2, 3, 4]
+      - type: ImageNormalize
+        mean: [123.675, 116.28, 103.53]
+        std: [58.395, 57.12, 57.375]
+      - type: DefaultFormatBundle3D
+        classes:
+          - car
+          - truck
+          - construction_vehicle
+          - bus
+          - trailer
+          - pedestrian
+          - motorcycle
+          - bicycle
+          - traffic_cone
+          - barrier
+      - type: Collect3D
+        keys: ['points', 'img']
+    modality:
+      use_lidar: true
+      use_camera: true
+      use_radar: false
+      use_map: false
+      use_external: false
+    test_mode: true
+    box_type_3d: LiDAR

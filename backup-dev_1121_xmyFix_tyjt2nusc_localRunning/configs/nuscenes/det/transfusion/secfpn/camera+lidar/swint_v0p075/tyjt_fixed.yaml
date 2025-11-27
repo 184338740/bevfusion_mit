@@ -1,0 +1,35 @@
+_base_:
+- ./default.yaml
+data:
+  test:
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_val.pkl
+    dataset_root: /mnt/dataset/tyjt_RawData
+  train:
+    ann_file: output/tyjt2bevfusion/20251023_055558/tyjt_infos_train_fixed.pkl
+    dataset:
+      ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_train.pkl
+      dataset_root: /mnt/dataset/tyjt_RawData
+  val:
+    ann_file: tyjt2pkl/step3_1_output/tyjt_infos_val_fixed.pkl
+    dataset_root: /mnt/dataset/tyjt_RawData
+dataset_root: /mnt/dataset/tyjt_RawData
+input_modality:
+  use_radar: false
+load_from: pretrained/bevfusion-det.pth
+model:
+  heads:
+    object:
+      num_classes: 7
+object_classes:
+- car
+- truck
+- bus
+- pedestrian
+- bicycle
+- motorcycle
+- traffic_cone
+optimizer:
+  lr: 0.0001
+run_dir: runs/train-bevfusion-tyjt
+runner:
+  max_epochs: 10

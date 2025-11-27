@@ -1,0 +1,16 @@
+_base_: ['./default.yaml']
+
+# 修改数据路径
+data:
+  train:
+    dataset:
+      ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_train.pkl'
+  val:
+    ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_val.pkl'
+
+# 关键：禁用CBGSDataset，直接使用原始数据集
+train:
+  type: 'NuScenesDataset'
+  data_root: '/mnt/dataset/tyjt_RawData' 
+  ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_train.pkl'
+  pipeline: ${train_pipeline}

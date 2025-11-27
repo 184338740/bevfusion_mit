@@ -1,0 +1,92 @@
+model:  # 未修改 - 原数值: , 当前数值: 
+  fuser:  # 未修改 - 原数值: , 当前数值: 
+    type: ConvFuser  # 修改 - 配置1: ConvFuser, 配置2: GTDepth
+    in_channels: [80, 256]  # 修改 - 配置1: [80, 256], 配置2: 512
+    out_channels: 256  # 未修改 - 原数值: 256, 当前数值: 256
+
+# 直接在这里覆盖数据路径，避免继承问题
+dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/  # 未修改 - 原数值: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/, 当前数值: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/
+
+data:  # 未修改 - 原数值: , 当前数值: 
+  samples_per_gpu: 1  # 未修改 - 原数值: 1, 当前数值: 1
+  workers_per_gpu: 4  # 修改 - 配置1: 4, 配置2: 2
+  train:  # 未修改 - 原数值: , 当前数值: 
+    type: NuScenesDataset  # 修改 - 配置1: NuScenesDataset, 配置2: GTDepth
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/  # 未修改 - 原数值: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/, 当前数值: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_train_correct.pkl  # 修改 - 配置1: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_train_correct.pkl, 配置2: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_val_fixed_quat.pkl
+    pipeline:  # 未修改 - 原数值: , 当前数值: 
+      - type: LoadMultiViewImageFromFiles  # 修改 - 配置1: LoadMultiViewImageFromFiles, 配置2: PointShuffle
+        to_float32: true  # 配置2中不存在此配置
+      - type: LoadPointsFromFile  # 修改 - 配置1: LoadPointsFromFile, 配置2: PointShuffle
+        coord_type: LIDAR  # 未修改 - 原数值: LIDAR, 当前数值: LIDAR
+        load_dim: 5  # 修改 - 配置1: 5, 配置2: 6
+        use_dim: [0, 1, 2, 3, 4]  # 修改 - 配置1: [0, 1, 2, 3, 4], 配置2: 
+      - type: LoadAnnotations3D  # 修改 - 配置1: LoadAnnotations3D, 配置2: PointShuffle
+        with_bbox_3d: true  # 未修改 - 原数值: true, 当前数值: true
+        with_label_3d: true  # 未修改 - 原数值: true, 当前数值: true
+      - type: ObjectRangeFilter  # 修改 - 配置1: ObjectRangeFilter, 配置2: PointShuffle
+        point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]  # 修改 - 配置1: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0], 配置2: 
+      - type: PointShuffle  # 未修改 - 原数值: PointShuffle, 当前数值: PointShuffle
+      - type: ImageNormalize  # 修改 - 配置1: ImageNormalize, 配置2: PointShuffle
+        mean: [123.675, 116.28, 103.53]  # 配置2中不存在此配置
+        std: [58.395, 57.12, 57.375]  # 修改 - 配置1: [58.395, 57.12, 57.375], 配置2: 
+      - type: DefaultFormatBundle3D  # 修改 - 配置1: DefaultFormatBundle3D, 配置2: PointShuffle
+        classes:  # 未修改 - 原数值: , 当前数值: 
+          - car
+          - truck
+          - construction_vehicle
+          - bus
+          - trailer
+          - pedestrian
+          - motorcycle
+          - bicycle
+          - traffic_cone
+          - barrier
+      - type: Collect3D  # 修改 - 配置1: Collect3D, 配置2: PointShuffle
+        keys: ['points', 'img', 'gt_bboxes_3d', 'gt_labels_3d']  # 配置2中不存在此配置
+    modality:  # 未修改 - 原数值: , 当前数值: 
+      use_lidar: true  # 未修改 - 原数值: true, 当前数值: true
+      use_camera: true  # 未修改 - 原数值: true, 当前数值: true
+      use_radar: false  # 未修改 - 原数值: false, 当前数值: false
+      use_map: false  # 未修改 - 原数值: false, 当前数值: false
+      use_external: false  # 未修改 - 原数值: false, 当前数值: false
+    test_mode: false  # 未修改 - 原数值: false, 当前数值: false
+    box_type_3d: LiDAR  # 未修改 - 原数值: LiDAR, 当前数值: LiDAR
+    filter_empty_gt: true  # 配置2中不存在此配置
+
+  val:  # 未修改 - 原数值: , 当前数值: 
+    type: NuScenesDataset  # 修改 - 配置1: NuScenesDataset, 配置2: GTDepth
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/  # 未修改 - 原数值: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/, 当前数值: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_val_correct.pkl  # 修改 - 配置1: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_val_correct.pkl, 配置2: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_val_fixed_quat.pkl
+    pipeline:  # 未修改 - 原数值: , 当前数值: 
+      - type: LoadMultiViewImageFromFiles  # 修改 - 配置1: LoadMultiViewImageFromFiles, 配置2: PointShuffle
+        to_float32: true  # 配置2中不存在此配置
+      - type: LoadPointsFromFile  # 修改 - 配置1: LoadPointsFromFile, 配置2: PointShuffle
+        coord_type: LIDAR  # 未修改 - 原数值: LIDAR, 当前数值: LIDAR
+        load_dim: 5  # 修改 - 配置1: 5, 配置2: 6
+        use_dim: [0, 1, 2, 3, 4]  # 修改 - 配置1: [0, 1, 2, 3, 4], 配置2: 
+      - type: ImageNormalize  # 修改 - 配置1: ImageNormalize, 配置2: PointShuffle
+        mean: [123.675, 116.28, 103.53]  # 配置2中不存在此配置
+        std: [58.395, 57.12, 57.375]  # 修改 - 配置1: [58.395, 57.12, 57.375], 配置2: 
+      - type: DefaultFormatBundle3D  # 修改 - 配置1: DefaultFormatBundle3D, 配置2: PointShuffle
+        classes:  # 未修改 - 原数值: , 当前数值: 
+          - car
+          - truck
+          - construction_vehicle
+          - bus
+          - trailer
+          - pedestrian
+          - motorcycle
+          - bicycle
+          - traffic_cone
+          - barrier
+      - type: Collect3D  # 修改 - 配置1: Collect3D, 配置2: PointShuffle
+        keys: ['points', 'img']  # 配置2中不存在此配置
+    modality:  # 未修改 - 原数值: , 当前数值: 
+      use_lidar: true  # 未修改 - 原数值: true, 当前数值: true
+      use_camera: true  # 未修改 - 原数值: true, 当前数值: true
+      use_radar: false  # 未修改 - 原数值: false, 当前数值: false
+      use_map: false  # 未修改 - 原数值: false, 当前数值: false
+      use_external: false  # 未修改 - 原数值: false, 当前数值: false
+    test_mode: true  # 修改 - 配置1: true, 配置2: false
+    box_type_3d: LiDAR  # 未修改 - 原数值: LiDAR, 当前数值: LiDAR
