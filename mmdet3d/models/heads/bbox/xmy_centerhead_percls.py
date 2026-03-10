@@ -1,11 +1,47 @@
 # =============================================================================
 # @file       xmy_centerhead_percls.py
 # @author     xmy
+# @date       2026-03-10
+# @version    2.0
+# @brief      自定义 CenterHead，支持训练阶段分类损失的类别加权。
+#
+# 升级说明（v2.0）：
+#   - 在 v1.0（支持测试阶段 per-class 阈值）基础上，新增训练阶段类别损失加权功能。
+#   - 新增配置项 per_class_loss_weight（位于 train_cfg 中），用于为每个类别设置独立的分类损失权重。
+#   - 实现方式：继承自官方 CenterHead，在 __init__ 中保存原始 loss_cls 配置，并创建一个 reduction='none'
+#     的损失实例 self.loss_cls_none，用于逐元素损失计算。在 loss 函数中，当配置了类别权重时，
+#     先计算逐元素损失，然后按通道乘以对应权重，最后求和并除以正样本数；否则使用原始损失。
+#   - 添加调试打印，在第一个 batch 输出每个任务的类别权重及加权前后的平均损失，便于验证。
+#   - 完全向后兼容：未配置 per_class_loss_weight 时行为与官方 CenterHead 一致。
+#
+# 配置示例（YAML格式，在 train_cfg 中添加）：xmy_tools/tyjt2nusc_1219_A100/configs/tyjt_2d_CenterheadLSSfpn_V1_6_01_a_0303_Local_Debug_CamOnly_v02_per_class_loss_weight.yaml
+#   train_cfg:
+#     point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
+#     grid_size: [1024, 1024, 1]
+#     voxel_size: [0.1, 0.1, 0.2]
+#     out_size_factor: 8
+#     # ... 其他训练配置 ...
+#     per_class_loss_weight:                      # 新增：每个类别的分类损失权重
+#       car: 1.0
+#       pedestrian: 2.5
+#       traffic_cone: 3.0
+#       bicycle: 2.0
+#       # 其他未列出的类别默认权重为 1.0
+#
+# 注意事项：
+#   - 权重值建议保持在合理范围（如 0.1~5.0），避免梯度过大或过小。
+#   - 该功能与测试阶段的 per_class_score_threshold 和 per_class_nms_thr 完全独立，可同时使用。
+#   - 修改同时影响纯视觉模型和融合模型。
+# =============================================================================
+
+# =============================================================================
+# @file       xmy_centerhead_percls.py
+# @author     xmy
 # @date       2026-03-09
 # @version    1.0
 # @brief      自定义 CenterHead，支持每个类别的独立置信度阈值和 NMS 阈值。
 #
-# 升级说明：
+# 升级说明（v1.0）：
 #   - 继承自官方 CenterHead，保留原有所有功能。
 #   - 新增两个阶段的过滤配置：
 #       阶段1: 按类别置信度阈值过滤 (per_class_score_threshold)
@@ -20,7 +56,7 @@
 #       * per_class_nms_thr         : dict，类别 -> NMS IoU 阈值，例如 {'car': 0.3, 'pedestrian': 0.15}
 #   - 若未提供上述字典，则自动使用全局阈值，完全向后兼容
 #
-# # 配置示例 (以 nuScenes 为例):
+# # 配置示例 (以 nuScenes 为例): xmy_tools/tyjt2nusc_1219_A100/configs/tyjt_2d_CenterheadLSSfpn_V1_6_01_b_0303_Local_Debug_CamOnly_v01_multi_thrd_for_test.yaml
 #  test_cfg = dict(
 #     # 全局阈值（原有）
 #     score_threshold=0.1,
@@ -81,10 +117,137 @@ class XmyCenterHeadPerCls(CenterHead):
     """CenterHead with per-class score threshold and NMS threshold."""
 
     def __init__(self, *args, **kwargs):
+        # 1. 保存 loss_cls 配置（从 kwargs 获取，默认使用 GaussianFocalLoss）
+        loss_cls_cfg = kwargs.get('loss_cls', dict(type='GaussianFocalLoss', reduction='mean')).copy()
+        self.loss_cls_cfg = loss_cls_cfg
+
+        # 2. super() 调用基类 CenterHead 初始化，构建 self.loss_cls (reduction='mean')【train_cfg】
+        # self.loss_cls：继承自基类，reduction='mean'，用于无权重分支（即 else 分支），直接返回标量损失。
         super().__init__(*args, **kwargs)
+
+        # 3. 创建 reduction='none' 的损失实例（用于训练加权）
+        # self.loss_cls_none：reduction='none'，用于有权重分支，返回逐元素损失张量，以便按通道乘以类别权重。
+        loss_cls_none_cfg = self.loss_cls_cfg.copy()
+        loss_cls_none_cfg['reduction'] = 'none'
+        self.loss_cls_none = build_loss(loss_cls_none_cfg)
+
+        # import pdb;pdb.set_trace()
+        # ========== 训练相关配置 ==========
+        # 4. 类别损失权重配置【train_cfg】
+        self.per_class_loss_weight = self.train_cfg.get('per_class_loss_weight', {})
+
+        # 5. 构建任务权重列表
+        self.task_class_loss_weights = []
+        # 先遍历：tasks ==> task_calsses（当前task的类别）self.class_names 就是配置文件中的 tasks 分组
+        if self.per_class_loss_weight:
+            for task_classes in self.class_names:  # 遍历task
+                task_weight = [self.per_class_loss_weight.get(cls_name, 1.0) for cls_name in task_classes] # 再遍历 task 内每个cls: 将当前cls的 权重添加到 task_weight 列表中，顺序与任务内的类别顺序一致
+                self.task_class_loss_weights.append(task_weight)  # 将当前任务 task_weight 权重，加到 tasks 的权重列表 task_class_loss_weights
+        else:
+            self.task_class_loss_weights = None
+
+        if self.task_class_loss_weights is not None:
+            print(f">>>[xmy]🔵[xmy_centerhead_percls.py]>>> [XmyCenterHeadPerCls] Task class loss weights: {self.task_class_loss_weights}")
+        else:
+            print(">>>[xmy]🔵[xmy_centerhead_percls.py]>>> [XmyCenterHeadPerCls] No per-class loss weights, using uniform weighting.")
+
+        # import pdb;pdb.set_trace()
+        # ========== 测试相关配置 ==========
+        # 类别置信度阈值（测试时使用）
         # [xmy] 从 test_cfg 中读取 per-class 阈值配置，若不存在则默认为空字典
         self.per_class_score_threshold = self.test_cfg.get('per_class_score_threshold', {})
+        # 类别 NMS 阈值（测试时使用）
         self.per_class_nms_thr = self.test_cfg.get('per_class_nms_thr', {})
+
+        # ========== 调试标志 ==========
+        self._debug_printed = False
+
+
+
+    @force_fp32(apply_to=("preds_dicts"))
+    def loss(self, gt_bboxes_3d, gt_labels_3d, preds_dicts, **kwargs):
+        """Loss function with per-class weighted classification loss."""
+        # Step1：获取Gt 
+        # heatmaps：Gt heatmaps
+        # anno_boxes： Gt 属性        
+        heatmaps, anno_boxes, inds, masks = self.get_targets(gt_bboxes_3d, gt_labels_3d)
+        loss_dict = dict()  # 存放最后的loss
+
+        # 分task(遍历的是不同的任务头，而不是单个类别): 开始获取pred、gt、loss
+        for task_id, preds_dict in enumerate(preds_dicts):
+            # Step2.1: heatmap loss 热力图分类损失
+            # (1) 获取当前task_id 的 预测的 pred_heatmap 和 gt_heatmap
+            pred_heatmap = clip_sigmoid(preds_dict[0]["heatmap"])  # [B, num_cls, H, W]
+            gt_heatmap = heatmaps[task_id]                         # [B, num_cls, H, W]
+            # (2) num_pos： 计算 gt_heatmap 中正样本的个数，用于后续的求avg
+            num_pos = gt_heatmap.eq(1).float().sum().item()
+
+            # ====== (3) 分类损失（支持类别加权）======
+            # (3.2) 有分类别权重的配置时： 使用 reduction='none' 的损失实例
+            if self.task_class_loss_weights is not None:
+                # 获取当前任务的类别权重张量
+                task_weights = pred_heatmap.new_tensor(self.task_class_loss_weights[task_id])  # [num_cls,]
+                # 计算每个像素的损失（不归约/不归一化），但不再合并归一化
+                element_loss = self.loss_cls_none(pred_heatmap, gt_heatmap)  # [B, num_cls, H, W]   # 注意：reduction='none' 的loss，才能返回张量
+                weighted_loss = element_loss * task_weights.view(1, -1, 1, 1)                  # 乘以类别权重（沿通道维度）
+
+                # 调试打印：
+                if not self._debug_printed and num_pos > 0:
+                    print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py]>>> [Task {task_id}] Class weights: {task_weights.tolist()}")
+                    mean_loss_before = element_loss.mean(dim=(0,2,3)).tolist()
+                    mean_loss_after = weighted_loss.mean(dim=(0,2,3)).tolist()
+                    print(f"  Mean loss per class (before weighting): {mean_loss_before}")
+                    print(f"  Mean loss per class (after weighting): {mean_loss_after}")
+                    print(f"  num_pos: {num_pos}")
+
+                # 求和并除以正样本数
+                loss_heatmap = weighted_loss.sum() / max(num_pos, 1)
+            else:
+                # (3.2)无分类别权重的配置时： 使用原有的 reduction='mean' 损失
+                loss_heatmap = self.loss_cls(
+                    pred_heatmap, gt_heatmap, avg_factor=max(num_pos, 1))
+
+            # ====== 回归损失（不变）======
+            # Step2.2 回归损失（与基类相同）： 不做类别的额外加权
+            target_box = anno_boxes[task_id]
+            # reconstruct the anno_box from multiple reg heads
+            preds_dict[0]["anno_box"] = torch.cat(
+                (
+                    preds_dict[0]["reg"],
+                    preds_dict[0]["height"],
+                    preds_dict[0]["dim"],
+                    preds_dict[0]["rot"],
+                    preds_dict[0]["vel"],
+                ),
+                dim=1,
+            )
+
+            # Regression loss for dimension, offset, height, rotation
+            ind = inds[task_id]
+            num = masks[task_id].float().sum()
+            pred = preds_dict[0]["anno_box"].permute(0, 2, 3, 1).contiguous()
+            pred = pred.view(pred.size(0), -1, pred.size(3))
+            pred = self._gather_feat(pred, ind)
+            mask = masks[task_id].unsqueeze(2).expand_as(target_box).float()
+            isnotnan = (~torch.isnan(target_box)).float()
+            mask *= isnotnan
+
+            code_weights = self.train_cfg.get("code_weights", None)
+            bbox_weights = mask * mask.new_tensor(code_weights)
+            # 回归loss
+            loss_bbox = self.loss_bbox(
+                pred, target_box, bbox_weights, avg_factor=(num + 1e-4)
+            )
+            # step3：更新 loss_dict
+            loss_dict[f"heatmap/task{task_id}"] = loss_heatmap
+            loss_dict[f"bbox/task{task_id}"] = loss_bbox
+        
+        # 在所有任务遍历完后设置标志为 True
+        if self.task_class_loss_weights is not None and not self._debug_printed:
+            self._debug_printed = True
+
+        return loss_dict
+
 
     def _filter_by_class_score(self, boxes3d, scores, labels, task_id):
         """按类别置信度阈值过滤框。
@@ -123,7 +286,7 @@ class XmyCenterHeadPerCls(CenterHead):
             list[dict]: Decoded bbox, scores and labels after nms.
         """
         if Debug:
-            import pdb;pdb.set_trace()
+            # import pdb;pdb.set_trace()
             debug_time = time.time()
             print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py] >>> [DEBUG CenterHead.get_bboxes] 开始时间: {debug_time:.6f}")
             print(f" 任务数量: {len(self.class_names)}")
