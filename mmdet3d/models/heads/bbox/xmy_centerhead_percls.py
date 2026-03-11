@@ -485,15 +485,20 @@ class XmyCenterHeadPerCls(CenterHead):
         for i, (box_preds, cls_preds, cls_labels) in enumerate(
             zip(batch_reg_preds, batch_cls_preds, batch_cls_labels)
         ):
+            # ========== [xmy] 修改：使用view(-1)避免标量问题 ==========
             # 处理单/多类别情况（输入已经是过滤后的）
+            # 修改1：使用 view(-1) 统一展平：cls_preds.view(-1) 确保 top_scores 始终为一维张量;不再用squeeze(-1)
+            top_scores = cls_preds.view(-1)          # view展平为一维，[N] 或 [0],不再用squeeze()
             if num_class_with_bg == 1:
-                top_scores = cls_preds.squeeze(-1)
+                # 单类别任务task，标签生成全0：
+                # 修改2：使用 top_scores.shape[0] 创建零标签，确保标签数量与分数数量一致。由于 top_scores 已确保为一维，shape[0] 安全
                 top_labels = torch.zeros(
-                    cls_preds.shape[0], device=cls_preds.device, dtype=torch.long
+                    top_scores.shape[0], device=top_scores.device, dtype=torch.long
                 )
             else:
-                top_labels = cls_labels.long()
-                top_scores = cls_preds.squeeze(-1)
+                # 修改3：多类别任务标签处理：cls_labels.long().view(-1) 同样将标签展平为一维，保证与 top_scores 对齐
+                top_labels = cls_labels.long().view(-1)
+            # ======================================================
 
             if Debug:
                 print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py] >>> rotate NMS前 (样本 {i}):")
@@ -505,7 +510,8 @@ class XmyCenterHeadPerCls(CenterHead):
                         print(f"    {cls_name}: {cls_count} 个框, 平均得分 {cls_scores.mean():.3f}")
 
             # 如果过滤后还有框，则继续处理 NMS
-            if top_scores.shape[0] != 0:
+            # 修改4：修改条件判断：使用 numel() 而非 shape[0]。top_scores.numel() > 0：numel() 返回张量元素总数，对空张量返回 0，对标量返回 1，对任意维度张量均有效，替代 shape[0] 更鲁棒
+            if top_scores.numel() > 0:
                 # 计算 BEV 框并应用 nms_scale 缩放
                 bev_box = metas[i]["box_type_3d"](
                     box_preds[:, :], self.bbox_coder.code_size
