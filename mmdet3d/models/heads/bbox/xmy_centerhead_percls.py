@@ -1,6 +1,31 @@
 # =============================================================================
 # @file       xmy_centerhead_percls.py
 # @author     xmy
+# @date       2026-03-25
+# @version    0.3.2
+# @brief      自定义 CenterHead，支持每个类别的独立置信度阈值和 NMS 阈值。
+#
+# 升级说明 (v0.3.2):
+#   - 修复了当某个任务过滤后仅剩一个框时，scores 和 labels 变为标量导致
+#     torch.cat 合并时维度不匹配的严重错误 (RuntimeError: Tensors must have
+#     same number of dimensions)。
+#   - 将置信度过滤逻辑从 _filter_by_class_score 迁移至 get_task_detections，
+#     使用 masked_select 进行过滤，彻底解决因标量张量导致的维度问题。
+#   - 重构 get_task_detections，统一使用 view(-1) 确保 top_scores 和 top_labels
+#     始终为一维张量，避免单框场景下的标量问题。
+#   - 删除冗余的 _filter_by_class_score 方法，简化代码结构。
+#   - 向后兼容：未配置 per_class 阈值时自动回退到全局阈值。
+#
+# Release Note (v0.3.2)
+#   - 修复：解决当某个任务过滤后仅剩一个框时，scores 和 labels 变为标量，导致 torch.cat 合并时维度不匹配的错误。
+#   - 重构：将置信度过滤逻辑移至 get_task_detections，使用 masked_select 确保维度一致性；统一使用 view(-1) 强制一维，避免标量问题。
+#   - 优化：删除冗余的 _filter_by_class_score 方法，简化代码，提高可维护性。
+#   - 兼容：完全向后兼容，未配置 per-class 阈值时自动使用全局阈值。
+# =============================================================================
+
+# =============================================================================
+# @file       xmy_centerhead_percls.py
+# @author     xmy
 # @date       2026-03-10
 # @version    2.0
 # @brief      自定义 CenterHead，支持训练阶段分类损失的类别加权。
@@ -154,7 +179,6 @@ class XmyCenterHeadPerCls(CenterHead):
         # import pdb;pdb.set_trace()
         # ========== 测试相关配置 ==========
         # 类别置信度阈值（测试时使用）
-        # [xmy] 从 test_cfg 中读取 per-class 阈值配置，若不存在则默认为空字典
         self.per_class_score_threshold = self.test_cfg.get('per_class_score_threshold', {})
         # 类别 NMS 阈值（测试时使用）
         self.per_class_nms_thr = self.test_cfg.get('per_class_nms_thr', {})
@@ -250,22 +274,14 @@ class XmyCenterHeadPerCls(CenterHead):
 
 
     def _filter_by_class_score(self, boxes3d, scores, labels, task_id):
-        """按类别置信度阈值过滤框。
-        Args:
-            boxes3d (torch.Tensor): 当前样本的所有候选框，形状 [N, 9]
-            scores (torch.Tensor): 对应的分数，形状 [N]
-            labels (torch.Tensor): 对应的标签，形状 [N]
-            task_id (int): 当前任务 ID
-        Returns:
-            tuple: 滤波后的 (boxes3d, scores, labels)
-        """
-        # 如果没有 per-class 阈值配置，直接返回原数据
+        """返回 per-box 的置信度阈值张量（不进行过滤）"""
         if not self.per_class_score_threshold:
-            return boxes3d, scores, labels
+            # 无 per-class 配置时，阈值就是全局阈值
+            thresh = torch.full_like(scores, self.test_cfg.get('score_threshold', 0.0))
+            return thresh
 
         task_class_names = self.class_names[task_id]
-        global_score_thr = self.test_cfg.get('score_threshold', 0.0)  # 安全获取全局阈值
-        # 创建与 scores 同形的阈值张量，初始化为全局阈值
+        global_score_thr = self.test_cfg.get('score_threshold', 0.0)
         per_box_thresh = torch.full_like(scores, global_score_thr)
 
         for cls_idx, cls_name in enumerate(task_class_names):
@@ -273,8 +289,8 @@ class XmyCenterHeadPerCls(CenterHead):
                 cls_mask = (labels == cls_idx)
                 per_box_thresh[cls_mask] = self.per_class_score_threshold[cls_name]
 
-        keep_mask = scores >= per_box_thresh
-        return boxes3d[keep_mask], scores[keep_mask], labels[keep_mask]
+        return per_box_thresh
+    
 
     @force_fp32(apply_to=("preds_dicts"))
     def get_bboxes(self, preds_dicts, metas, img=None, rescale=False):
@@ -285,14 +301,6 @@ class XmyCenterHeadPerCls(CenterHead):
         Returns:
             list[dict]: Decoded bbox, scores and labels after nms.
         """
-        if Debug:
-            # import pdb;pdb.set_trace()
-            debug_time = time.time()
-            print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py] >>> [DEBUG CenterHead.get_bboxes] 开始时间: {debug_time:.6f}")
-            print(f" 任务数量: {len(self.class_names)}")
-            print(f" 任务分组: {self.class_names}")
-            print(f" 每个任务的类别数: {self.num_classes}")
-
         # 1.处理 nms_type: 确保它是一个列表，长度等于任务数
         if not isinstance(self.test_cfg["nms_type"], list):
             nms_types = [self.test_cfg["nms_type"] for _ in range(len(preds_dicts))]
@@ -322,9 +330,9 @@ class XmyCenterHeadPerCls(CenterHead):
         for task_id, preds_dict in enumerate(preds_dicts):
             num_class_with_bg = self.num_classes[task_id]         # 当前任务的类别数
             batch_size = preds_dict[0]["heatmap"].shape[0]        # batch大小
-            if Debug:
-                print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py] >>> 处理任务{task_id}: {self.class_names[task_id]}")
-                print(f">>>[xmy]🔵[xmy_centerhead_percls.py] >>> 任务{task_id}的类别数: {num_class_with_bg}")
+            # if Debug:
+            #     print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py] >>> 处理任务{task_id}: {self.class_names[task_id]}")
+            #     print(f">>>[xmy]🔵[xmy_centerhead_percls.py] >>> 任务{task_id}的类别数: {num_class_with_bg}")
 
             # 获取当前任务的特征图并做sigmoid处理
             batch_heatmap = preds_dict[0]["heatmap"].sigmoid()
@@ -356,32 +364,23 @@ class XmyCenterHeadPerCls(CenterHead):
                 task_id=task_id,
             )
 
-            if Debug:
-                print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py] >>> 解码后任务{task_id}的临时结果:")
-                for i in range(min(2, batch_size)):
-                    boxes_info = temp[i]
-                    print(f"   样本{i}: 框数量 {len(boxes_info['bboxes'])}")
-
             # ====== [xmy] 阶段1: 按类别置信度阈值(per_class_score_threshold) 的过滤 ======
             # 直接用test_cfg.per_class_score_threshold 滤波temp结果
             # 直接修改 temp 中的内容，后续分支直接使用 temp
-            for i in range(batch_size):
-                boxes3d, scores, labels = self._filter_by_class_score(
-                    temp[i]["bboxes"], temp[i]["scores"], temp[i]["labels"], task_id
-                )
-                temp[i]["bboxes"] = boxes3d
-                temp[i]["scores"] = scores
-                temp[i]["labels"] = labels
+            # for i in range(batch_size):
+            #     if Debug:
+            #         print(f"[DEBUG] before filter: boxes3d.shape={temp[i]['bboxes'].shape}, scores.shape={temp[i]['scores'].shape}, labels.shape={temp[i]['labels'].shape}")
+            #     boxes3d, scores, labels = self._filter_by_class_score(
+            #         temp[i]["bboxes"], temp[i]["scores"], temp[i]["labels"], task_id
+            #     )
+            #     temp[i]["bboxes"] = boxes3d
+            #     temp[i]["scores"] = scores
+            #     temp[i]["labels"] = labels
 
             # 重新生成滤波后的列表（因为数据量可能变化）
             batch_reg_preds = [box["bboxes"] for box in temp]
             batch_cls_preds = [box["scores"] for box in temp]
             batch_cls_labels = [box["labels"] for box in temp]
-
-            if Debug:
-                print(f"任务 {task_id} 滤波后框数统计:")
-                for i in range(batch_size):
-                    print(f"  样本 {i}: 保留 {len(batch_cls_preds[i])} 框")
             # ===================================================
 
             # ====== [xmy] 阶段2: NMS 的过滤 ======
@@ -438,20 +437,21 @@ class XmyCenterHeadPerCls(CenterHead):
                 # =================== rotate分支结束 ===================
 
         # =================== 合并所有任务的结果 ===================
-        if Debug:
-            print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py] >>> 开始合并{len(rets)}个任务的结果")
         num_samples = len(rets[0])
 
         ret_list = []
         for i in range(num_samples):
             for k in rets[0][i].keys():
                 if k == "bboxes":
+                    # 合并bboxes
                     bboxes = torch.cat([ret[i][k] for ret in rets])
                     bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5
                     bboxes = metas[i]["box_type_3d"](bboxes, self.bbox_coder.code_size)
                 elif k == "scores":
+                    # 合并scores
                     scores = torch.cat([ret[i][k] for ret in rets])
                 elif k == "labels":
+		    # 合并labels
                     flag = 0
                     for j, num_class in enumerate(self.num_classes):
                         rets[j][i][k] += flag
@@ -470,7 +470,7 @@ class XmyCenterHeadPerCls(CenterHead):
         nms_scale=1.0,
         task_id=None,
     ):
-        """Rotate nms for each task (已移除得分过滤，仅执行类别NMS和后续处理)."""
+        """Rotate nms for each task (支持 per-class NMS 阈值和 per-class 置信度阈值)."""
         predictions_dicts = []
         post_center_range = self.test_cfg["post_center_limit_range"]
         if len(post_center_range) > 0:
@@ -485,80 +485,103 @@ class XmyCenterHeadPerCls(CenterHead):
         for i, (box_preds, cls_preds, cls_labels) in enumerate(
             zip(batch_reg_preds, batch_cls_preds, batch_cls_labels)
         ):
-            # ========== [xmy] 修改：使用view(-1)避免标量问题 ==========
-            # 处理单/多类别情况（输入已经是过滤后的）
-            # 修改1：使用 view(-1) 统一展平：cls_preds.view(-1) 确保 top_scores 始终为一维张量;不再用squeeze(-1)
-            top_scores = cls_preds.view(-1)          # view展平为一维，[N] 或 [0],不再用squeeze()
+            # ========== 数据格式修复 ==========
+            if not isinstance(cls_labels, torch.Tensor):
+                cls_labels = torch.tensor([], dtype=torch.long, device=box_preds.device)
+            elif cls_labels.dtype in [torch.float16, torch.float32, torch.float64]:
+                cls_labels = cls_labels.long()
+
+            if not isinstance(cls_preds, torch.Tensor):
+                cls_preds = torch.tensor([], device=box_preds.device)
+
+            # ========== 生成 top_scores 和 top_labels ==========
             if num_class_with_bg == 1:
-                # 单类别任务task，标签生成全0：
-                # 修改2：使用 top_scores.shape[0] 创建零标签，确保标签数量与分数数量一致。由于 top_scores 已确保为一维，shape[0] 安全
+                # 使用 view(-1) 确保一维，避免标量（与 squeeze(-1) 等价但处理 [1] 时更安全）
+                top_scores = cls_preds.view(-1)
                 top_labels = torch.zeros(
-                    top_scores.shape[0], device=top_scores.device, dtype=torch.long
+                    cls_preds.shape[0], device=cls_preds.device, dtype=torch.long
                 )
             else:
-                # 修改3：多类别任务标签处理：cls_labels.long().view(-1) 同样将标签展平为一维，保证与 top_scores 对齐
-                top_labels = cls_labels.long().view(-1)
-            # ======================================================
+                top_labels = cls_labels.long()
+                top_scores = cls_preds.view(-1)   # 保持一维
 
-            if Debug:
-                print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py] >>> rotate NMS前 (样本 {i}):")
+            # ========== 空预测处理 ==========
+            if top_scores.numel() == 0:
+                predictions_dicts.append(dict(
+                    bboxes=torch.zeros(0, self.bbox_coder.code_size, device=box_preds.device),
+                    scores=torch.zeros(0, device=box_preds.device),
+                    labels=torch.zeros(0, dtype=torch.long, device=box_preds.device),
+                ))
+                continue
+
+            # ========== 生成 per-box 阈值（替换官方固定阈值分支） ==========
+            # 获取全局阈值（默认值）
+            global_score_thr = self.test_cfg.get('score_threshold', 0.0)
+            per_box_thresh = torch.full_like(top_scores, global_score_thr)
+
+            # 根据类别设置 per-class 阈值（如果配置了）
+            if self.per_class_score_threshold:
                 for cls_idx, cls_name in enumerate(task_class_names):
-                    cls_mask = (top_labels == cls_idx)
-                    cls_count = cls_mask.sum().item()
-                    if cls_count > 0:
-                        cls_scores = top_scores[cls_mask]
-                        print(f"    {cls_name}: {cls_count} 个框, 平均得分 {cls_scores.mean():.3f}")
+                    if cls_name in self.per_class_score_threshold:
+                        cls_mask = (top_labels == cls_idx)
+                        per_box_thresh[cls_mask] = self.per_class_score_threshold[cls_name]
 
-            # 如果过滤后还有框，则继续处理 NMS
-            # 修改4：修改条件判断：使用 numel() 而非 shape[0]。top_scores.numel() > 0：numel() 返回张量元素总数，对空张量返回 0，对标量返回 1，对任意维度张量均有效，替代 shape[0] 更鲁棒
-            if top_scores.numel() > 0:
-                # 计算 BEV 框并应用 nms_scale 缩放
-                bev_box = metas[i]["box_type_3d"](
-                    box_preds[:, :], self.bbox_coder.code_size
-                ).bev
-                for cls, scale in enumerate(nms_scale):
-                    cur_bev_box = bev_box[top_labels == cls]
-                    cur_bev_box[:, [2, 3]] *= scale
-                    bev_box[top_labels == cls] = cur_bev_box
-                boxes_for_nms = xywhr2xyxyr(bev_box)
+            # ========== 执行过滤（利用 masked_select 自动恢复维度） ==========
+            keep = top_scores >= per_box_thresh
+            top_scores = top_scores.masked_select(keep)
+            box_preds = box_preds[keep]
+            top_labels = top_labels[keep]
 
-                # 按类别分别执行 NMS
-                unique_labels = top_labels.unique()
-                selected = []
-                if unique_labels.numel() > 0:
-                    for cls_label in unique_labels:
-                        cls_mask = (top_labels == cls_label)
-                        cls_boxes = boxes_for_nms[cls_mask]
-                        cls_scores = top_scores[cls_mask]
-                        cls_name = task_class_names[cls_label.item()]
-                        nms_thr = self.per_class_nms_thr.get(cls_name, self.test_cfg.get("nms_thr", 0.2))
-                        cls_selected = nms_gpu(
-                            cls_boxes,
-                            cls_scores,
-                            thresh=nms_thr,
-                            pre_maxsize=self.test_cfg.get("pre_max_size", 1000),
-                            post_max_size=self.test_cfg.get("post_max_size", 83),
-                        )
-                        global_indices = torch.where(cls_mask)[0][cls_selected]
-                        selected.append(global_indices)
-                    if selected:
-                        selected = torch.cat(selected)
-                    else:
-                        selected = torch.tensor([], dtype=torch.long, device=top_scores.device)
+            # 再次检查空预测（过滤后可能为空）
+            if top_scores.numel() == 0:
+                predictions_dicts.append(dict(
+                    bboxes=torch.zeros(0, self.bbox_coder.code_size, device=box_preds.device),
+                    scores=torch.zeros(0, device=box_preds.device),
+                    labels=torch.zeros(0, dtype=torch.long, device=box_preds.device),
+                ))
+                continue
+
+            # ========== 后续 NMS 处理（与官方一致） ==========
+            bev_box = metas[i]["box_type_3d"](
+                box_preds[:, :], self.bbox_coder.code_size
+            ).bev
+
+            # 应用 NMS 尺度缩放
+            for cls, scale in enumerate(nms_scale):
+                mask = (top_labels == cls)
+                if mask.dim() > 1:
+                    mask = mask.view(-1)
+                cur_bev_box = bev_box[mask]
+                cur_bev_box[:, [2, 3]] *= scale
+                bev_box[mask] = cur_bev_box
+
+            boxes_for_nms = xywhr2xyxyr(bev_box)
+
+            # 按类别分别执行 NMS（支持 per-class NMS 阈值）
+            unique_labels = top_labels.unique()
+            selected = []
+            if unique_labels.numel() > 0:
+                for cls_label in unique_labels:
+                    mask = (top_labels == cls_label)
+                    if mask.dim() > 1:
+                        mask = mask.view(-1)
+                    cls_boxes = boxes_for_nms[mask]
+                    cls_scores = top_scores[mask]
+                    cls_name = task_class_names[cls_label.item()]
+                    nms_thr = self.per_class_nms_thr.get(cls_name, self.test_cfg.get("nms_thr", 0.2))
+                    cls_selected = nms_gpu(
+                        cls_boxes,
+                        cls_scores,
+                        thresh=nms_thr,
+                        pre_maxsize=self.test_cfg.get("pre_max_size", 1000),
+                        post_max_size=self.test_cfg.get("post_max_size", 83),
+                    )
+                    global_indices = torch.where(mask)[0][cls_selected]
+                    selected.append(global_indices)
+                if selected:
+                    selected = torch.cat(selected)
                 else:
                     selected = torch.tensor([], dtype=torch.long, device=top_scores.device)
-
-                if Debug:
-                    print(f">>>[xmy]🔵[xmy_centerhead_percls.py] >>> NMS 后最终框数 (样本 {i}):")
-                    if len(selected) > 0:
-                        final_box_preds = box_preds[selected]
-                        final_scores = top_scores[selected]
-                        final_labels = top_labels[selected]
-                        for cls_idx, cls_name in enumerate(task_class_names):
-                            final_count = (final_labels == cls_idx).sum().item()
-                            print(f"    {cls_name}: {final_count}")
-                    else:
-                        print("    无剩余框")
             else:
                 selected = torch.tensor([], dtype=torch.long, device=top_scores.device)
 
@@ -589,7 +612,7 @@ class XmyCenterHeadPerCls(CenterHead):
                 predictions_dict = dict(
                     bboxes=torch.zeros([0, self.bbox_coder.code_size], dtype=dtype, device=device),
                     scores=torch.zeros([0], dtype=dtype, device=device),
-                    labels=torch.zeros([0], dtype=top_labels.dtype, device=device),
+                    labels=torch.zeros([0], dtype=torch.long, device=device),
                 )
 
             predictions_dicts.append(predictions_dict)
