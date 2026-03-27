@@ -1,4 +1,10 @@
 # ============================================================================
+# 日期: 2026-03-27
+# author: xmy
+# 版本: v8.4
+#   - TYJTDatasetV2的create_gt_database加速: pipeline删除LoadPointsFromMultiSweeps加载
+# ============================================================================
+# ============================================================================
 # create_gt_database.py - 多进程加速版本 v8.3,  for v03数据集
 # 路径: tools/data_converter/create_gt_database.py
 # 修改说明：
@@ -529,15 +535,15 @@ def create_groundtruth_database(
                     use_dim=6,                       # 和原始的主点云一致，生成的数据库点云也是6维度
                     # use_dim=[0,1,2,3,4],           # 使用前5维（或使用全部6维：use_dim=6）
                 ),
-                dict(
-                    type="LoadPointsFromMultiSweeps",
-                    sweeps_num=10,
-                    load_dim=6,
-                    use_dim=6,                       # 和原始的主点云一致，生成的数据库点云也是6维度
-                    # use_dim=[0,1,2,3,4],
-                    pad_empty_sweeps=True,
-                    remove_close=True,
-                ),
+                # dict(
+                #     type="LoadPointsFromMultiSweeps",
+                #     sweeps_num=10,
+                #     load_dim=6,
+                #     use_dim=6,                       # 和原始的主点云一致，生成的数据库点云也是6维度
+                #     # use_dim=[0,1,2,3,4],
+                #     pad_empty_sweeps=True,
+                #     remove_close=True,
+                # ),
                 dict(
                     type="LoadAnnotations3D", with_bbox_3d=True, with_label_3d=True
                 ),
