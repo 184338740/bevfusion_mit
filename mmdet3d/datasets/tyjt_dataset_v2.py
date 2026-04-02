@@ -4,7 +4,12 @@
     - 直接使用 TYJT 的 data_infos 作为 GT，无需模拟 NuScenes 对象或依赖 split 文件。
     - 通过继承 DetectionEval 并重写 GT 加载逻辑，复用官方评估核心算法。
     - 预测结果保持自车坐标系，避免全局坐标转换导致的范围过滤失效。
-升级内容:
+
+版本v2.3.0
+    - 修复验证集（val）运行时报错 KeyError: 'ann_info' 的问题
+        - val/test 模式时, class TYJTDatasetV2 的 def get_data_info() 也生成 'ann_info'
+
+版本v2.3.0
     - 新增 TYJTEval 类（继承 DetectionEval）：
         -_load_tyjt_gt()：从 data_infos 加载 GT，转换为 DetectionBox，并计算 center_dist、num_pts。
         - _add_center_dist()：为预测框计算 center_dist。
@@ -394,10 +399,10 @@ class TYJTDatasetV2(Custom3DDataset):
             data['camera2ego'] = camera2ego
             data['camera2lidar'] = camera2lidar
 
-        # 标注信息(非测试模式)
-        if not self.test_mode:
-            data['ann_info'] = self.get_ann_info(index)
-
+        # # 标注信息(非测试模式)
+        # if not self.test_mode:
+        #     data['ann_info'] = self.get_ann_info(index)
+        data['ann_info'] = self.get_ann_info(index)
         return data
 
     def get_ann_info(self, index):
