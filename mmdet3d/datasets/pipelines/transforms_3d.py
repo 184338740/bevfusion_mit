@@ -214,7 +214,9 @@ class GlobalRotScaleTrans:
                 data["points"].translate(translation)
                 data["points"].scale(scale)
 
-            if "radar" in data:
+            # 【xmy-修改】
+            # if "radar" in data:  
+            if "radar" in data and data["radar"] is not None and hasattr(data["radar"], 'rotate'):
                 data["radar"].rotate(-theta)
                 data["radar"].translate(translation)
                 data["radar"].scale(scale)
@@ -331,7 +333,10 @@ class RandomFlip3D:
             rotation = np.array([[1, 0, 0], [0, -1, 0], [0, 0, 1]]) @ rotation
             if "points" in data:
                 data["points"].flip("horizontal")
-            if "radar" in data:
+
+            # 【xmy-修改】
+            # if "radar" in data:
+            if "radar" in data and data["radar"] and hasattr(data["radar"], 'flip'):
                 data["radar"].flip("horizontal")
             if "gt_bboxes_3d" in data:
                 data["gt_bboxes_3d"].flip("horizontal")
@@ -342,7 +347,10 @@ class RandomFlip3D:
             rotation = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]]) @ rotation
             if "points" in data:
                 data["points"].flip("vertical")
-            if "radar" in data:
+
+            # 【xmy-修改】
+            # if "radar" in data:
+            if "radar" in data and data["radar"] and hasattr(data["radar"], 'flip'):
                 data["radar"].flip("vertical")
             if "gt_bboxes_3d" in data:
                 data["gt_bboxes_3d"].flip("vertical")
@@ -604,7 +612,9 @@ class PointsRangeFilter:
         clean_points = points[points_mask]
         data["points"] = clean_points
 
-        if "radar" in data:
+        # 【xmy-修改】
+        # if "radar" in data:
+        if "radar" in data and data["radar"] is not None and hasattr(data["radar"], 'in_range_bev'):
             radar = data["radar"]
             # radar_mask = radar.in_range_3d(self.pcd_range)
             radar_mask = radar.in_range_bev([-55.0, -55.0, 55.0, 55.0])
