@@ -5,7 +5,17 @@
     - 通过继承 DetectionEval 并重写 GT 加载逻辑，复用官方评估核心算法。
     - 预测结果保持自车坐标系，避免全局坐标转换导致的范围过滤失效。
 
-版本v2.3.0
+版本v2.3.3
+    - 修复TYJTDatasetV2 类内 self.CLASSES 的顺序错位问题,会导致训练类型完全错误
+        - 原因:TYJTDatasetV2.CLASSES 的顺序与配置文件中的 object_classes 顺序不一致，导致 get_ann_info 生成的 gt_labels_3d 索引与模型检测头的输出通道顺序错位。
+        - self.CLASSES 改为和官方配置(mmdet3d/datasets/nuscenes_dataset.py)一致的CLASSES顺序,防止后续的 loss\get_ann_info\TYJTEval 受到影响
+    
+版本v2.3.2
+    - 修复test是报错：KeyError: 'box_type_3d' 。原因： metas 缺少了 box_type_3d 字段
+        - 在 TYJTDatasetV2.get_data_info 中返回 box_type_3d
+        - 在配置文件的 test_pipeline 的 Collect3D 中，将 box_type_3d 添加到 meta_lis_keys
+
+版本v2.3.1
     - 修复验证集（val）运行时报错 KeyError: 'ann_info' 的问题
         - val/test 模式时, class TYJTDatasetV2 的 def get_data_info() 也生成 'ann_info'
 
@@ -22,7 +32,9 @@
     - 完全向后兼容，不影响原有训练、验证流程。
     - 评估结果与 nuScenes 官方指标对齐，可直接用于模型对比。
 训练命令：
-    torchpack dist-run -np 1 python tools/train_tyjt_pkl.py ./xmy_tools/tyjt2pkl_v2/0311/configs/tyjt_2d_CenterheadLSSfpn_vA010_a_0316_XmyCenterHeadPerCls_TYJTDatasetV2_360x640.yaml --run-dir runs/tyjt_2d_CenterheadLSSfpn_vA010_a_0316_XmyCenterHeadPerCls_TYJTDatasetV2_360x640
+    torchpack dist-run -np 1 python tools/train_tyjt_pkl.py \
+  ./xmy_tools/tyjt2pkl_v2/0311/configs/tyjt_2d_CenterheadLSSfpn_vA010_a_0316_XmyCenterHeadPerCls_TYJTDatasetV2_360x640.yaml \
+  --run-dir runs/tyjt_2d_CenterheadLSSfpn_vA010_a_0316_XmyCenterHeadPerCls_TYJTDatasetV2_360x640
 """
 
 import numpy as np
@@ -82,9 +94,11 @@ class TYJTEval(DetectionEval):
         self.gt_boxes = self._load_tyjt_gt(gt_infos, verbose)
 
         # 手动过滤预测框（基于 class_range）
+        print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [Running: 对预测框(pred_boxes), 进行范围滤波]; self.cfg.class_range = {self.cfg.class_range}")
         self.pred_boxes = self._filter_boxes_by_range(self.pred_boxes, self.cfg.class_range, verbose)
 
         # 手动过滤 GT 框（基于 class_range）
+        print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [Running: 对Gt框(gt_boxes), 进行范围滤波]; self.cfg.class_range = {self.cfg.class_range}")
         self.gt_boxes = self._filter_boxes_by_range(self.gt_boxes, self.cfg.class_range, verbose)
 
         # 样本 token 列表（从 GT 获取）
@@ -117,7 +131,7 @@ class TYJTEval(DetectionEval):
             total_before += len(boxes)
             total_after += len(kept)
         if verbose:
-            print(f"过滤范围后: 框数从 {total_before} 减少到 {total_after}")
+            print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> 过滤范围后: 框数从 {total_before} 减少到 {total_after} ")
         return filtered
 
     def _load_tyjt_gt(self, infos: list, verbose: bool) -> EvalBoxes:
@@ -242,18 +256,32 @@ class TYJTDatasetV2(Custom3DDataset):
 
     # 3. 训练类名
     # Final training classes (10 classes, same as nuScenes)
+    # 官方配置：mmdet3d/datasets/nuscenes_dataset.py
     CLASSES = (
         "car",
         "truck",
-        "bus",
-        "pedestrian",
-        "motorcycle",
-        "bicycle",
-        "construction_vehicle",
         "trailer",
+        "bus",
+        "construction_vehicle",
+        "bicycle",
+        "motorcycle",
+        "pedestrian",
         "traffic_cone",
         "barrier",
     )
+    # 自己的历史错误,错位的版本, 仅作警戒!!!
+    # CLASSES = (
+    #     "car",
+    #     "truck",
+    #     "bus",
+    #     "pedestrian",
+    #     "motorcycle",
+    #     "bicycle",
+    #     "construction_vehicle",
+    #     "trailer",
+    #     "traffic_cone",
+    #     "barrier",
+    # )
 
     # Fixed camera order (must match the keys in info['cams'])
     CAM_ORDER = ['CAM_A', 'CAM_B', 'CAM_C', 'CAM_D']
@@ -346,7 +374,7 @@ class TYJTDatasetV2(Custom3DDataset):
             'lidar2ego': np.eye(4, dtype=np.float32),
             'sample_idx': info.get('token', str(index)),   # 用于数据库生成的文件名
         }
-
+            
         # 相机信息(仅在启用时添加)
         if self.modality.get('use_camera', False):
             img_paths = []
@@ -392,14 +420,26 @@ class TYJTDatasetV2(Custom3DDataset):
                 lidar2image_mat = intrinsic_4x4 @ lidar2camera_mat
                 lidar2image.append(lidar2image_mat)
 
+            # 在循环结束后，将列表转换为 numpy 数组
+            camera2ego = np.stack(camera2ego, axis=0)        # (N, 4, 4)
+            camera2lidar = np.stack(camera2lidar, axis=0)    # (N, 4, 4)
+            camera_intrinsics = np.stack(camera_intrinsics, axis=0)  # (N, 4, 4)
+            lidar2camera = np.stack(lidar2camera, axis=0)    # (N, 4, 4)
+            lidar2image = np.stack(lidar2image, axis=0)      # (N, 4, 4)
+
             data['image_paths'] = img_paths
+            data['filename'] = img_paths   # 添加这一行，与官方键名对齐
             data['lidar2camera'] = lidar2camera
             data['camera_intrinsics'] = camera_intrinsics
             data['lidar2image'] = lidar2image
             data['camera2ego'] = camera2ego
             data['camera2lidar'] = camera2lidar
+            data['box_type_3d'] = self.box_type_3d   # 或者直接写 'LiDAR'
+            # 纯视觉模式下提供占位的 lidar_aug_matrix
+            if not self.modality.get('use_lidar', True):
+                data['lidar_aug_matrix'] = np.eye(4, dtype=np.float32)
 
-        # # 标注信息(非测试模式)
+        # 标注信息(非测试模式)
         # if not self.test_mode:
         #     data['ann_info'] = self.get_ann_info(index)
         data['ann_info'] = self.get_ann_info(index)
@@ -409,7 +449,7 @@ class TYJTDatasetV2(Custom3DDataset):
         info = self.data_infos[index]
 
         # 从 info 直接读取基础框和名称
-        gt_bboxes_3d = info['gt_boxes'].copy()          # (N,7)
+        gt_bboxes_3d = info['gt_boxes'].copy()          # (N,7)  
         gt_names = info['gt_names'].copy()              # (N,)
 
         # 如果需要速度,拼接速度字段
@@ -428,7 +468,7 @@ class TYJTDatasetV2(Custom3DDataset):
             if target is None or target not in self.CLASSES:
                 # 未映射的类别(如 other)设为 -1,但保留名称用于数据库生成(可设为 'unknown')
                 mapped_names.append('unknown')
-                gt_labels_3d.append(-1)
+                gt_labels_3d.append(-1)  # 不在目标class内的目标，index会被设置为-1,代表unknown。   ObjectNameFilter 会给过滤掉
             else:
                 mapped_names.append(target)
                 gt_labels_3d.append(self.CLASSES.index(target))
@@ -443,11 +483,12 @@ class TYJTDatasetV2(Custom3DDataset):
         ).convert_to(self.box_mode_3d)
 
         return dict(
-            gt_bboxes_3d=gt_bboxes_3d,
-            gt_labels_3d=gt_labels_3d,
-            gt_names=mapped_names,   # 添加 gt_names,供数据库生成使用
+            gt_bboxes_3d=gt_bboxes_3d,          # 源数据Gt是全部加载：List：3D边界框，形状 (N, 7) 或 (N, 9) (含速度)，N 为原始样本中的目标数量（未经过滤）
+            gt_labels_3d=gt_labels_3d,          # 源数据Gt是全部加载：List：类别标签索引，形状 (N,)，取值范围 -1 或 (0 ~ C-1)，    -1 表示无效/忽略的目标（原始数据未裁剪）
+                                                # 但：-1代表 unknown类型； 可以被 ObjectNameFilter 默认mask掉；其他的类型则需要配置
+            gt_names=mapped_names,              # 源数据Gt是全部加载：List：类别名称字符串列表，长度 N，用于数据库生成等辅助功能（原始长度）
+            gt_names_3d=mapped_names,           # 源数据Gt是全部加载：List：类别名称字符串列表，长度 N，供 DefaultFormatBundle3D 动态生成标签索引（原始长度）
         )
-
     def get_cat_ids(self, idx):
         info = self.data_infos[idx]
         if self.use_valid_flag and 'valid_flag' in info:
