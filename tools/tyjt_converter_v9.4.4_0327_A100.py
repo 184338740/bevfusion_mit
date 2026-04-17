@@ -3,7 +3,12 @@
 TYJT 数据集预处理脚本，生成 BEVFusion 所需的 info pkl 文件。
 基于 tyjt_calib_utils.py 中的 CalibrationProcessor 进行标定解析
 
-版本 v9.4.4:
+版本 v9.4.5 (0402)
+    - 更新 tyjt场景包的解析配置: 相机映射、路径
+    - 升级 打印: 每个包处理时，打印样本数目
+    - 升级 多线程调用: def create_tyjt_gt_database() ==> def create_groundtruth_database()【注意：目前能运行，但训练会有bug】
+
+版本 v9.4.4: (0327)
     - 新增命令行选项，允许用户选择性生成 info 文件和 GT 数据库，避免重复处理数据包：
         * --generate-info：生成 tyjt_infos_train.pkl 和 tyjt_infos_val.pkl（默认不生成）
         * --generate-database：生成 tyjt_dbinfos_train.pkl 和 tyjt_gt_database/（默认不生成）
@@ -156,7 +161,7 @@ elif DatasetInfos == "A100_all":
             "intersections": {
                 "R03": {
                     "group_key": "G32050700003M00",
-                    "cameras": [  # C相机缺失
+                    "cameras": [  # C相机缺失，T形路口
                         ("R3_Aw_CamS", "A"),
                         ("R3_Bn_CamW", "B"),
                         ("R3_Ds_CamE", "D")
@@ -164,7 +169,7 @@ elif DatasetInfos == "A100_all":
                 },
                 "R04": {
                     "group_key": "G32050700004M00",
-                    "cameras": [  # C相机缺失
+                    "cameras": [  # C相机缺失，T形路口
                         ("R4_Aw_CamS", "A"),
                         ("R4_Bn_CamW", "B"),
                         ("R4_Ds_CamE", "D")
@@ -189,7 +194,7 @@ elif DatasetInfos == "A100_all":
             "intersections": {
                 "R03": {
                     "group_key": "G32050700003M00",
-                    "cameras": [  # C相机缺失
+                    "cameras": [  # C相机缺失，T形路口
                         ("R3_Aw_CamS", "A"),
                         ("R3_Bn_CamW", "B"),
                         ("R3_Ds_CamE", "D")
@@ -197,7 +202,7 @@ elif DatasetInfos == "A100_all":
                 },
                 "R04": {
                     "group_key": "G32050700004M00",
-                    "cameras": [  # C相机缺失
+                    "cameras": [  # C相机缺失,T形路口
                         ("R4_Aw_CamS", "A"),
                         ("R4_Bn_CamW", "B"),
                         ("R4_Ds_CamE", "D")
@@ -220,7 +225,14 @@ elif DatasetInfos == "A100_all":
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
             "intersections": {
-                "R01": {"group_key": "G32020500001M00", "cameras": []}  # 无有效相机
+                "R01": {
+                    "group_key": "G32020500001M00", 
+                    "cameras": [
+                        ("R2_Ae_CamS", "A"),
+                        ("R2_Bs_CamW", "B"),
+                        ("R2_Cw_CamN", "C"),
+                        ("R2_Dn_CamE", "D")
+                    ]}
             }
         },
         "2d3d4d_20241218": {
@@ -297,13 +309,19 @@ elif DatasetInfos == "A100_all":
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
             "intersections": {
-                "R26": {
+                "R26": {  # 发现图像没有做去畸变, 没有image_dc数据,导致为空
                     "group_key": "G32050700026M00",
+                    # "cameras": [
+                    #     ("R26_Aw_CamS", "A"),
+                    #     ("R26_Bn_CamW", "B"),
+                    #     ("R26_Ce_CamN", "C"),
+                    #     ("R26_Ds_CamE", "D")
+                    # ]
                     "cameras": [
-                        ("R26_Aw_CamS", "A"),
-                        ("R26_Bn_CamW", "B"),
-                        ("R26_Ce_CamN", "C"),
-                        ("R26_Ds_CamE", "D")
+                        ("26A_CamR", "A"),
+                        ("26B_CamR", "B"),
+                        ("26C_CamR", "C"),
+                        ("26D_CamR", "D")
                     ]
                 }
             }
@@ -718,22 +736,27 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
 
 def process_package(pkg_name, pkg_config, data_root, out_infos, max_sweeps=10):
     """
-    处理单个数据包，生成带时序信息的 info，并追加到 out_infos 列表。
+    处理单个数据包，生成带时序信息的 info，并追加到 out_infos 列表
+    返回生成的样本数量
     """
     pkg_path = data_root / pkg_name
     if not pkg_path.exists():
         print(f"警告：数据包路径不存在 {pkg_path}")
-        return
+        return 0
 
     print(f"正在处理数据包: {pkg_name}")
     calib_data = load_calibration(pkg_path, pkg_config)
     if not calib_data:
         print(f"  标定加载失败，跳过")
-        return
+        return 0
 
     file_map, sub_packet_map = scan_package_files(pkg_path, pkg_config)
     if not file_map:
-        return
+        print(f"  未找到任何有效样本（无点云/标注/相机配对）")
+        return 0
+    
+    # 记录处理前的样本数
+    before_count = len(out_infos)
 
     sub_packet_samples = defaultdict(list)
     for ts, files in file_map.items():
@@ -799,6 +822,10 @@ def process_package(pkg_name, pkg_config, data_root, out_infos, max_sweeps=10):
                 count += 1
 
             info['sweeps'] = sweeps
+    after_count = len(out_infos)
+    sample_count = after_count - before_count
+    print(f"  数据包 {pkg_name} 生成 {sample_count} 个样本")
+    return sample_count    
 
 def extract_simple_info(infos):
     """提取每个样本的关键时序字段"""
@@ -827,7 +854,7 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def create_tyjt_gt_database(info_pkl, out_dir, data_root):
+def create_tyjt_gt_database(info_pkl, out_dir, data_root, workers=1):
     """基于 TYJTDatasetV2 生成 GT 数据库"""
     from tools.data_converter.create_gt_database import create_groundtruth_database
 
@@ -842,108 +869,9 @@ def create_tyjt_gt_database(info_pkl, out_dir, data_root):
         db_info_save_path=str(Path(out_dir) / 'tyjt_dbinfos_train.pkl'),
         relative_path=True,                  # 使用相对路径
         # 如果不需要加载增强数据，可以设置 load_augmented=None
-        load_augmented=None
+        load_augmented=None,
+        workers=workers   # 添加多线程
     )
-
-
-# def main():
-#     parser = argparse.ArgumentParser(description="TYJT 数据集 info 生成工具 v9.4.2 (NuScenes格式)")
-#     parser.add_argument("--data-root", type=str, default="/mnt/dataset/tyjt_RawData_all",
-#                         help="TYJT 数据集根目录")
-#     parser.add_argument("--train-split", type=str, default="../datasets/tyjt2pkl/Local_V031/tyjt_train.txt",
-#                         help="训练集划分文件")
-#     parser.add_argument("--val-split", type=str, default="../datasets/tyjt2pkl/Local_V031/tyjt_val.txt",
-#                         help="验证集划分文件")
-#     parser.add_argument("--out-dir", type=str, default="../datasets/tyjt2pkl/Local_V031/",
-#                         help="输出 pkl 文件的目录")
-#     parser.add_argument('--max-sweeps', type=int, default=10,
-#                         help='Number of sweeps (previous frames) to include for each sample')
-#     # 新增两个选项
-#     parser.add_argument('--skip-info', action='store_true',
-#                         help='Skip generating tyjt_infos_train.pkl and tyjt_infos_val.pkl')
-#     parser.add_argument('--skip-database', action='store_true',
-#                         help='Skip generating GT database (tyjt_dbinfos_train.pkl and tyjt_gt_database/)')
-    
-#     args = parser.parse_args()
-
-#     out_dir = Path(args.out_dir)
-#     out_dir.mkdir(parents=True, exist_ok=True)
-
-#     train_pkgs = load_split(args.train_split)
-#     val_pkgs = load_split(args.val_split)
-#     print(f"训练集数据包数: {len(train_pkgs)}，验证集数据包数: {len(val_pkgs)}")
-
-#     data_root = Path(args.data_root)
-
-#     train_infos = []
-#     val_infos = []
-
-#     start_time = time.time()
-
-#     for pkg_name in train_pkgs:
-#         if pkg_name not in PACKAGE_CONFIG:
-#             print(f"警告：跳过未配置的数据包: {pkg_name}")
-#             continue
-#         process_package(pkg_name, PACKAGE_CONFIG[pkg_name], data_root, train_infos, max_sweeps=args.max_sweeps)
-
-#     for pkg_name in val_pkgs:
-#         if pkg_name not in PACKAGE_CONFIG:
-#             print(f"警告：跳过未配置的数据包: {pkg_name}")
-#             continue
-#         process_package(pkg_name, PACKAGE_CONFIG[pkg_name], data_root, val_infos, max_sweeps=args.max_sweeps)
-
-#     elapsed = time.time() - start_time
-#     print(f"处理完成，耗时 {elapsed:.2f} 秒")
-#     print(f"训练集样本数: {len(train_infos)}")
-#     print(f"验证集样本数: {len(val_infos)}")
-
-#     # 构建带 metadata 的完整结构
-#     metadata = {
-#         "version": 'Local_V031_sub', #"v03-tyjt",
-#         "description": "TYJT dataset converted for BEVFusion",
-#         "date_created": time.strftime("%Y-%m-%d %H:%M:%S")
-#     }
-#     train_data = {"infos": train_infos, "metadata": metadata}
-#     val_data = {"infos": val_infos, "metadata": metadata}
-
-#     # 保存 pkl
-#     train_pkl = out_dir / "tyjt_infos_train.pkl"
-#     val_pkl = out_dir / "tyjt_infos_val.pkl"
-#     with open(train_pkl, 'wb') as f:
-#         pickle.dump(train_data, f)
-#     with open(val_pkl, 'wb') as f:
-#         pickle.dump(val_data, f)
-
-#     # 可选保存完整 JSON（用于调试），需处理 numpy 数组
-#     train_json = out_dir / "tyjt_infos_train.json"
-#     val_json = out_dir / "tyjt_infos_val.json"
-#     with open(train_json, 'w', encoding='utf-8') as f:
-#         json.dump(train_data, f, cls=NumpyEncoder, indent=2, ensure_ascii=False)
-#     with open(val_json, 'w', encoding='utf-8') as f:
-#         json.dump(val_data, f, cls=NumpyEncoder, indent=2, ensure_ascii=False)
-
-#     print(f"训练集 info 已保存至 {train_pkl} 和 {train_json}")
-#     print(f"验证集 info 已保存至 {val_pkl} 和 {val_json}")
-
-#     # 生成简化版样本文件（不包含 numpy 数组）
-#     train_simple = extract_simple_info(train_infos)
-#     val_simple = extract_simple_info(val_infos)
-
-#     train_simple_path = out_dir / "sample_train.json"
-#     val_simple_path = out_dir / "sample_val.json"
-#     with open(train_simple_path, 'w', encoding='utf-8') as f:
-#         json.dump(train_simple, f, indent=2, ensure_ascii=False)
-#     with open(val_simple_path, 'w', encoding='utf-8') as f:
-#         json.dump(val_simple, f, indent=2, ensure_ascii=False)
-
-#     print(f"简化版样本信息已保存至 {train_simple_path} 和 {val_simple_path}")
-
-
-#     # 生成 GT 数据库（仅训练集）
-#     print(" ========== 开始生成 GT 数据库... ========== ")
-#     create_tyjt_gt_database(str(train_pkl), out_dir, str(data_root))
-#     print(" ========== GT 数据库生成完成。========== ")
-
 
 def main():
     parser = argparse.ArgumentParser(description="TYJT 数据集 info 生成工具 v9.4.4 (NuScenes格式)")
@@ -964,6 +892,8 @@ def main():
                         help='Generate GT database (tyjt_dbinfos_train.pkl and tyjt_gt_database/) (true/false, default: true)')
     parser.add_argument('--version', type=str, default=None,
                         help='Dataset version string (default: auto-generated timestamp)')
+    parser.add_argument('--workers', type=int, default=1,
+                        help='Number of worker processes for GT database generation (default: 1)')
     args = parser.parse_args()
 
     # 解析布尔值
@@ -991,21 +921,25 @@ def main():
         train_infos = []
         val_infos = []
         start_time = time.time()
+        total_train_samples = 0
+        total_val_samples = 0
         for pkg_name in train_pkgs:
             if pkg_name not in PACKAGE_CONFIG:
                 print(f"警告：跳过未配置的数据包: {pkg_name}")
                 continue
-            process_package(pkg_name, PACKAGE_CONFIG[pkg_name], data_root, train_infos, max_sweeps=args.max_sweeps)
+            cnt = process_package(pkg_name, PACKAGE_CONFIG[pkg_name], data_root, train_infos, max_sweeps=args.max_sweeps)
+            total_train_samples += cnt
         for pkg_name in val_pkgs:
             if pkg_name not in PACKAGE_CONFIG:
                 print(f"警告：跳过未配置的数据包: {pkg_name}")
                 continue
-            process_package(pkg_name, PACKAGE_CONFIG[pkg_name], data_root, val_infos, max_sweeps=args.max_sweeps)
+            cnt = process_package(pkg_name, PACKAGE_CONFIG[pkg_name], data_root, val_infos, max_sweeps=args.max_sweeps)
+            total_val_samples += cnt
 
         elapsed = time.time() - start_time
         print(f"处理完成，耗时 {elapsed:.2f} 秒")
-        print(f"训练集样本数: {len(train_infos)}")
-        print(f"验证集样本数: {len(val_infos)}")
+        print(f"训练集总样本数: {len(train_infos)} (各包累计: {total_train_samples})")
+        print(f"验证集总样本数: {len(val_infos)} (各包累计: {total_val_samples})")
 
         # 构建带 metadata 的完整结构
         metadata = {
@@ -1060,7 +994,7 @@ def main():
             print(f"错误：info 文件 {train_pkl} 不存在，无法生成数据库。请先使用 --generate-info true 生成 info 文件。")
         else:
             print(" ========== 开始生成 GT 数据库... ========== ")
-            create_tyjt_gt_database(str(train_pkl), out_dir, str(data_root))
+            create_tyjt_gt_database(str(train_pkl), out_dir, str(data_root), workers=args.workers)
             print(" ========== GT 数据库生成完成。========== ")
     else:
         print("跳过生成 GT 数据库 (--generate-database false)")
