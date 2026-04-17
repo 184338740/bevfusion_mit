@@ -3,7 +3,17 @@
 # author: xmy
 # 版本: v8.4
 #   - TYJTDatasetV2的create_gt_database加速: pipeline删除LoadPointsFromMultiSweeps加载
-# ============================================================================
+# 修改目的
+#   - 加速 GT 数据库生成：生成 ground truth 数据库时只需当前帧目标内部的点云，无需加载前后 10 帧的 sweeps 点云，大幅减少磁盘 I/O 和预处理时间。
+#   - 避免无关点干扰：多帧 sweeps 可能引入动态物体点或不同时刻的噪点，这些点不会出现在当前帧的目标框中，反而可能造成误判或污染数据库样本。
+#   - 简化流程：数据库生成只依赖单帧点云，逻辑更清晰，降低内存占用。
+# 影响范围
+#   - 仅影响 TYJTDatasetV2：其他数据集（NuScenesDataset, KittiDataset, WaymoDataset, TYJTDataset）的 pipeline 保持不变，仍然会加载 multi‑sweeps。
+#   - 不影响训练与推理：该修改仅作用于 create_groundtruth_database 函数，训练时使用的数据集 pipeline 由训练配置文件独立定义，不受影响。
+#   - 数据库内容一致：由于 sweeps 点云在提取目标内点时从未被使用，删除后生成的 .bin 数据库文件内容与修改前完全相同（假设原始单帧点云已覆盖目标区域）。
+# 兼容
+#   - 完全向后兼容：已有数据库无需重新生成；v8.4 生成的数据库与 v8.3 完全等价。
+#   - 无需修改调用代码：只需保持 dataset_class_name = "TYJTDatasetV2" 即可自动生效。
 # ============================================================================
 # create_gt_database.py - 多进程加速版本 v8.3,  for v03数据集
 # 路径: tools/data_converter/create_gt_database.py
@@ -55,7 +65,7 @@ from mmdet3d.core.bbox import box_np_ops as box_np_ops
 from mmdet3d.datasets import build_dataset
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
 
-Debug = True
+Debug = False
 if Debug:
     import time
     print(f">>>[xmy]🔵[tools/data_converter/create_gt_database.py] >>> [Debug Mode = True] ")
@@ -165,20 +175,20 @@ def _process_sample(args, dataset_cfg, database_save_path, info_prefix, with_mas
         print(f">>>[xmy]🔵[tools/data_converter/create_gt_database.py] >>> [DEBUG] _process_sample: dataset id={id(dataset)}, dataset.modality={dataset.modality}")
 
     # 保留原调试断点：处理第一个样本时触发（可根据需要注释）
-    if idx == 0:
+    if Debug and idx == 0:
         import pdb; pdb.set_trace()
         print(">>>[xmy]🔵[tools/data_converter/create_gt_database.py] >>> 进入 _process_sample 处理第一个样本")
 
-    print("DEBUG: calling dataset.get_data_info")
+    if Debug: print("DEBUG: calling dataset.get_data_info")
     input_dict = dataset.get_data_info(idx)
-    print("DEBUG: dataset.get_data_info returned")
+    if Debug: print("DEBUG: dataset.get_data_info returned")
 
-    print("DEBUG: calling dataset.pre_pipeline")
+    if Debug: print("DEBUG: calling dataset.pre_pipeline")
     dataset.pre_pipeline(input_dict)
-    print("DEBUG: dataset.pre_pipeline returned")
-    print("DEBUG: calling dataset.pipeline")
+    if Debug: print("DEBUG: dataset.pre_pipeline returned")
+    if Debug: print("DEBUG: calling dataset.pipeline")
     example = dataset.pipeline(input_dict)
-    print("DEBUG: dataset.pipeline returned")
+    if Debug: print("DEBUG: dataset.pipeline returned")
 
     annos = example["ann_info"]
     image_idx = example["sample_idx"]
@@ -553,7 +563,8 @@ def create_groundtruth_database(
 
     # ---------- 保留原调试打印和断点 ----------
     print(f"🔵[xmy]>>> bevfusion_mit_xmy/tools/data_converter/create_gt_database.py::create_groundtruth_database()  workers={workers}")
-    import pdb; pdb.set_trace()
+    if Debug:
+        import pdb; pdb.set_trace()
 
     # ---------- 输出目录初始化 ----------
     if database_save_path is None:
