@@ -3,6 +3,12 @@
 TYJT 数据集预处理脚本，生成 BEVFusion 所需的 info pkl 文件。
 基于 tyjt_calib_utils.py 中的 CalibrationProcessor 进行标定解析
 
+版本 v9.4.6 (0417)
+    - 严格过滤：仅保留同时包含 CAM_A、CAM_B、CAM_C、CAM_D 四路相机的样本
+    - 实现方式：在 build_sample_info() 中检查 cams_info 的键集合是否完全等于 {'CAM_A','CAM_B','CAM_C','CAM_D'}
+    - 影响：T 型路口（3 相机）和多相机路口（≥5 相机）的样本将被丢弃，确保训练数据统一为四相机格式
+    - 理由：BEVFusion 训练 pipeline 固定需要 A/B/C/D 四路相机
+
 版本 v9.4.5 (0402)
     - 更新 tyjt场景包的解析配置: 相机映射、路径
     - 升级 打印: 每个包处理时，打印样本数目
@@ -57,6 +63,13 @@ import datetime
 
 # 导入自定义标定工具
 from tyjt_utils.tyjt_calib_utils import CalibrationProcessor
+
+Debug = False
+print(f">>>[xmy]🔵[TYJTDatasetV2]🔵[tools/tyjt_converter_A100.py] >>> Debug Mode = {Debug}")
+
+VERBOSE = False   # 设为 True 时打印详细相机状态
+from collections import defaultdict
+skip_stats = defaultdict(lambda: defaultdict(int))   # skip_stats[package_name][reason] += 1
 
 # ==================== 全局配置 ====================
 DatasetInfos = "A100_all"
@@ -579,6 +592,10 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
 
     # 处理相机
     cams_info = {}
+    # if Debug:
+    #     print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [DEBUG] 处理样本 {package_name}_{road_id}_{ts}")
+    #     print(f">>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [DEBUG] 可用相机文件: {[k for k in files.keys() if k.startswith('cam_')]}")
+
     for cam_item in road_cfg["cameras"]:
         if config["type"] == "hikvision":
             folder, cam_order = cam_item[0], cam_item[1]
@@ -588,17 +605,23 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
 
         img_path = files.get(f'cam_{cam_order}')
         if not img_path:
+            if VERBOSE:
+                print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [DEBUG] 相机 {cam_order} 跳过：无图像路径")
             continue
 
         cam_calib = calib_data.get(calib_key)
         if cam_calib is None:
-            print(f"警告：缺失相机标定 {calib_key}")
+            if VERBOSE:
+                print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [DEBUG] 相机 {cam_order} 跳过：标定缺失")
+            # print(f"警告：缺失相机标定 {calib_key}")
             continue
 
         # ---------- 新增：检查相机内参完整性 ----------
         # 必须包含 fx, fy, cx, cy，否则跳过该相机
         if not all(k in cam_calib for k in ['fx', 'fy', 'cx', 'cy']):
-            print(f"警告：相机 {calib_key} 内参缺失，跳过该相机。样本 {token}")
+            if VERBOSE:
+                print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [DEBUG] 相机 {cam_order} 内参缺失: {cam_calib.keys()}")
+            # print(f"警告：相机 {calib_key} 内参缺失，跳过该相机。样本 {token}")
             continue
         # -----------------------------------------
 
@@ -634,9 +657,39 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
             "cam_intrinsic": intrinsic
         }
 
-    # ---------- 新增：检查有效相机数量 ----------
-    if len(cams_info) < 2:
-        print(f"警告：样本 {token} 有效相机数不足2个（仅 {len(cams_info)}），跳过该样本")
+    # ---------- 检查有效相机数量 ----------
+    required_cams = {'CAM_A', 'CAM_B', 'CAM_C', 'CAM_D'}
+    actual_cams = set(cams_info.keys())
+    if actual_cams != required_cams:
+        missing = required_cams - actual_cams
+        extra = actual_cams - required_cams
+        
+        # 始终打印一行简要信息（日志量可控）
+        if VERBOSE: print(f"⚠️ 跳过样本 {token}，缺少相机: {sorted(missing) if missing else '无'}, 多余: {sorted(extra) if extra else '无'}")
+        
+        # 统计跳过原因
+        if missing:
+            reason = f"missing_{'_'.join(sorted(missing))}"
+        else:
+            reason = "extra_cams"
+        skip_stats[package_name][reason] += 1
+        
+        # 可选：如果需要深度排查，临时将下面的 VERBOSE 设为 True
+        # VERBOSE = False   # 调试时改为 True 可打印每个相机的详细状态
+        if VERBOSE:
+            print(f"   详细相机状态:")
+            for cam_item in road_cfg["cameras"]:
+                if config["type"] == "hikvision":
+                    folder, cam_order = cam_item[0], cam_item[1]
+                    calib_key = folder
+                else:
+                    folder, calib_key, cam_order = cam_item[0], cam_item[1], cam_item[2]
+                img_path = files.get(f'cam_{cam_order}')
+                cam_calib = calib_data.get(calib_key)
+                has_img = img_path is not None
+                has_calib = cam_calib is not None
+                has_intr = has_calib and all(k in cam_calib for k in ['fx', 'fy', 'cx', 'cy'])
+                print(f"      {cam_order}: image={has_img}, calib={has_calib}, intrinsic={has_intr}")
         return None
     # -----------------------------------------
 
@@ -764,68 +817,75 @@ def process_package(pkg_name, pkg_config, data_root, out_infos, max_sweeps=10):
         if sub_pkt:
             sub_packet_samples[sub_pkt].append((int(ts), files))
 
-    road_id = next(iter(pkg_config["intersections"]))
+    # 遍历每个路口
+    for road_id in pkg_config["intersections"]:
+        for sub_pkt, samples in sub_packet_samples.items():
+            samples.sort(key=lambda x: x[0])
+            temp_infos = []
+            for ts, files in samples:
+                info = build_sample_info(str(ts), files, calib_data, pkg_config, road_id, pkg_name)
+                if info:
+                    temp_infos.append(info)
 
-    for sub_pkt, samples in sub_packet_samples.items():
-        samples.sort(key=lambda x: x[0])
-        temp_infos = []
-        for ts, files in samples:
-            info = build_sample_info(str(ts), files, calib_data, pkg_config, road_id, pkg_name)
-            if info:
-                temp_infos.append(info)
+            if not temp_infos:
+                continue
 
-        if not temp_infos:
-            continue
+            start_idx = len(out_infos)
+            for i, info in enumerate(temp_infos):
+                info['prev'] = i - 1 if i > 0 else -1
+                info['next'] = i + 1 if i < len(temp_infos) - 1 else -1
+                out_infos.append(info)
 
-        start_idx = len(out_infos)
-        for i, info in enumerate(temp_infos):
-            info['prev'] = i - 1 if i > 0 else -1
-            info['next'] = i + 1 if i < len(temp_infos) - 1 else -1
-            out_infos.append(info)
+            for i, info in enumerate(temp_infos):
+                if info['prev'] != -1:
+                    info['prev'] = start_idx + info['prev']
+                if info['next'] != -1:
+                    info['next'] = start_idx + info['next']
 
-        for i, info in enumerate(temp_infos):
-            if info['prev'] != -1:
-                info['prev'] = start_idx + info['prev']
-            if info['next'] != -1:
-                info['next'] = start_idx + info['next']
+            for i in range(len(temp_infos)):
+                idx = start_idx + i
+                info = out_infos[idx]
+                sweeps = []
+                prev_idx = info['prev']
+                count = 0
+                while prev_idx != -1 and count < max_sweeps:
+                    prev_info = out_infos[prev_idx]
 
-        for i in range(len(temp_infos)):
-            idx = start_idx + i
-            info = out_infos[idx]
-            sweeps = []
-            prev_idx = info['prev']
-            count = 0
-            while prev_idx != -1 and count < max_sweeps:
-                prev_info = out_infos[prev_idx]
+                    ego2global_cur = np.array(info['ego2global'])
+                    ego2global_prev = np.array(prev_info['ego2global'])
+                    T_prev_to_cur = np.linalg.inv(ego2global_cur) @ ego2global_prev
 
-                ego2global_cur = np.array(info['ego2global'])
-                ego2global_prev = np.array(prev_info['ego2global'])
-                T_prev_to_cur = np.linalg.inv(ego2global_cur) @ ego2global_prev
+                    # 分解变换矩阵为旋转矩阵和平移向量
+                    R = T_prev_to_cur[:3, :3]
+                    t = T_prev_to_cur[:3, 3]
 
-                # 分解变换矩阵为旋转矩阵和平移向量
-                R = T_prev_to_cur[:3, :3]
-                t = T_prev_to_cur[:3, 3]
+                    # 将旋转矩阵转换为四元数（[w,x,y,z]）
+                    # quat = CalibrationProcessor.rotation_matrix_to_quaternion(R)
 
-                # 将旋转矩阵转换为四元数（[w,x,y,z]）
-                # quat = CalibrationProcessor.rotation_matrix_to_quaternion(R)
+                    sweep = {
+                        'data_path': prev_info['lidar_path'],
+                        'timestamp': prev_info['timestamp'],
+                        'human_time': prev_info['human_time'],
+                        'sensor2lidar_rotation': R,                 # 直接存储旋转矩阵（numpy 数组）
+                        'sensor2lidar_translation': t,              # 平移向量
+                        'transform': T_prev_to_cur.tolist()
+                    }
+                    sweeps.append(sweep)
+                    prev_idx = prev_info['prev']
+                    count += 1
 
-                sweep = {
-                    'data_path': prev_info['lidar_path'],
-                    'timestamp': prev_info['timestamp'],
-                    'human_time': prev_info['human_time'],
-                    'sensor2lidar_rotation': R,                 # 直接存储旋转矩阵（numpy 数组）
-                    'sensor2lidar_translation': t,              # 平移向量
-                    'transform': T_prev_to_cur.tolist()
-                }
-                sweeps.append(sweep)
-                prev_idx = prev_info['prev']
-                count += 1
-
-            info['sweeps'] = sweeps
+                info['sweeps'] = sweeps
     after_count = len(out_infos)
     sample_count = after_count - before_count
     print(f"  数据包 {pkg_name} 生成 {sample_count} 个样本")
-    return sample_count    
+    # 打印该包的跳过原因统计
+    if pkg_name in skip_stats:
+        print(f"  数据包 {pkg_name} 跳过统计:")
+        for reason, cnt in skip_stats[pkg_name].items():
+            print(f"      {reason}: {cnt}")
+
+    return sample_count
+
 
 def extract_simple_info(infos):
     """提取每个样本的关键时序字段"""
