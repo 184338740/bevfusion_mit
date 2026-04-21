@@ -131,10 +131,19 @@ def main():
 
     configs.load(args.config, recursive=True)
     cfg = Config(recursive_eval(configs), filename=args.config)
-    print(cfg)
+
+    print(f">>>[xmy]🔵 tools/test.py: Before merge_from_dict: cfg = {cfg} ")
 
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
+    print(f">>>[xmy]🔵 tools/test.py: After merge_from_dict: cfg = {cfg} ")
+
+    cfg.dump(os.path.join('cur_configs.yaml'))
+    # cfg.dump(os.path.join('cur_configs.py'))
+    cfg.dump(os.path.join('cur_configs.json'))
+
+
+
     # set cudnn_benchmark
     if cfg.get("cudnn_benchmark", False):
         torch.backends.cudnn.benchmark = True
