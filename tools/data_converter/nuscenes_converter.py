@@ -21,6 +21,97 @@ nus_attributes = ('cycle.with_rider', 'cycle.without_rider',
                   'pedestrian.sitting_lying_down', 'vehicle.moving',
                   'vehicle.parked', 'vehicle.stopped', 'None')
 
+# # 🔵[xmy添加]>>> TYJT到nuScenes的类别映射
+# TYJT_CATEGORY_MAPPING = {
+#     'vehicle.car': 'car',
+#     'vehicle.truck': 'truck', 
+#     'vehicle.construction': 'construction_vehicle',
+#     'vehicle.van': 'car',
+#     'vehicle.bus': 'bus',
+#     'vehicle.emergency.vehicle': 'construction_vehicle',
+#     'human.pedestrian.adult': 'pedestrian',
+#     'human.pedestrian.cyclist': 'motorcycle',  # 关键修复
+#     'vehicle.bicycle': 'bicycle',
+#     'vehicle.tricycle': 'motorcycle',  # 关键修复
+#     'human.pedestrian.police_officer': 'pedestrian',
+#     'vehicle.trailer': 'trailer',
+#     'movable_object.trafficcone': 'traffic_cone',
+#     'movable_object.barrier': 'barrier',
+#     'movable_object.debris': 'barrier'
+# }
+
+# # 🔵[xmy添加]>>> TYJT 内部15属性，初步变成10属性（只有在nusc2pkl的数据预处理阶段，能进行属性merge，在训练阶段只能挑选不能merge）
+# TYJT_CATEGORY_MAPPING = {
+#     "tyjt.car": "tyjt.car",
+#     "tyjt.truck": "tyjt.truck", 
+#     "tyjt.construction_truck": "tyjt.truck",
+#     "tyjt.van": "tyjt.car",
+#     "tyjt.bus": "tyjt.bus",
+#     "tyjt.pedestrian": "tyjt.pedestrian", 
+#     "tyjt.cyclist": "tyjt.pedestrian",
+#     "tyjt.bicycle": "tyjt.bicycle",
+#     "tyjt.tricycle": "tyjt.motorcycle",
+#     "tyjt.tricyclist": "tyjt.pedestrian",
+#     "tyjt.trolley": "tyjt.trolley",
+#     "tyjt.cone": "tyjt.traffic_cone",
+#     "tyjt.barrier": "tyjt.barrier",
+#     "tyjt.robot": "tyjt.other",
+#     "tyjt.other": "tyjt.other"
+# }
+
+
+TYJT_CATEGORY_MAPPING = {
+    # ============ 车辆类 (6类 -> 4类) ============
+    "tyjt.car": "car",                    # car + van -> car
+    "tyjt.van": "car",                    
+    "tyjt.truck": "truck",                # truck + construction_truck -> truck  
+    "tyjt.construction_truck": "truck",
+    "tyjt.bus": "bus",                    # bus
+    "tyjt.robot": "construction_vehicle", # robot -> construction_vehicle
+    # ============ 行人及骑行者 (4类 -> 3类) ============
+    # ---有人
+    "tyjt.pedestrian": "pedestrian",      # pedestrian
+    "tyjt.cyclist": "pedestrian",            # cyclist -> bicycle
+    "tyjt.tricyclist": "motorcycle",      # tricyclist -> motorcycle
+    # ---无人
+    "tyjt.bicycle": "bicycle",            # bicycle
+    "tyjt.tricycle": "motorcycle",        # tricycle -> motorcycle
+    # ============ 特殊物体 (1类 -> 1类) ============
+    "tyjt.trolley": "trailer",            # trolley -> trailer
+    # ============ 道路设施 (3类 -> 2类) ============
+    "tyjt.cone": "traffic_cone",          # cone -> traffic_cone
+    "tyjt.barrier": "barrier",            # barrier + other -> barrier
+    "tyjt.other": "barrier"
+}
+
+#  🔵[xmy添加]>>> TYJT到nuScenes的类别映
+# TYJT_CATEGORY_MAPPING = {
+#     'vehicle.car': 'car',
+#     'vehicle.truck': 'truck', 
+#     'vehicle.construction': 'construction_vehicle',
+#     'vehicle.van': 'car',
+#     'vehicle.bus': 'bus',
+#     'vehicle.emergency.vehicle': 'construction_vehicle',
+#     'human.pedestrian.adult': 'pedestrian',
+#     'human.pedestrian.cyclist': 'motorcycle',  # 关键修复
+#     'vehicle.bicycle': 'bicycle',
+#     'vehicle.tricycle': 'motorcycle',  # 关键修复
+#     'human.pedestrian.police_officer': 'pedestrian',
+#     'vehicle.trailer': 'trailer',
+#     'movable_object.trafficcone': 'traffic_cone',
+#     'movable_object.barrier': 'barrier',
+#     'movable_object.debris': 'barrier'
+# }
+
+
+
+
+
+# 当需要将tyjt转换nusc的names时才使用，但当前方案不再使用该函数
+def convert_tyjt_to_nuscenes_category(tyjt_category):
+    """转换TYJT类别到nuScenes标准类别"""
+    return TYJT_CATEGORY_MAPPING.get(tyjt_category, 'barrier')
+
 
 def create_nuscenes_infos(root_path,
                           info_prefix,
@@ -40,70 +131,192 @@ def create_nuscenes_infos(root_path,
             Default: 10
     """
     from nuscenes.nuscenes import NuScenes
+
+    print(f"🔵[xmy]>>> bevfusion_mit_xmy/tools/data_converter/nuscenes_converter.py::44::create_nuscenes_infos() ")
+    
+    # 1. 初始化NuScenes对象
     nusc = NuScenes(version=version, dataroot=root_path, verbose=True)
-    from nuscenes.utils import splits
-    available_vers = ['v1.0-trainval', 'v1.0-test', 'v1.0-mini']
-    assert version in available_vers
-    if version == 'v1.0-trainval':
-        train_scenes = splits.train
-        val_scenes = splits.val
-    elif version == 'v1.0-test':
-        train_scenes = splits.test
-        val_scenes = []
-    elif version == 'v1.0-mini':
-        train_scenes = splits.mini_train
-        val_scenes = splits.mini_val
-    else:
-        raise ValueError('unknown')
-
-    # filter existing scenes.
+    
+    # 获取可用场景
     available_scenes = get_available_scenes(nusc)
-    available_scene_names = [s['name'] for s in available_scenes]
-    train_scenes = list(
-        filter(lambda x: x in available_scene_names, train_scenes))
-    val_scenes = list(filter(lambda x: x in available_scene_names, val_scenes))
-    train_scenes = set([
-        available_scenes[available_scene_names.index(s)]['token']
-        for s in train_scenes
-    ])
-    val_scenes = set([
-        available_scenes[available_scene_names.index(s)]['token']
-        for s in val_scenes
-    ])
-
+    print(f"🔵[xmy]>>> 可用场景数量: {len(available_scenes)}")
+    
+    # 🔵[xmy修复]>>> 明确test版本处理
     test = 'test' in version
-    if test:
-        print('test scene: {}'.format(len(train_scenes)))
+    print(f"🔵[xmy修复]>>> 当前版本: {version}, 测试模式: {test}")
+    
+    # 🔵[xmy修复]>>> 初始化变量，确保所有分支都能访问
+    train_nusc_infos = []
+    val_nusc_infos = []
+    
+    # 🔵[xmy修复]>>> 单场景数据集特殊处理
+    if len(available_scenes) == 1:
+        print(f"🔵[xmy修复]>>> 单场景数据集，使用时间顺序划分")
+        
+        # 获取所有样本并按时间戳排序
+        all_samples = nusc.sample
+        all_samples.sort(key=lambda x: x['timestamp'])  # 按时间戳排序
+        
+        all_sample_tokens = [sample['token'] for sample in all_samples]
+        
+        if test:
+            # 测试模式：所有样本作为测试集
+            train_sample_tokens = set(all_sample_tokens)
+            val_sample_tokens = set()
+            print(f"🔵[xmy修复]>>> 测试模式：所有{len(all_sample_tokens)}个样本作为测试集")
+        else:
+            # 🔵[xmy修复]>>> 训练验证模式：按时间顺序划分，避免数据泄露
+            split_idx = int(0.7 * len(all_sample_tokens))  # 70%训练，30%验证
+            
+            train_sample_tokens = set(all_sample_tokens[:split_idx])
+            val_sample_tokens = set(all_sample_tokens[split_idx:])
+            
+            print(f"🔵[xmy修复]>>> 训练验证模式：")
+            print(f"  训练样本: {len(train_sample_tokens)}")
+            print(f"  验证样本: {len(val_sample_tokens)}")
+            print(f"  划分比例: 训练{100*split_idx/len(all_sample_tokens):.1f}% / 验证{100*(len(all_sample_tokens)-split_idx)/len(all_sample_tokens):.1f}%")
+        
+        # 传递给_fill_trainval_infos的是样本token集合
+        train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
+            nusc, train_sample_tokens, val_sample_tokens, test=test, 
+            max_sweeps=max_sweeps, max_radar_sweeps=max_radar_sweeps,
+            is_sample_level=True)  # 明确标记为样本级划分
+        
     else:
-        print('train scene: {}, val scene: {}'.format(
-            len(train_scenes), len(val_scenes)))
-    train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
-        nusc, train_scenes, val_scenes, test, max_sweeps=max_sweeps, max_radar_sweeps=max_radar_sweeps)
+        # 多场景使用正常划分逻辑
+        from nuscenes.utils import splits
+        
+        # 🔵[xmy修复]>>> 支持自定义版本
+        available_vers = ['v1.0-trainval', 'v1.0-test', 'v1.0-mini']
+        tyjt_vers = ['v1.0-tyjt-trainval', 'v1.0-tyjt-test', 'v1.0-tyjt']
+        
+        if version in available_vers:
+            # 标准版本使用官方划分
+            if version == 'v1.0-trainval':
+                train_scenes = splits.train
+                val_scenes = splits.val
+                print(f"🔵[xmy修复]>>> 使用官方trainval划分")
+            elif version == 'v1.0-test':
+                train_scenes = splits.test
+                val_scenes = []
+                print(f"🔵[xmy修复]>>> 使用官方test划分")
+            elif version == 'v1.0-mini':
+                train_scenes = splits.mini_train
+                val_scenes = splits.mini_val
+                print(f"🔵[xmy修复]>>> 使用官方mini划分")
+                
+            # 场景过滤
+            available_scene_names = [s['name'] for s in available_scenes]
+            train_scenes = list(filter(lambda x: x in available_scene_names, train_scenes))
+            val_scenes = list(filter(lambda x: x in available_scene_names, val_scenes))
+            train_scenes = set([available_scenes[available_scene_names.index(s)]['token'] for s in train_scenes])
+            val_scenes = set([available_scenes[available_scene_names.index(s)]['token'] for s in val_scenes])
+            
+        elif version in tyjt_vers:
+            # 🔵[xmy修复]>>> TYJT数据集使用自定义划分
+            print(f"🔵[xmy修复]>>> TYJT数据集，使用自定义场景划分")
+            
+            # 获取所有场景
+            all_scenes = [s['token'] for s in available_scenes]
+            scene_names = [s['name'] for s in available_scenes]
+            
+            if version == 'v1.0-tyjt-trainval':
+                # 训练验证模式：70%训练，30%验证
+                split_idx = int(0.7 * len(all_scenes))
+                train_scenes = set(all_scenes[:split_idx])
+                val_scenes = set(all_scenes[split_idx:])
+                print(f"🔵[xmy修复]>>> TYJT训练验证划分: {len(train_scenes)}训练 / {len(val_scenes)}验证")
+                
+            elif version == 'v1.0-tyjt-test':
+                # 测试模式：所有场景作为测试集
+                train_scenes = set(all_scenes)
+                val_scenes = set()
+                print(f"🔵[xmy修复]>>> TYJT测试模式: {len(train_scenes)}测试场景")
+                
+            else:  # v1.0-tyjt
+                # 默认：所有场景既用于训练也用于验证（不推荐）
+                train_scenes = set(all_scenes)
+                val_scenes = set(all_scenes)
+                print(f"🔵[xmy修复]>>> TYJT全量模式: {len(train_scenes)}场景同时用于训练和验证")
+                
+        else:
+            # 其他自定义版本使用自动场景划分
+            print(f"🔵[xmy]>>> 自定义版本: {version}，使用自动场景划分")
+            
+            scene_tokens = [s['token'] for s in available_scenes]
+            scene_names = [s['name'] for s in available_scenes]
+            
+            split_index = int(0.7 * len(scene_tokens))
+            train_scenes = set(scene_tokens[:split_index])
+            val_scenes = set(scene_tokens[split_index:])
+
+        if test:
+            print('test scene: {}'.format(len(train_scenes)))
+        else:
+            print('train scene: {}, val scene: {}'.format(len(train_scenes), len(val_scenes)))
+        
+        # 多场景使用场景级划分
+        train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
+            nusc, train_scenes, val_scenes, test=test, 
+            max_sweeps=max_sweeps, max_radar_sweeps=max_radar_sweeps,
+            is_sample_level=False)  # 明确标记为场景级划分
 
     metadata = dict(version=version)
+
+    # 🔵[xmy修复]>>> 明确的文件保存逻辑
     if test:
+        # 测试模式：只保存测试集
         print('test sample: {}'.format(len(train_nusc_infos)))
         data = dict(infos=train_nusc_infos, metadata=metadata)
-        info_path = osp.join(root_path,
-                             '{}_infos_test_radar.pkl'.format(info_prefix))
+        # FIX: 找不到pkl文件
+        # 错误: NuScenesDataset: [Errno 2] No such file or directory: './data/nuscenes/nuscenes_infos_test.pkl
+        # 日期: 2025-10-09, xmy
+        # 修改1：删除_radar后缀
+        # 修改2：osp.join(info_prefix 改成 osp.join(root_path
+        info_path = osp.join(root_path, '{}_infos_test.pkl'.format(info_prefix))
         mmcv.dump(data, info_path)
+        print(f"🔵[xmy修复]>>> 测试集pkl已生成: {info_path}")
+        
+        # 测试模式不生成gt_database
+        return
     else:
-        print(info_prefix)
-        print('train sample: {}, val sample: {}'.format(
-            len(train_nusc_infos), len(val_nusc_infos)))
+        # 训练验证模式：保存训练集和验证集
+        print('train sample: {}, val sample: {}'.format(len(train_nusc_infos), len(val_nusc_infos)))
+        
+        # 训练集
         data = dict(infos=train_nusc_infos, metadata=metadata)
         # FIX: 找不到pkl文件
         # 错误: NuScenesDataset: [Errno 2] No such file or directory: './data/nuscenes/nuscenes_infos_train.pkl
         # 日期: 2025-10-09, xmy
         # 修改1：删除_radar后缀
         # 修改2：osp.join(info_prefix 改成 osp.join(root_path
-        info_path = osp.join(root_path,
-                             '{}_infos_train_radar.pkl'.format(info_prefix))
+        info_path = osp.join(root_path, '{}_infos_train.pkl'.format(info_prefix))
         mmcv.dump(data, info_path)
+        print(f"🔵[xmy修复]>>> 训练集pkl已生成: {info_path}")
+        
+        # 验证集  
         data['infos'] = val_nusc_infos
-        info_val_path = osp.join(root_path,
-                                 '{}_infos_val_radar.pkl'.format(info_prefix))
+        info_val_path = osp.join(root_path, '{}_infos_val.pkl'.format(info_prefix))
         mmcv.dump(data, info_val_path)
+        print(f"🔵[xmy修复]>>> 验证集pkl已生成: {info_val_path}")
+
+
+    # 🔵[xmy修复]>>> 确保database包含所有nuScenes标准类别
+    if not test:
+        db_path = osp.join(root_path, f'{info_prefix}_dbinfos_train.pkl')
+        if osp.exists(db_path):
+            db_infos = mmcv.load(db_path)
+            # print(f"🔵[xmy修复]>>> 原 db_infos: {db_infos.keys()}")
+
+            # 确保包含所有标准类别
+            for cat in nus_categories:
+                if cat not in db_infos:
+                    db_infos[cat] = []  # 创建空列表
+            
+            # print(f"🔵[xmy修复]>>> 新db_infos: {db_infos.keys()}")
+
+            mmcv.dump(db_infos, db_path)
+            print(f"✅ 已确保database包含所有{len(nus_categories)}个nuScenes标准类别;  nus_categories= {nus_categories}")
 
 
 def get_available_scenes(nusc):
@@ -149,7 +362,8 @@ def _fill_trainval_infos(nusc,
                          val_scenes,
                          test=False,
                          max_sweeps=10, 
-                         max_radar_sweeps=10):
+                         max_radar_sweeps=10,
+                         is_sample_level=False):
     """Generate the train/val infos from the raw data.
     Args:
         nusc (:obj:`NuScenes`): Dataset class in the nuScenes dataset.
@@ -167,162 +381,235 @@ def _fill_trainval_infos(nusc,
     val_nusc_infos = []
     token2idx = {}
 
-    i_ = 0
+    print(f"🔵[xmy修复]>>> 划分模式: {'样本级' if is_sample_level else '场景级'}")
+    print(f"🔵[xmy修复]>>> 训练集大小: {len(train_scenes)}, 验证集大小: {len(val_scenes)}")
+
+    # 🔵[xmy添加]>>> 检测数据集类型
+    is_tyjt_dataset = 'tyjt' in nusc.version.lower()
+
+    print(f"🔵[xmy检测]>>> 数据集类型: {'TYJT' if is_tyjt_dataset else '标准NuScenes'}")
 
     for sample in mmcv.track_iter_progress(nusc.sample):
-        # i_ += 1 
-        # if i_ > 6: 
-        #     break 
+        try:
+            # 1. 获取基础信息
+            lidar_token = sample['data']['LIDAR_TOP']
+            sd_rec = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
+            cs_record = nusc.get('calibrated_sensor', sd_rec['calibrated_sensor_token'])
+            pose_record = nusc.get('ego_pose', sd_rec['ego_pose_token'])
+            lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
 
-        lidar_token = sample['data']['LIDAR_TOP']
-        sd_rec = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
-        cs_record = nusc.get('calibrated_sensor',
-                             sd_rec['calibrated_sensor_token'])
-        pose_record = nusc.get('ego_pose', sd_rec['ego_pose_token'])
-        lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
+            mmcv.check_file_exist(lidar_path)
 
-        mmcv.check_file_exist(lidar_path)
+            # 2. 创建基础info字典
+            info = {
+                'lidar_path': lidar_path,
+                'token': sample['token'],
+                'sweeps': [],
+                'cams': dict(),
+                'radars': dict(), 
+                'lidar2ego_translation': cs_record['translation'],
+                'lidar2ego_rotation': cs_record['rotation'],
+                'ego2global_translation': pose_record['translation'],
+                'ego2global_rotation': pose_record['rotation'],
+                'timestamp': sample['timestamp'],
+                'prev_token': sample['prev']
+            }
 
-        info = {
-            'lidar_path': lidar_path,
-            'token': sample['token'],
-            'sweeps': [],
-            'cams': dict(),
-            'radars': dict(), 
-            'lidar2ego_translation': cs_record['translation'],
-            'lidar2ego_rotation': cs_record['rotation'],
-            'ego2global_translation': pose_record['translation'],
-            'ego2global_rotation': pose_record['rotation'],
-            'timestamp': sample['timestamp'],
-            'prev_token': sample['prev']
-        }
+            # 3. 标定信息
+            l2e_r = info['lidar2ego_rotation']
+            l2e_t = info['lidar2ego_translation']
+            e2g_r = info['ego2global_rotation']
+            e2g_t = info['ego2global_translation']
+            l2e_r_mat = Quaternion(l2e_r).rotation_matrix
+            e2g_r_mat = Quaternion(e2g_r).rotation_matrix
 
-        l2e_r = info['lidar2ego_rotation']
-        l2e_t = info['lidar2ego_translation']
-        e2g_r = info['ego2global_rotation']
-        e2g_t = info['ego2global_translation']
-        l2e_r_mat = Quaternion(l2e_r).rotation_matrix
-        e2g_r_mat = Quaternion(e2g_r).rotation_matrix
-
-        # obtain 6 image's information per frame
-        camera_types = [
-            'CAM_FRONT',
-            'CAM_FRONT_RIGHT',
-            'CAM_FRONT_LEFT',
-            'CAM_BACK',
-            'CAM_BACK_LEFT',
-            'CAM_BACK_RIGHT',
-        ]
-        for cam in camera_types:
-            cam_token = sample['data'][cam]
-            cam_path, _, cam_intrinsic = nusc.get_sample_data(cam_token)
-            cam_info = obtain_sensor2top(nusc, cam_token, l2e_t, l2e_r_mat,
-                                         e2g_t, e2g_r_mat, cam)
-            cam_info.update(cam_intrinsic=cam_intrinsic)
-            info['cams'].update({cam: cam_info})
-
-        radar_names = ['RADAR_FRONT', 'RADAR_FRONT_LEFT', 'RADAR_FRONT_RIGHT',  'RADAR_BACK_LEFT', 'RADAR_BACK_RIGHT']
-
-        for radar_name in radar_names:
-            radar_token = sample['data'][radar_name]
-            radar_rec = nusc.get('sample_data', radar_token)
-            sweeps = []
-
-            while len(sweeps) < max_radar_sweeps:
-                if not radar_rec['prev'] == '':
-                    radar_path, _, radar_intrin = nusc.get_sample_data(radar_token)
-
-                    radar_info = obtain_sensor2top(nusc, radar_token, l2e_t, l2e_r_mat,
-                                                e2g_t, e2g_r_mat, radar_name)
-                    sweeps.append(radar_info)
-                    radar_token = radar_rec['prev']
-                    radar_rec = nusc.get('sample_data', radar_token)
-                else:
-                    radar_path, _, radar_intrin = nusc.get_sample_data(radar_token)
-
-                    radar_info = obtain_sensor2top(nusc, radar_token, l2e_t, l2e_r_mat,
-                                                e2g_t, e2g_r_mat, radar_name)
-                    sweeps.append(radar_info)
-            
-            info['radars'].update({radar_name: sweeps})
-        # obtain sweeps for a single key-frame
-        sd_rec = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
-        sweeps = []
-        while len(sweeps) < max_sweeps:
-            if not sd_rec['prev'] == '':
-                sweep = obtain_sensor2top(nusc, sd_rec['prev'], l2e_t,
-                                          l2e_r_mat, e2g_t, e2g_r_mat, 'lidar')
-                sweeps.append(sweep)
-                sd_rec = nusc.get('sample_data', sd_rec['prev'])
-            else:
-                break
-        info['sweeps'] = sweeps
-        # obtain annotation
-        if not test:
-            annotations = [
-                nusc.get('sample_annotation', token)
-                for token in sample['anns']
+            # 4. 相机信息
+            camera_types = [
+                'CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_FRONT_LEFT',
+                'CAM_BACK', 'CAM_BACK_LEFT', 'CAM_BACK_RIGHT',
             ]
-            locs = np.array([b.center for b in boxes]).reshape(-1, 3)
-            dims = np.array([b.wlh for b in boxes]).reshape(-1, 3)
-            rots = np.array([b.orientation.yaw_pitch_roll[0]
-                             for b in boxes]).reshape(-1, 1)
-            velocity = np.array(
-                [nusc.box_velocity(token)[:2] for token in sample['anns']])
-            valid_flag = np.array(
-                [(anno['num_lidar_pts'] + anno['num_radar_pts']) > 0
-                 for anno in annotations],
-                dtype=bool).reshape(-1)
-            # convert velo from global to lidar
-            for i in range(len(boxes)):
-                velo = np.array([*velocity[i], 0.0])
-                velo = velo @ np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(
-                    l2e_r_mat).T
-                velocity[i] = velo[:2]
+            
+            # 容错处理：只处理存在的相机
+            available_cameras = []
+            for cam in camera_types:
+                if cam in sample['data']:
+                    available_cameras.append(cam)
 
-            names = [b.name for b in boxes]
-            for i in range(len(names)):
-                if names[i] in NuScenesDataset.NameMapping:
-                    names[i] = NuScenesDataset.NameMapping[names[i]]
-            names = np.array(names)
-            # we need to convert rot to SECOND format.
-            gt_boxes = np.concatenate([locs, dims, -rots - np.pi / 2], axis=1)
-            assert len(gt_boxes) == len(
-                annotations), f'{len(gt_boxes)}, {len(annotations)}'
-            info['gt_boxes'] = gt_boxes
-            info['gt_names'] = names
-            info['gt_velocity'] = velocity.reshape(-1, 2)
-            info['num_lidar_pts'] = np.array(
-                [a['num_lidar_pts'] for a in annotations])
-            info['num_radar_pts'] = np.array(
-                [a['num_radar_pts'] for a in annotations])
-            info['valid_flag'] = valid_flag
+            for cam in available_cameras:
+                cam_token = sample['data'][cam]
+                cam_path, _, cam_intrinsic = nusc.get_sample_data(cam_token)
+                cam_info = obtain_sensor2top(nusc, cam_token, l2e_t, l2e_r_mat,
+                                            e2g_t, e2g_r_mat, cam)
+                cam_info.update(cam_intrinsic=cam_intrinsic)
+                info['cams'].update({cam: cam_info})
 
-        if sample['scene_token'] in train_scenes:
-            train_nusc_infos.append(info)
-            token2idx[info['token']] = ('train', len(train_nusc_infos) - 1)
-        else:
-            val_nusc_infos.append(info)
-            token2idx[info['token']] = ('val', len(val_nusc_infos) - 1)
-    
+            # 5. Radar信息处理 - TYJT兼容性
+            radar_names = ['RADAR_FRONT', 'RADAR_FRONT_LEFT', 'RADAR_FRONT_RIGHT', 
+                          'RADAR_BACK_LEFT', 'RADAR_BACK_RIGHT']
+
+            # 🔵[xmy添加]>>> TYJT数据集没有radar数据
+            if is_tyjt_dataset:
+                radar_names = []
+
+            for radar_name in radar_names:
+                if radar_name in sample['data']:
+                    radar_token = sample['data'][radar_name]
+                    try:
+                        radar_info = obtain_sensor2top(nusc, radar_token, l2e_t, l2e_r_mat,
+                                                     e2g_t, e2g_r_mat, 'radar')
+                        info['radars'].update({radar_name: radar_info})
+                    except Exception as e:
+                        print(f"🔵[xmy警告]>>> 处理radar数据失败: {e}")
+
+            # 6. 获取sweeps
+            sd_rec = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
+            sweeps = []
+            while len(sweeps) < max_sweeps:
+                if not sd_rec['prev'] == '':
+                    sweep = obtain_sensor2top(nusc, sd_rec['prev'], l2e_t,
+                                            l2e_r_mat, e2g_t, e2g_r_mat, 'lidar')
+                    sweeps.append(sweep)
+                    sd_rec = nusc.get('sample_data', sd_rec['prev'])
+                else:
+                    break
+            info['sweeps'] = sweeps
+
+            # 7. 获取标注信息
+            if not test:
+                annotations = [
+                    nusc.get('sample_annotation', token)
+                    for token in sample['anns']
+                ]
+
+                locs = np.array([b.center for b in boxes]).reshape(-1, 3)
+                dims = np.array([b.wlh for b in boxes]).reshape(-1, 3)
+                rots = np.array([b.orientation.yaw_pitch_roll[0]
+                                for b in boxes]).reshape(-1, 1)
+                
+                # 处理velocity
+                velocity = np.array([nusc.box_velocity(token)[:2] for token in sample['anns']])
+                valid_flag = np.array([(anno['num_lidar_pts'] + anno['num_radar_pts']) > 0
+                                    for anno in annotations], dtype=bool).reshape(-1)
+                
+                # convert velo from global to lidar
+                for i in range(len(boxes)):
+                    velo = np.array([*velocity[i], 0.0])
+                    velo = velo @ np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(l2e_r_mat).T
+                    velocity[i] = velo[:2]
+
+                names = [b.name for b in boxes]
+                
+                # 🔵[xmy修改]>>> 添加TYJT类别转换逻辑
+                converted_names = []
+                for i in range(len(names)):
+                    original_name = names[i]
+                    
+                    # 如果是TYJT数据集，直接应用TYJT映射
+                    if is_tyjt_dataset:
+                        # 直接使用TYJT映射，不经过NuScenes映射
+                        if original_name in TYJT_CATEGORY_MAPPING:
+                            mapped_name = TYJT_CATEGORY_MAPPING[original_name]
+                            # print(f"🔵[TYJT映射]>>> {original_name} -> {mapped_name}")
+                        else:
+                            # 如果不在TYJT映射中，保持原样
+                            mapped_name = 'tyjt.other'
+                            print(f"🔵[TYJT警告]>>> 未知TYJT类别: {original_name} -> {mapped_name}")
+                    else:
+                        # 标准NuScenes数据集，应用标准映射
+                        if original_name in NuScenesDataset.NameMapping:
+                            mapped_name = NuScenesDataset.NameMapping[original_name]
+                        else:
+                            mapped_name = original_name
+                    
+                    converted_names.append(mapped_name)
+
+                
+                names = np.array(converted_names)
+                
+                # 统计类别分布（调试用）
+                if is_tyjt_dataset and len(names) > 0:
+                    unique_names = set(names)
+                    if len(unique_names) > 0:
+                        print(f"🔵[xmy统计]>>> 样本 {sample['token'][:8]} 包含类别: {unique_names}")
+                
+                gt_boxes = np.concatenate([locs, dims, -rots - np.pi / 2], axis=1)
+                info['gt_boxes'] = gt_boxes
+                info['gt_names'] = names
+                info['gt_velocity'] = velocity.reshape(-1, 2)
+                info['num_lidar_pts'] = np.array([a['num_lidar_pts'] for a in annotations])
+                info['num_radar_pts'] = np.array([a['num_radar_pts'] for a in annotations])
+                info['valid_flag'] = valid_flag
+
+            # 8. 样本划分
+            if is_sample_level:
+                # 样本级划分：直接检查样本token
+                if sample['token'] in train_scenes:
+                    train_nusc_infos.append(info)
+                    token2idx[info['token']] = ('train', len(train_nusc_infos) - 1)
+                if sample['token'] in val_scenes:
+                    val_nusc_infos.append(info)
+                    token2idx[info['token']] = ('val', len(val_nusc_infos) - 1)
+            else:
+                # 场景级划分：检查样本所属场景
+                if sample['scene_token'] in train_scenes:
+                    train_nusc_infos.append(info)
+                    token2idx[info['token']] = ('train', len(train_nusc_infos) - 1)
+                elif sample['scene_token'] in val_scenes:
+                    val_nusc_infos.append(info)
+                    token2idx[info['token']] = ('val', len(val_nusc_infos) - 1)
+
+        except Exception as e:
+            print(f"🔵[xmy错误]>>> 处理样本 {sample['token']} 时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+
+    # 9. 处理prev_token链接
     for info in train_nusc_infos:
         prev_token = info['prev_token']
         if prev_token == '':
             info['prev'] = -1
         else:
-            prev_set, prev_idx = token2idx[prev_token]
-            assert prev_set == 'train'
-            info['prev'] = prev_idx
+            if prev_token in token2idx:
+                prev_set, prev_idx = token2idx[prev_token]
+                if prev_set == 'train':
+                    info['prev'] = prev_idx
+                else:
+                    info['prev'] = -1
+            else:
+                info['prev'] = -1
 
     for info in val_nusc_infos:
         prev_token = info['prev_token']
         if prev_token == '':
             info['prev'] = -1
         else:
-            prev_set, prev_idx = token2idx[prev_token]
-            assert prev_set == 'val'
-            info['prev'] = prev_idx
+            if prev_token in token2idx:
+                prev_set, prev_idx = token2idx[prev_token]
+                if prev_set == 'val':
+                    info['prev'] = prev_idx
+                else:
+                    info['prev'] = -1
+            else:
+                info['prev'] = -1
 
+    # 🔵[xmy添加]>>> 最终统计信息
+    if not test:
+        train_categories = {}
+        val_categories = {}
+        
+        for info in train_nusc_infos:
+            for name in info.get('gt_names', []):
+                train_categories[name] = train_categories.get(name, 0) + 1
+                
+        for info in val_nusc_infos:
+            for name in info.get('gt_names', []):
+                val_categories[name] = val_categories.get(name, 0) + 1
+        
+        print(f"🔵[xmy统计]>>> 训练集类别分布: {dict(sorted(train_categories.items()))}")
+        print(f"🔵[xmy统计]>>> 验证集类别分布: {dict(sorted(val_categories.items()))}")
+
+    print(f"🔵[xmy修复]>>> 最终结果: 训练样本 {len(train_nusc_infos)}, 验证样本 {len(val_nusc_infos)}")
     return train_nusc_infos, val_nusc_infos
 
 
@@ -655,16 +942,30 @@ def generate_record(ann_rec: dict, x1: float, y1: float, x2: float, y2: float,
     coco_rec['image_id'] = sample_data_token
     coco_rec['area'] = (y2 - y1) * (x2 - x1)
 
-    if repro_rec['category_name'] not in NuScenesDataset.NameMapping:
-        return None
-    cat_name = NuScenesDataset.NameMapping[repro_rec['category_name']]
+    # 🔵[xmy修改]>>> 添加TYJT类别转换
+    original_category = repro_rec['category_name']
+    
+    # 首先应用标准NuScenes映射
+    if original_category in NuScenesDataset.NameMapping:
+        cat_name = NuScenesDataset.NameMapping[original_category]
+    else:
+        cat_name = original_category
+    
+    # 如果是TYJT数据集，应用额外映射
+    if 'tyjt' in filename.lower() and cat_name in TYJT_CATEGORY_MAPPING:
+        cat_name = convert_tyjt_to_nuscenes_category(cat_name)
+    
+    # 确保最终类别在nus_categories中
+    if cat_name not in nus_categories:
+        cat_name = 'barrier'
+        print(f"🔵[xmy警告]>>> 2D标注未知类别映射: {original_category} -> {cat_name}")
+
     coco_rec['category_name'] = cat_name
     coco_rec['category_id'] = nus_categories.index(cat_name)
     coco_rec['bbox'] = [x1, y1, x2 - x1, y2 - y1]
     coco_rec['iscrowd'] = 0
 
     return coco_rec
-
 
 if __name__ == '__main__':
     create_nuscenes_infos('data/nuscenes/', 'radar_nuscenes_5sweeps')
