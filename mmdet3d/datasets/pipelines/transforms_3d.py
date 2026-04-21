@@ -21,6 +21,32 @@ from mmdet.datasets.builder import PIPELINES
 from ..builder import OBJECTSAMPLERS
 from .utils import noise_per_object_v3_
 
+Debug = False
+
+if Debug:
+    import time
+    # 复用您已有的get_worker_info函数（来自loading.py）
+    # 如果没有，则创建一个简单的
+    import threading
+    import os
+    print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/transforms_3d.py] >>> [DataLoader侧]  >>> [Debug Mode = True] ")
+    global_print_interval = 10
+
+    def get_worker_info():
+        """获取worker信息（简化版）"""
+        try:
+            import torch
+            worker_info = torch.utils.data.get_worker_info()
+            if worker_info is not None:
+                return f"DL_Worker{worker_info.id}"
+        except:
+            pass
+        
+        # 备选方案
+        thread_id = threading.get_ident()
+        process_id = os.getpid()
+        return f"P{process_id}_T{thread_id%1000:03d}"
+
 
 @PIPELINES.register_module()
 class GTDepth:
@@ -28,6 +54,98 @@ class GTDepth:
         self.keyframe_only = keyframe_only 
 
     def __call__(self, data):
+        # if Debug:
+        #     start_time = time.time()
+        #     # 获取样本ID
+        #     sample_id = 'unknown'
+        #     for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+        #         if key in data:
+        #             sample_id = str(data[key])
+        #             break        
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID - 修复后的版本
+            sample_id = 'unknown'
+            
+            # 尝试从多个可能的字段获取
+            if 'metas' in data:
+                metas = data['metas']
+                
+                # 处理DataContainer
+                if hasattr(metas, 'data'):
+                    metas = metas.data
+                
+                # 现在metas可能是实际的元数据
+                if isinstance(metas, list) and len(metas) > 0:
+                    # 从metas获取（Collect3D之后的数据结构）
+                    first_meta = metas[0]
+                    # 如果列表中的元素也是DataContainer
+                    if hasattr(first_meta, 'data'):
+                        first_meta = first_meta.data
+                    
+                    if isinstance(first_meta, dict):
+                        for key in ['sample_idx', 'sample_id', 'token', 'frame_id', 'pts_filename', 'img_filename']:
+                            if key in first_meta:
+                                sample_id = str(first_meta[key])
+                                # 如果是从文件名提取，可以简化
+                                if 'filename' in key and '/' in sample_id:
+                                    # 从路径中提取文件名
+                                    sample_id = sample_id.split('/')[-1].split('.')[0]
+                                break
+                elif isinstance(metas, dict):
+                    # metas本身是字典
+                    for key in ['sample_idx', 'sample_id', 'token', 'frame_id', 'pts_filename', 'img_filename']:
+                        if key in metas:
+                            sample_id = str(metas[key])
+                            # 如果是从文件名提取，可以简化
+                            if 'filename' in key and '/' in sample_id:
+                                # 从路径中提取文件名
+                                sample_id = sample_id.split('/')[-1].split('.')[0]
+                            break
+            elif 'metadata' in data:
+                # 从metadata获取
+                metadata = data['metadata']
+                # 处理DataContainer
+                if hasattr(metadata, 'data'):
+                    metadata = metadata.data
+                
+                if isinstance(metadata, dict):
+                    for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                        if key in metadata:
+                            sample_id = str(metadata[key])
+                            break
+            elif 'img_metas' in data:
+                # 从img_metas获取
+                img_metas = data['img_metas']
+                # 处理DataContainer
+                if hasattr(img_metas, 'data'):
+                    img_metas = img_metas.data
+                
+                if isinstance(img_metas, list) and len(img_metas) > 0:
+                    first_img_meta = img_metas[0]
+                    if hasattr(first_img_meta, 'data'):
+                        first_img_meta = first_img_meta.data
+                    
+                    if isinstance(first_img_meta, dict):
+                        for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                            if key in first_img_meta:
+                                sample_id = str(first_img_meta[key])
+                                break
+                elif isinstance(img_metas, dict):
+                    for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                        if key in img_metas:
+                            sample_id = str(img_metas[key])
+                            break
+            
+            # 最后尝试从points或img的元数据获取
+            if sample_id == 'unknown' and 'points' in data:
+                points_data = data['points']
+                if hasattr(points_data, 'metadata') and points_data.metadata:
+                    for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                        if key in points_data.metadata:
+                            sample_id = str(points_data.metadata[key])
+                            break
+
         sensor2ego = data['camera2ego'].data
         cam_intrinsic = data['camera_intrinsics'].data 
         img_aug_matrix = data['img_aug_matrix'].data 
@@ -91,6 +209,16 @@ class GTDepth:
             depth[c, masked_coords[:, 0], masked_coords[:, 1]] = masked_dist
 
         data['depths'] = depth 
+
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:
+                worker_id = get_worker_info()
+                # 统计深度点数量
+                depth_points = (depth > 0).sum().item() if hasattr(depth, 'sum') else 0
+                print(f">>>[xmy]🟡[Pipeline] GTDepth [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 耗时={duration:.4f}s | "
+                      f"深度点={depth_points}")        
         return data
 
 
@@ -164,6 +292,44 @@ class ImageAug3D:
         return img, rotation, translation
 
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in data:
+                    sample_id = str(data[key])
+                    break
+
+            # 🔍 添加详细的调试信息
+            print(f"\n{'='*80}")
+            print(f"🔵[DEBUG] ImageAug3D 开始处理 - 样本: {sample_id[:12]}...")
+            print(f"{'='*80}")
+            
+            # 1. 打印原始图像信息
+            if "img" in data:
+                imgs = data["img"]
+                print(f"📷 原始图像信息:")
+                print(f"   相机数量: {len(imgs)}")
+                for i, img in enumerate(imgs[:1]):  # 只显示第一个相机
+                    print(f"   相机{i}原始尺寸: {img.size}")  # (W, H)
+            
+            # 2. 打印原始内参（如果有）
+            if "camera_intrinsics" in data:
+                K_list = data["camera_intrinsics"]
+                print(f"\n📐 原始相机内参 (第一个相机):")
+                if len(K_list) > 0:
+                    K_orig = K_list[0]
+                    print(f"   fx={K_orig[0,0]:.1f}  fy={K_orig[1,1]:.1f}")
+                    print(f"   cx={K_orig[0,2]:.1f}  cy={K_orig[1,2]:.1f}")
+            
+            # 3. 打印原始图像尺寸
+            if "ori_shape" in data:
+                W, H = data["ori_shape"]
+                print(f"\n📏 原始图像尺寸: {W}×{H} (宽×高)")
+                print(f"   目标尺寸: {self.final_dim[1]}×{self.final_dim[0]}")
+                print(f"   宽缩放: {self.final_dim[1]/W:.3f}倍")
+                print(f"   高缩放: {self.final_dim[0]/H:.3f}倍")
         imgs = data["img"]
         new_imgs = []
         transforms = []
@@ -189,6 +355,14 @@ class ImageAug3D:
         data["img"] = new_imgs
         # update the calibration matrices
         data["img_aug_matrix"] = transforms
+
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:  # 只打印耗时>1ms的
+                worker_id = get_worker_info()
+                print(f">>>[xmy]🟡[Pipeline] ImageAug3D [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 耗时={duration:.4f}s")
+        
         return data
 
 
@@ -201,6 +375,15 @@ class GlobalRotScaleTrans:
         self.is_train = is_train
 
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in data:
+                    sample_id = str(data[key])
+                    break
+
         transform = np.eye(4).astype(np.float32)
 
         if self.is_train:
@@ -209,12 +392,14 @@ class GlobalRotScaleTrans:
             translation = np.array([random.normal(0, self.trans_lim) for i in range(3)])
             rotation = np.eye(3)
 
-            if "points" in data:
+            # 【xmy-修改】【允许删除 lidar 训练】
+            # if "points" in data:
+            if "points" in data and data["points"] is not None:
                 data["points"].rotate(-theta)
                 data["points"].translate(translation)
                 data["points"].scale(scale)
 
-            # 【xmy-修改】
+            # 【xmy-修改】【允许删除 radar 训练】
             # if "radar" in data:  
             if "radar" in data and data["radar"] is not None and hasattr(data["radar"], 'rotate'):
                 data["radar"].rotate(-theta)
@@ -231,6 +416,13 @@ class GlobalRotScaleTrans:
             transform[:3, 3] = translation * scale
 
         data["lidar_aug_matrix"] = transform
+
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:
+                worker_id = get_worker_info()
+                print(f">>>[xmy]🟡[Pipeline] GlobalRotScaleTrans [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 耗时={duration:.4f}s")        
         return data
 
 
@@ -269,6 +461,15 @@ class GridMask:
         self.prob = self.st_prob * self.epoch / self.max_epoch
 
     def __call__(self, results):
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in results:
+                    sample_id = str(results[key])
+                    break
+
         if np.random.rand() > self.prob:
             return results
         imgs = results["img"]
@@ -319,22 +520,42 @@ class GridMask:
             imgs = [x * mask for x in imgs]
 
         results.update(img=imgs)
+
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:
+                worker_id = get_worker_info()
+                print(f">>>[xmy]🟡[Pipeline] GridMask [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 耗时={duration:.4f}s | "
+                      f"概率={self.prob:.2f}, 应用增强=True")
+                        
         return results
 
 
 @PIPELINES.register_module()
 class RandomFlip3D:
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in data:
+                    sample_id = str(data[key])
+                    break
+
         flip_horizontal = random.choice([0, 1])
         flip_vertical = random.choice([0, 1])
 
         rotation = np.eye(3)
         if flip_horizontal:
             rotation = np.array([[1, 0, 0], [0, -1, 0], [0, 0, 1]]) @ rotation
-            if "points" in data:
+            # 【xmy-修改】【允许 缺少Lidar的缺省训练】
+            # if "points" in data:
+            if "points" in data and data["points"] is not None:
                 data["points"].flip("horizontal")
 
-            # 【xmy-修改】
+            # 【xmy-修改】【允许 缺少Radar的缺省训练】
             # if "radar" in data:
             if "radar" in data and data["radar"] and hasattr(data["radar"], 'flip'):
                 data["radar"].flip("horizontal")
@@ -345,10 +566,12 @@ class RandomFlip3D:
 
         if flip_vertical:
             rotation = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]]) @ rotation
-            if "points" in data:
+            # 【xmy-修改】【允许 缺少Lidar的缺省训练】
+            # if "points" in data:
+            if "points" in data and data["points"] is not None:
                 data["points"].flip("vertical")
 
-            # 【xmy-修改】
+            # 【xmy-修改】【允许 缺少Radar的缺省训练】
             # if "radar" in data:
             if "radar" in data and data["radar"] and hasattr(data["radar"], 'flip'):
                 data["radar"].flip("vertical")
@@ -358,6 +581,14 @@ class RandomFlip3D:
                 data["gt_masks_bev"] = data["gt_masks_bev"][:, ::-1, :].copy()
 
         data["lidar_aug_matrix"][:3, :] = rotation @ data["lidar_aug_matrix"][:3, :]
+
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:
+                worker_id = get_worker_info()
+                print(f">>>[xmy]🟡[Pipeline] RandomFlip3D [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 耗时={duration:.4f}s")
+
         return data
 
 
@@ -405,10 +636,45 @@ class ObjectPaste:
                 'points', 'gt_bboxes_3d', 'gt_labels_3d' keys are updated \
                 in the result dict.
         """
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in data:
+                    sample_id = str(data[key])
+                    break
+            # 添加这行验证代码
+            # print(f"ObjectPaste收到的data类型: {type(data)}")
+            # print(f"data是否列表: {isinstance(data, list)}")
+            # print(f"data的键: {list(data.keys())}")
+            
+            # # 如果有gt_bboxes_3d，看看它的类型
+            # if 'gt_bboxes_3d' in data:
+            #     bboxes = data['gt_bboxes_3d']
+            #     print(f"gt_bboxes_3d类型: {type(bboxes)}")
+            #     if isinstance(bboxes, list):
+            #         print(f"是列表，长度: {len(bboxes)}")
+            #     else:
+            #         print(f"不是列表，是: {bboxes.__class__.__name__}")
+
+        # 【xmy-修改】【允许 无Lidar缺省时运行】
+        if "points" not in data or data["points"] is None:
+            return data
         if self.stop_epoch is not None and self.epoch >= self.stop_epoch:
+            if Debug:
+                duration = time.time() - start_time
+                worker_id = get_worker_info()
+                print(f">>>[xmy]🟡[Pipeline] ObjectPaste [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 跳过(epoch≥{self.stop_epoch}) | 耗时={duration:.4f}s")
             return data
         gt_bboxes_3d = data["gt_bboxes_3d"]
         gt_labels_3d = data["gt_labels_3d"]
+
+        # 记录原始数量（用于统计）
+        if Debug:
+            original_boxes = len(data["gt_bboxes_3d"])  # 单个样本的框数量
+            original_points = data["points"].tensor.shape[0] if hasattr(data["points"], 'tensor') else 0   # 单个样本的点数
 
         # change to float for blending operation
         points = data["points"]
@@ -449,11 +715,34 @@ class ObjectPaste:
 
                 data["gt_bboxes"] = gt_bboxes_2d
                 data["img"] = sampled_dict["img"]
+            if Debug:
+                pasted_boxes = len(sampled_gt_bboxes_3d)
+                pasted_points = sampled_points.tensor.shape[0] if hasattr(sampled_points, 'tensor') else 0    
+        else:
+            if Debug:
+                pasted_boxes = 0
+                pasted_points = 0
 
         data["gt_bboxes_3d"] = gt_bboxes_3d
         data["gt_labels_3d"] = gt_labels_3d.astype(np.long)
         data["points"] = points
 
+        # 统一的打印风格（与其他类一致）
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:  # 只打印耗时>1ms的（与其他类保持一致）
+                worker_id = get_worker_info()
+                
+                # 计算最终数量
+                final_boxes = len(gt_bboxes_3d)
+                final_points = points.tensor.shape[0] if hasattr(points, 'tensor') else len(points)
+                
+                # 统一的打印格式
+                print(f">>>[xmy]🟡[Pipeline] ObjectPaste [{worker_id}]: "
+                    f"样本={sample_id[:15]} | 耗时={duration:.4f}s | "
+                    f"粘贴={pasted_boxes}个目标 | "
+                    f"框:{original_boxes}→{final_boxes} | "
+                    f"点:{original_points}→{final_points}")
         return data
 
 
@@ -557,6 +846,15 @@ class ObjectRangeFilter:
             dict: Results after filtering, 'gt_bboxes_3d', 'gt_labels_3d' \
                 keys are updated in the result dict.
         """
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in data:
+                    sample_id = str(data[key])
+                    break
+
         # Check points instance type and initialise bev_range
         if isinstance(
             data["gt_bboxes_3d"], (LiDARInstance3DBoxes, DepthInstance3DBoxes)
@@ -580,6 +878,17 @@ class ObjectRangeFilter:
         data["gt_bboxes_3d"] = gt_bboxes_3d
         data["gt_labels_3d"] = gt_labels_3d
 
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:
+                worker_id = get_worker_info()
+                # 获取过滤前后的框数
+                original_boxes = mask.shape[0]
+                filtered_boxes = len(gt_bboxes_3d)
+                print(f">>>[xmy]🟡[Pipeline] ObjectRangeFilter [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 耗时={duration:.4f}s | "
+                      f"3D框: {original_boxes}→{filtered_boxes}")
+                
         return data
 
     def __repr__(self):
@@ -607,12 +916,24 @@ class PointsRangeFilter:
             dict: Results after filtering, 'points', 'pts_instance_mask' \
                 and 'pts_semantic_mask' keys are updated in the result dict.
         """
+        #  【xmy-修改】【允许 Points 缺省时训练】
+        if "points" not in data or data["points"] is None:
+            return data
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in data:
+                    sample_id = str(data[key])
+                    break
+
         points = data["points"]
         points_mask = points.in_range_3d(self.pcd_range)
         clean_points = points[points_mask]
         data["points"] = clean_points
 
-        # 【xmy-修改】
+        # 【xmy-修改】【允许 Radar缺省时训练】
         # if "radar" in data:
         if "radar" in data and data["radar"] is not None and hasattr(data["radar"], 'in_range_bev'):
             radar = data["radar"]
@@ -620,6 +941,17 @@ class PointsRangeFilter:
             radar_mask = radar.in_range_bev([-55.0, -55.0, 55.0, 55.0])
             clean_radar = radar[radar_mask]
             data["radar"] = clean_radar
+
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:
+                worker_id = get_worker_info()
+                # 获取过滤前后的点数
+                original_points = points.tensor.shape[0] if hasattr(points, 'tensor') else len(points)
+                filtered_points = clean_points.tensor.shape[0] if hasattr(clean_points, 'tensor') else len(clean_points)
+                print(f">>>[xmy]🟡[Pipeline] PointsRangeFilter [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 耗时={duration:.4f}s | "
+                      f"点云: {original_points}→{filtered_points}")
 
         return data
 
@@ -636,12 +968,33 @@ class ObjectNameFilter:
         self.labels = list(range(len(self.classes)))
 
     def __call__(self, data):
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in data:
+                    sample_id = str(data[key])
+                    break
+
         gt_labels_3d = data["gt_labels_3d"]
         gt_bboxes_mask = np.array(
             [n in self.labels for n in gt_labels_3d], dtype=np.bool_
         )
         data["gt_bboxes_3d"] = data["gt_bboxes_3d"][gt_bboxes_mask]
         data["gt_labels_3d"] = data["gt_labels_3d"][gt_bboxes_mask]
+
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:
+                worker_id = get_worker_info()
+                # 获取过滤前后的类别数
+                original_classes = len(gt_labels_3d)
+                filtered_classes = np.sum(gt_bboxes_mask)
+                print(f">>>[xmy]🟡[Pipeline] ObjectNameFilter [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 耗时={duration:.4f}s | "
+                      f"类别过滤: {original_classes}→{filtered_classes}")    
+
         return data
 
 
@@ -1011,8 +1364,26 @@ class ImageNormalize:
         )
 
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        if Debug:
+            start_time = time.time()
+            # 获取样本ID
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in data:
+                    sample_id = str(data[key])
+                    break        
         data["img"] = [self.compose(img) for img in data["img"]]
         data["img_norm_cfg"] = dict(mean=self.mean, std=self.std)
+
+        if Debug:
+            duration = time.time() - start_time
+            if duration > 0.000001:
+                worker_id = get_worker_info()
+                num_images = len(data["img"])
+                print(f">>>[xmy]🟡[Pipeline] ImageNormalize [{worker_id}]: "
+                      f"样本={sample_id[:15]} | 耗时={duration:.4f}s | "
+                      f"图像数={num_images}")
+                        
         return data
 
 
