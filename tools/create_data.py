@@ -97,34 +97,43 @@ if __name__ == "__main__":
             load_augmented = "pointpainting"
 
     if args.dataset == "nuscenes" and args.version != "v1.0-mini":
-        train_version = f"{args.version}-trainval"
-        nuscenes_data_prep(
-            root_path=args.root_path,
-            info_prefix=args.extra_tag,
-            version=train_version,
-            dataset_name="NuScenesDataset",
-            out_dir=args.out_dir,
-            max_sweeps=args.max_sweeps,
-            load_augmented=load_augmented,
-        )
-        test_version = f"{args.version}-test"
-        nuscenes_data_prep(
-            root_path=args.root_path,
-            info_prefix=args.extra_tag,
-            version=test_version,
-            dataset_name="NuScenesDataset",
-            out_dir=args.out_dir,
-            max_sweeps=args.max_sweeps,
-            load_augmented=load_augmented,
-        )
-    elif args.dataset == "nuscenes" and args.version == "v1.0-mini":
-        train_version = f"{args.version}"
-        nuscenes_data_prep(
-            root_path=args.root_path,
-            info_prefix=args.extra_tag,
-            version=train_version,
-            dataset_name="NuScenesDataset",
-            out_dir=args.out_dir,
-            max_sweeps=args.max_sweeps,
-            load_augmented=load_augmented,
-        )
+        # 🔵[xmy修复]>>> 明确处理test版本
+        if 'test' in args.version:
+            # 测试版本只生成test.pkl
+            test_version = args.version
+            print(f"🔵[xmy修复]>>> 测试版本: {test_version}，生成测试集pkl")
+            nuscenes_data_prep(
+                root_path=args.root_path,
+                info_prefix=args.extra_tag,
+                version=test_version,
+                dataset_name="NuScenesDataset",
+                out_dir=args.out_dir,
+                max_sweeps=args.max_sweeps,
+                load_augmented=load_augmented,
+            )
+        else:
+            # 非测试版本生成trainval
+            train_version = f"{args.version}-trainval"
+            test_version = f"{args.version}-test"
+            
+            print(f"🔵[xmy修复]>>> 生成训练集和验证集: {train_version}")
+            nuscenes_data_prep(
+                root_path=args.root_path,
+                info_prefix=args.extra_tag,
+                version=train_version,
+                dataset_name="NuScenesDataset",
+                out_dir=args.out_dir,
+                max_sweeps=args.max_sweeps,
+                load_augmented=load_augmented,
+            )
+            
+            print(f"🔵[xmy修复]>>> 生成测试集: {test_version}")
+            nuscenes_data_prep(
+                root_path=args.root_path,
+                info_prefix=args.extra_tag,
+                version=test_version,
+                dataset_name="NuScenesDataset",
+                out_dir=args.out_dir,
+                max_sweeps=args.max_sweeps,
+                load_augmented=load_augmented,
+            )
