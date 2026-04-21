@@ -184,7 +184,19 @@ class LoadPointsFromMultiSweeps:
         """
         points = results["points"]
         points = points[:, self.use_dim]
-        points.tensor[:, 4] = 0
+        # 修复点云维度问题
+	# points.tensor[:, 4] = 0
+        if points.tensor.shape[1] >= 5:
+            points.tensor[:, 4] = 0
+        else:
+            # 如果维度不足5，扩展维度
+            import torch
+            original_tensor = points.tensor
+            new_tensor = torch.zeros((original_tensor.shape[0], 5),
+                                    dtype=original_tensor.dtype,
+                                    device=original_tensor.device)
+            new_tensor[:, :original_tensor.shape[1]] = original_tensor
+            points.tensor = new_tensor
         sweep_points_list = [points]
         ts = results["timestamp"] / 1e6
         if self.pad_empty_sweeps and len(results["sweeps"]) == 0:
