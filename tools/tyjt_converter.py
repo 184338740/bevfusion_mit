@@ -3,6 +3,36 @@
 TYJT 数据集预处理脚本，生成 BEVFusion 所需的 info pkl 文件。
 基于 tyjt_calib_utils.py 中的 CalibrationProcessor 进行标定解析
 
+版本 v9.4.7 (0421)
+    - 标注目录自动探测：支持 ["label","labels","perc"] 候选列表，解决 2d3d4d_20241122_wuxi 使用 perc 的问题
+    - 图像目录可配置：支持数据包级 image_subdir（默认 image_dc），适配非标准图像目录
+    - 图像格式扩展：支持 .png 图像，解决 2d3d4d_20250618_weiyuan 图像为 png 的问题
+    - 修复标注解析中 pointNum 字段为 None 导致的 TypeError
+    - 智能路口匹配：自动识别子包所属路口，消除无关警告
+    - 修正 process_package 只处理第一个路口的缺陷，确保十字路口样本被正确生成
+    - 添加详细分层树状统计，清晰展示每级过滤规则及数量
+    - 增加 ENABLE_LIDAR_COUNT 开关（默认 False），控制总点云数统计（耗时操作）
+
+测试结果（正确配置下）：
+    - 2d3d_20250218: 生成 7916 个四相机样本
+    - 2d3d_20250221: 生成 5725 个四相机样本
+    - 2d3d4d_20250117: 生成 7090 个样本（验证集）
+    - 2d3d4d_20241122_wuxi、2d3d4d_20250618_weiyuan 正常生成样本
+    - 2d3d4d_20250403 因相机目录与标定键名不匹配，需手动创建软链接（见下方说明）
+
+对于 2d3d4d_20250403 数据包的预处理建议：
+    由于该数据包的相机文件夹名（26A_CAMR 等）与标定文件中的键名（R26_Aw_CamS 等）不一致，且无法修改标定文件或目录结构，可通过创建软链接解决：
+    ```bash
+    cd /cephfsdata/users/lishan/00_Data/00_RawData/2d3d4d_20250403/datasets
+    for sub in */; do
+        cd "$sub"
+        ln -sf ../26A_CAMR/image_dc R26_Aw_CamS/image_dc
+        ln -sf ../26B_CAMR/image_dc R26_Bn_CamW/image_dc
+        ln -sf ../26C_CAMR/image_dc R26_Ce_CamN/image_dc
+        ln -sf ../26D_CAMR/image_dc R26_Ds_CamE/image_dc
+        cd ..
+    done
+
 版本 v9.4.6 (0417)
     - 严格过滤：仅保留同时包含 CAM_A、CAM_B、CAM_C、CAM_D 四路相机的样本
     - 实现方式：在 build_sample_info() 中检查 cams_info 的键集合是否完全等于 {'CAM_A','CAM_B','CAM_C','CAM_D'}
@@ -65,88 +95,28 @@ import datetime
 from tyjt_utils.tyjt_calib_utils import CalibrationProcessor
 
 Debug = False
+VERBOSE = False   # 设为 True 时打印详细相机状态
+ENABLE_LIDAR_FILE_COUNT = True   # 耗时统计开关
+
 print(f">>>[xmy]🔵[TYJTDatasetV2]🔵[tools/tyjt_converter_A100.py] >>> Debug Mode = {Debug}")
 
-VERBOSE = False   # 设为 True 时打印详细相机状态
 from collections import defaultdict
+skip_detail = defaultdict(lambda: defaultdict(int))
 skip_stats = defaultdict(lambda: defaultdict(int))   # skip_stats[package_name][reason] += 1
+early_filter_detail = defaultdict(lambda: defaultdict(int))
 
 # ==================== 全局配置 ====================
-DatasetInfos = "A100_all"
+# label_subdir： 标注文件路径为 <packet>/datasets/<sub_packet>/lidar/<label_subdir>/, 默认为 label, 允许缺省，如果不存在则跳过，给出warning
+# image_subdir： 去畸变后图像的路径为 <packet>/datasets/<sub_packet>/<camera_folder:ABCD等文件夹>/<image_subdir>/, 默认为 image_dc, 允许缺省，如果不存在则跳过，给出warning
 
-if DatasetInfos == "Local":
-    PACKAGE_CONFIG = {
-        "2d3d_20250114": {
-            "type": "hikvision",
-            "calib_root": "calib/2d3d_20250114",
-            "group2map_file": "group2map_calib.json",
-            "camera2map_file": "camera2map_calib.json",
-            "intersections": {
-                "R9": {
-                    "group_key": "G32050700009M00",
-                    "cameras": [
-                        ("R9_Aw_CamS", "A"),
-                        ("R9_Bn_CamW", "B"),
-                        ("R9_Ce_CamN", "C"),
-                        ("R9_Ds_CamE", "D")
-                    ]
-                }
-            }
-        },
-        "2d3d4d_20250728_weiyuan": {
-            "type": "all_in_one",
-            "calib_root": "calib/G51102400001M00",
-            "sensor2map_file": "sensor2map_calib.json",
-            "intersections": {
-                "R01": {
-                    "group_key": "group2map",
-                    "cameras": [
-                        ("SC_1A_CamR", "SC_1A_CamR_new", "A"),
-                        ("SC_1B_CamR", "SC_1B_CamR_new", "B"),
-                        ("SC_1C_CamR", "SC_1C_CamR_new", "C"),
-                        ("SC_1D_CamR", "SC_1D_CamR_new", "D")
-                    ]
-                }
-            }
-        }
-    }
-elif DatasetInfos == "A100_sub":
-    PACKAGE_CONFIG = {
-        "2d3d_20250114": {
-            "type": "hikvision",
-            "calib_root": "calib/2d3d_20250114",
-            "group2map_file": "group2map_calib.json",
-            "camera2map_file": "camera2map_calib.json",
-            "intersections": {
-                "R9": {
-                    "group_key": "G32050700009M00",
-                    "cameras": [
-                        ("R9_Aw_CamS", "A"),
-                        ("R9_Bn_CamW", "B"),
-                        ("R9_Ce_CamN", "C"),
-                        ("R9_Ds_CamE", "D")
-                    ]
-                }
-            }
-        },
-        "2d3d4d_20250728_weiyuan": {
-            "type": "all_in_one",
-            "calib_root": "calib/G51102400001M00",
-            "sensor2map_file": "sensor2map_calib.json",
-            "intersections": {
-                "R01": {
-                    "group_key": "group2map",
-                    "cameras": [
-                        ("SC_1A_CamR", "SC_1A_CamR_new", "A"),
-                        ("SC_1B_CamR", "SC_1B_CamR_new", "B"),
-                        ("SC_1C_CamR", "SC_1C_CamR_new", "C"),
-                        ("SC_1D_CamR", "SC_1D_CamR_new", "D")
-                    ]
-                }
-            }
-        }
-    }
-elif DatasetInfos == "A100_all":
+# LABEL_DIR_CANDIDATES 标注文件的目录候选（按优先级排序，标准优先），如果不用自动化标签，就把"perc"删除
+# LABEL_DIR_CANDIDATES = ["label", "labels", "perc"]
+LABEL_DIR_CANDIDATES = ["label", "labels"]
+
+print(f">>>[xmy]🔵[TYJTDatasetV2]🔵[tools/tyjt_converter_A100.py] >>> config: LABEL_DIR_CANDIDATES = {LABEL_DIR_CANDIDATES}")
+
+DatasetInfos = "A100_all"
+if DatasetInfos == "A100_all":
     PACKAGE_CONFIG = {
         # 海康相机产品（9个）
         "2d3d_20250114": {
@@ -154,6 +124,8 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d_20250114",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R9": {
                     "group_key": "G32050700009M00",
@@ -171,6 +143,8 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d_20250218",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R03": {
                     "group_key": "G32050700003M00",
@@ -204,6 +178,8 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d_20250221",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R03": {
                     "group_key": "G32050700003M00",
@@ -237,6 +213,8 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d4d_20241122",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "perc",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R01": {
                     "group_key": "G32020500001M00", 
@@ -253,6 +231,8 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d4d_20241218",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R02": {
                     "group_key": "G32050700002M00",
@@ -270,6 +250,8 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d4d_20250117",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R26": {
                     "group_key": "G32050700026M00",
@@ -287,6 +269,8 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d4d_20250213",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R26": {
                     "group_key": "G32050700026M00",
@@ -304,6 +288,8 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d4d_20250218",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R26": {
                     "group_key": "G32050700026M00",
@@ -321,21 +307,23 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d4d_20250403",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R26": {  # 发现图像没有做去畸变, 没有image_dc数据,导致为空
                     "group_key": "G32050700026M00",
-                    # "cameras": [
-                    #     ("R26_Aw_CamS", "A"),
-                    #     ("R26_Bn_CamW", "B"),
-                    #     ("R26_Ce_CamN", "C"),
-                    #     ("R26_Ds_CamE", "D")
-                    # ]
                     "cameras": [
-                        ("26A_CamR", "A"),
-                        ("26B_CamR", "B"),
-                        ("26C_CamR", "C"),
-                        ("26D_CamR", "D")
+                        ("R26_Aw_CamS", "A"),
+                        ("R26_Bn_CamW", "B"),
+                        ("R26_Ce_CamN", "C"),
+                        ("R26_Ds_CamE", "D")
                     ]
+                    # "cameras": [
+                    #     ("26A_CAMR", "A"),
+                    #     ("26B_CAMR", "B"),
+                    #     ("26C_CAMR", "C"),
+                    #     ("26D_CAMR", "D")
+                    # ]
                 }
             }
         },
@@ -344,6 +332,8 @@ elif DatasetInfos == "A100_all":
             "calib_root": "calib/2d3d4d_20250408",
             "group2map_file": "group2map_calib.json",
             "camera2map_file": "camera2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R26": {
                     "group_key": "G32050700026M00",
@@ -359,13 +349,15 @@ elif DatasetInfos == "A100_all":
         # 一体机产品（3个）
         "2d3d4d_20250618_weiyuan": {
             "type": "all_in_one",
-            "calib_root": "info/G51102400002M00",
+            "calib_root": "info/G51102400002M00",   # xmy注意: 标定文件路径是info， 不是calib
             "sensor2map_file": "sensor2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R02": {
                     "group_key": "group2map",
                     "cameras": [  # (相机文件夹名, 标定键, 相机顺序A/B/C/D)
-                        ("SC_2A_CamR", "SC_2A_CamR_new", "A"),
+                        ("SC_2A_CamR", "SC_2A_CamR_new", "A"),   # xmy注意: 该图像格式是.png 
                         ("SC_2B_CamR", "SC_2B_CamR_new", "B"),
                         ("SC_2C_CamR", "SC_2C_CamR_new", "C"),
                         ("SC_2D_CamR", "SC_2D_CamR_new", "D")
@@ -377,6 +369,8 @@ elif DatasetInfos == "A100_all":
             "type": "all_in_one",
             "calib_root": "calib/G51102400002M00",
             "sensor2map_file": "sensor2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R02": {
                     "group_key": "group2map",
@@ -393,6 +387,8 @@ elif DatasetInfos == "A100_all":
             "type": "all_in_one",
             "calib_root": "calib/G51102400001M00",
             "sensor2map_file": "sensor2map_calib.json",
+            "label_subdir": "label",       # 可选，默认 "label"
+            "image_subdir": "image_dc",    # 可选，默认 "image_dc"
             "intersections": {
                 "R01": {
                     "group_key": "group2map",
@@ -401,43 +397,6 @@ elif DatasetInfos == "A100_all":
                         ("SC_1B_CamR", "SC_1B_CamR_new", "B"),
                         ("SC_1C_CamR", "SC_1C_CamR_new", "C"),
                         ("SC_1D_CamR", "SC_1D_CamR_new", "D")
-                    ]
-                }
-            }
-        }
-    }
-elif DatasetInfos == "A100_V031_sub":
-    PACKAGE_CONFIG = {
-        "2d3d4d_20250117": {
-            "type": "hikvision",
-            "calib_root": "calib/2d3d4d_20250117",
-            "group2map_file": "group2map_calib.json",
-            "camera2map_file": "camera2map_calib.json",
-            "intersections": {
-                "R26": {
-                    "group_key": "G32050700026M00",
-                    "cameras": [
-                        ("R26_Aw_CamS", "A"),
-                        ("R26_Bn_CamW", "B"),
-                        ("R26_Ce_CamN", "C"),
-                        ("R26_Ds_CamE", "D")
-                    ]
-                }
-            }
-        },
-        "2d3d4d_20250213": {
-            "type": "hikvision",
-            "calib_root": "calib/2d3d4d_20250213",
-            "group2map_file": "group2map_calib.json",
-            "camera2map_file": "camera2map_calib.json",
-            "intersections": {
-                "R26": {
-                    "group_key": "G32050700026M00",
-                    "cameras": [
-                        ("R26_Aw_CamS", "A"),
-                        ("R26_Bn_CamW", "B"),
-                        ("R26_Ce_CamN", "C"),
-                        ("R26_Ds_CamE", "D")
                     ]
                 }
             }
@@ -485,52 +444,132 @@ def load_calibration(package_path: Path, config: Dict) -> Dict:
 
 def scan_package_files(package_path: Path, config: Dict) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]:
     """
-    扫描数据包内所有子包，返回时间戳到文件路径的映射，以及时间戳到子包名的映射。
+    1. 扫描数据包内所有子包，返回时间戳到文件路径的映射，以及时间戳到子包名的映射。
+    2. 自动识别每个子包所属的路口，只扫描匹配路口的相机。
+    3. 自动探测标注目录，支持多种图像格式。
     返回格式: (file_map, sub_packet_map)
         file_map: { timestamp: { 'lidar': path, 'label': path, 'cam_A': path, ... } }
         sub_packet_map: { timestamp: sub_packet_name }
     """
+    # 获取子目录配置（提供默认值）
+    image_subdir = config.get("image_subdir", "image_dc")  # 去畸变图像文件夹：默认为 image_dc
+
+    # 标注目录候选列表（全局，按优先级）
+    label_candidates = LABEL_DIR_CANDIDATES
+    # 去重并保持顺序（避免重复尝试相同目录）
+    seen = set()
+    label_candidates = [c for c in label_candidates if not (c in seen or seen.add(c))]
+
     file_map = defaultdict(dict)
     sub_packet_map = {}
     datasets_dir = package_path / "datasets"
     if not datasets_dir.exists():
         return {}, {}
+    
+    # 预构建每个路口需要的相机文件夹集合（用于匹配）
+    road_cam_folders = {}
+    for road_id, road_cfg in config["intersections"].items():
+        folders = set()
+        for cam_item in road_cfg["cameras"]:
+            if config["type"] == "hikvision":
+                folder, _ = cam_item[0], cam_item[1]
+            else:
+                folder, _, _ = cam_item
+            folders.add(folder)
+        road_cam_folders[road_id] = folders
 
     for sub_packet in datasets_dir.iterdir():
         if not sub_packet.is_dir():
             continue
 
+        # 获取子包下存在的所有文件夹名
+        existing_folders = {entry.name for entry in sub_packet.iterdir() if entry.is_dir()}
+        
+        # 匹配路口：找到第一个满足其所需相机文件夹全部存在的路口
+        matched_road = None
+        for road_id, required_folders in road_cam_folders.items():
+            if required_folders.issubset(existing_folders):
+                matched_road = road_id
+                break
+        if matched_road is None:
+            if Debug:
+                print(f"  调试：子包 {sub_packet.name} 未匹配任何路口配置，跳过")
+            continue
+        road_cfg = config["intersections"][matched_road]
+
+        # 扫描点云
         lidar_dir = sub_packet / "lidar" / "pcd"
         if lidar_dir.exists():
             for npy_file in lidar_dir.glob("*.npy"):
                 ts = npy_file.stem
                 if ts.isdigit():
                     file_map[ts]['lidar'] = str(npy_file)
+                    file_map[ts]['road_id'] = matched_road
                     sub_packet_map[ts] = sub_packet.name
 
-        label_dir = sub_packet / "lidar" / "label"
-        if label_dir.exists():
-            for json_file in label_dir.glob("*.json"):
+        # 扫描标注：尝试候选目录列表
+        label_path = None
+        for cand in label_candidates:
+            test_dir = sub_packet / "lidar" / cand
+            if test_dir.exists():
+                label_path = test_dir
+                if VERBOSE and cand not in ["label", "labels"]:
+                    print(f">>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_converter_A100.py] >>>  调试：子包 {sub_packet.name} 使用标注目录 '{cand}'（非默认）")
+                break
+        if label_path:
+            for json_file in label_path.glob("*.json"):
                 ts = json_file.stem
                 if ts.isdigit():
                     file_map[ts]['label'] = str(json_file)
+                    file_map[ts]['road_id'] = matched_road
                     sub_packet_map.setdefault(ts, sub_packet.name)
+        else:
+            print(f">>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_converter_A100.py] >>>  警告：未找到标注目录（尝试过 {label_candidates}; {label_path}")
 
-        for road_id, road_cfg in config["intersections"].items():
-            for cam_item in road_cfg["cameras"]:
-                if config["type"] == "hikvision":
-                    folder, cam_order = cam_item[0], cam_item[1]
-                else:
-                    folder, _, cam_order = cam_item
-                cam_dir = sub_packet / folder / "image_dc"
-                if cam_dir.exists():
-                    for jpg_file in cam_dir.glob("*.jpg"):
-                        ts = jpg_file.stem
+
+        # 扫描相机（使用配置的 image_subdir）（仅扫描匹配路口的相机）
+        for cam_item in road_cfg["cameras"]:
+            if config["type"] == "hikvision":
+                folder, cam_order = cam_item[0], cam_item[1]
+            else:
+                folder, _, cam_order = cam_item
+            cam_dir = sub_packet / folder / image_subdir
+            if cam_dir.exists():
+                for img_file in cam_dir.glob("*"):
+                    if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
+                        ts = img_file.stem
                         if ts.isdigit():
-                            file_map[ts][f'cam_{cam_order}'] = str(jpg_file)
+                            file_map[ts][f'cam_{cam_order}'] = str(img_file)
+                            file_map[ts]['road_id'] = matched_road
                             sub_packet_map.setdefault(ts, sub_packet.name)
+            else:
+                print(f">>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_converter_A100.py] >>>   警告：未找到相机目录 {cam_dir}")
 
-    # 过滤有效样本
+    # ========== 新增：统计早期过滤原因 ==========
+    early_stats = defaultdict(int)
+    for ts, files in file_map.items():
+        has_lidar = 'lidar' in files
+        has_label = 'label' in files
+        cam_keys = [k for k in files if k.startswith('cam_')]
+        cam_count = len(cam_keys)
+        
+        if not has_lidar:
+            early_stats['missing_lidar'] += 1
+        elif not has_label:
+            early_stats['missing_label'] += 1
+        elif cam_count < 2:
+            early_stats[f'cam_count_{cam_count}'] += 1
+        else:
+            early_stats['valid'] += 1
+
+    # 将非 valid 的原因记录到全局字典（以数据包名称为键）
+    pkg_key = package_path.name
+    for reason, cnt in early_stats.items():
+        if reason != 'valid':
+            early_filter_detail[pkg_key][reason] += cnt
+    # ============================================
+
+    # 过滤有效样本（必须同时有点云、标注、至少2个相机）
     valid_file_map = {}
     valid_sub_packet_map = {}
     for ts, files in file_map.items():
@@ -540,6 +579,7 @@ def scan_package_files(package_path: Path, config: Dict) -> Tuple[Dict[str, Dict
                 valid_file_map[ts] = files
                 valid_sub_packet_map[ts] = sub_packet_map.get(ts, 'unknown')
     return valid_file_map, valid_sub_packet_map
+
 
 def compute_cam2ego(cam_calib: Dict, group2map_params: Any) -> Tuple[List[float], List[float]]:
     """
@@ -566,11 +606,16 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
     采用通用逻辑：lidar 和 ego 可能不同，通过 lidar2ego 矩阵计算 sensor2lidar。
     若有效相机数少于2个，则跳过该样本。
     """
+    # 记录失败原因（用于详细统计）
+    skip_reason = None
+
     road_cfg = config["intersections"][road_id]
     group_key = road_cfg["group_key"]
     group2map_params = calib_data.get(group_key)
     if group2map_params is None:
         print(f"警告：缺失 group_key {group_key}")
+        skip_reason = f"missing_group_key_{group_key}"
+        skip_detail[package_name][skip_reason] += 1
         return None
 
     # 计算 ego2global 矩阵，并分解为旋转和平移
@@ -607,28 +652,39 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
         if not img_path:
             if VERBOSE:
                 print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [DEBUG] 相机 {cam_order} 跳过：无图像路径")
-            continue
+            skip_reason = f"cam_{cam_order}_no_image"
+            skip_detail[package_name][skip_reason] += 1
+            return None
 
         cam_calib = calib_data.get(calib_key)
         if cam_calib is None:
             if VERBOSE:
                 print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [DEBUG] 相机 {cam_order} 跳过：标定缺失")
-            # print(f"警告：缺失相机标定 {calib_key}")
-            continue
+            skip_reason = f"cam_{cam_order}_no_calib"
+            skip_detail[package_name][skip_reason] += 1
+            return None
 
         # ---------- 新增：检查相机内参完整性 ----------
         # 必须包含 fx, fy, cx, cy，否则跳过该相机
         if not all(k in cam_calib for k in ['fx', 'fy', 'cx', 'cy']):
             if VERBOSE:
                 print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [DEBUG] 相机 {cam_order} 内参缺失: {cam_calib.keys()}")
-            # print(f"警告：相机 {calib_key} 内参缺失，跳过该相机。样本 {token}")
-            continue
+            skip_reason = f"cam_{cam_order}_no_intrinsic"
+            skip_detail[package_name][skip_reason] += 1
+            return None
         # -----------------------------------------
 
         # 计算 cam2ego (sensor2ego)
         # translation：从相机坐标系到 ego 坐标系的平移向量（3 个元素）。
         # rotation：从相机坐标系到 ego 坐标系的旋转四元数（4 个元素，格式为 [w, x, y, z]）
-        translation, rotation = compute_cam2ego(cam_calib, group2map_params)
+        try:
+            translation, rotation = compute_cam2ego(cam_calib, group2map_params)
+        except Exception as e:
+            if VERBOSE:
+                print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [DEBUG] 相机 {cam_order} 变换计算失败: {e}")
+            skip_reason = f"cam_{cam_order}_transform_error"
+            skip_detail[package_name][skip_reason] += 1
+            return None
 
         # 构建 sensor2ego 矩阵 (齐次变换矩阵)
         sensor2ego_mat = np.eye(4)
@@ -667,12 +723,14 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
         # 始终打印一行简要信息（日志量可控）
         if VERBOSE: print(f"⚠️ 跳过样本 {token}，缺少相机: {sorted(missing) if missing else '无'}, 多余: {sorted(extra) if extra else '无'}")
         
-        # 统计跳过原因
+        # 统计跳过原因（兼容原有 skip_stats）
         if missing:
             reason = f"missing_{'_'.join(sorted(missing))}"
         else:
             reason = "extra_cams"
         skip_stats[package_name][reason] += 1
+        # 同时记录到详细统计
+        skip_detail[package_name][f"final_{reason}"] += 1
         
         # 可选：如果需要深度排查，临时将下面的 VERBOSE 设为 True
         # VERBOSE = False   # 调试时改为 True 可打印每个相机的详细状态
@@ -710,26 +768,35 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
                 yaw = obj['rotation'][0]
                 gt_boxes.append(box3d + [yaw])  # 7维
                 gt_names.append(obj['type'])
-                num_lidar_pts.append(obj.get('pointNum', -1))
+                point_num = obj.get('pointNum')
+                if point_num is None:
+                    point_num = -1
+                num_lidar_pts.append(point_num)
                 valid_flag.append(True)
                 gt_velocity.append([0.0, 0.0])   # v9.4.3: 速度设为0
 
         except Exception as e:
             print(f"警告：无法解析标注文件 {label_path}: {e}")
+            skip_reason = "label_parse_error"
+            skip_detail[package_name][skip_reason] += 1
+            return None
+    else:
+        # 没有标注文件
+        skip_reason = "missing_label_file"
+        skip_detail[package_name][skip_reason] += 1
+        return None
 
     if not gt_boxes:
-        gt_boxes = np.zeros((0, 7), dtype=np.float32)
-        gt_names = np.array([], dtype=str)
-        num_lidar_pts = np.zeros((0,), dtype=np.int32)
-        gt_velocity = np.zeros((0, 2), dtype=np.float32)   #  v9.4.3 空速度数组
-        valid_flag = np.zeros((0,), dtype=bool)
+        # 没有有效标注（可能是空标注文件）
+        skip_reason = "empty_gt_boxes"
+        skip_detail[package_name][skip_reason] += 1
+        return None
 
-    else:
-        gt_boxes = np.array(gt_boxes, dtype=np.float32)
-        gt_names = np.array(gt_names, dtype=str)
-        num_lidar_pts = np.array(num_lidar_pts, dtype=np.int32)
-        gt_velocity = np.array(gt_velocity, dtype=np.float32)   #  v9.4.3 (N, 2)
-        valid_flag = np.array(valid_flag, dtype=bool)
+    gt_boxes = np.array(gt_boxes, dtype=np.float32)
+    gt_names = np.array(gt_names, dtype=str)
+    num_lidar_pts = np.array(num_lidar_pts, dtype=np.int32)
+    gt_velocity = np.array(gt_velocity, dtype=np.float32)   #  v9.4.3 (N, 2)
+    valid_flag = np.array(valid_flag, dtype=bool)
 
     # 人类可读时间
     try:
@@ -786,6 +853,49 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
 
     return info
 
+def print_package_stats(pkg_name, total_lidar, total_scanned, early_detail,
+                        filtered_cam, success):
+    """
+    打印数据包统计树状图
+    total_lidar: 总点云数（若为 None 则不显示第一层）
+    total_scanned: 扫描阶段有效样本数
+    early_detail: 早期过滤原因字典，如 {'missing_label':12, 'no_matching_road':600}
+    filtered_cam: 因缺少 CAM_C 被过滤的数量
+    success: 成功生成的样本数
+    """
+    indent = "  "
+    if total_lidar is not None:
+        # 详细模式：显示总点云数及第一次过滤
+        print(f"{indent}总点云数: {total_lidar}")
+        print(f"{indent}   第一次过滤（规则：点云时间戳纯数字、子包匹配路口、同时存在点云/标注/≥2相机）：")
+        silent = total_lidar - total_scanned
+        print(f"{indent}   ├─ 过滤掉: {silent}")
+        print(f"{indent}   └─ 过滤后保留: {total_scanned}  (扫描阶段有效样本)")
+        inner_indent = f"{indent}       "
+    else:
+        # 简洁模式：直接从扫描阶段有效样本开始
+        print(f"{indent}扫描阶段有效样本: {total_scanned}")
+        inner_indent = f"{indent}   "
+
+    # 第二次过滤（早期过滤）
+    early_total = sum(early_detail.values())
+    print(f"{inner_indent}├─ 第二次过滤（规则：标注目录存在、相机数≥2）：")
+    print(f"{inner_indent}│   ├─ 过滤掉: {early_total}")
+    if early_detail:
+        # 打印具体原因
+        items = list(early_detail.items())
+        for i, (reason, cnt) in enumerate(items):
+            if i == len(items) - 1:
+                print(f"{inner_indent}│   │   └─ {reason}: {cnt}")
+            else:
+                print(f"{inner_indent}│   │   ├─ {reason}: {cnt}")
+    print(f"{inner_indent}│   └─ 过滤后保留: {total_scanned}  (进入 build_sample_info)")
+
+    # 第三次过滤（相机数量）
+    print(f"{inner_indent}└─ 第三次过滤（规则：必须包含四路相机）：")
+    print(f"{inner_indent}    ├─ 过滤掉: {filtered_cam}  (缺少 CAM_C)")
+    print(f"{inner_indent}    └─ 过滤后保留: {success}  (成功生成)")
+
 
 def process_package(pkg_name, pkg_config, data_root, out_infos, max_sweeps=10):
     """
@@ -807,82 +917,97 @@ def process_package(pkg_name, pkg_config, data_root, out_infos, max_sweeps=10):
     if not file_map:
         print(f"  未找到任何有效样本（无点云/标注/相机配对）")
         return 0
-    
-    # 记录处理前的样本数
+
+    # 扫描阶段有效样本数
+    total_scanned = len(file_map)
+
     before_count = len(out_infos)
 
+    # 按子包分组
     sub_packet_samples = defaultdict(list)
     for ts, files in file_map.items():
         sub_pkt = sub_packet_map.get(ts)
         if sub_pkt:
             sub_packet_samples[sub_pkt].append((int(ts), files))
 
-    # 遍历每个路口
-    for road_id in pkg_config["intersections"]:
-        for sub_pkt, samples in sub_packet_samples.items():
-            samples.sort(key=lambda x: x[0])
-            temp_infos = []
-            for ts, files in samples:
-                info = build_sample_info(str(ts), files, calib_data, pkg_config, road_id, pkg_name)
-                if info:
-                    temp_infos.append(info)
-
-            if not temp_infos:
+    success_count = 0
+    for sub_pkt, samples in sub_packet_samples.items():
+        samples.sort(key=lambda x: x[0])
+        temp_infos = []
+        for ts, files in samples:
+            road_id = files.get('road_id')
+            if road_id is None:
+                skip_detail[pkg_name]["missing_road_id"] += 1
                 continue
+            info = build_sample_info(str(ts), files, calib_data, pkg_config, road_id, pkg_name)
+            if info:
+                temp_infos.append(info)
+                success_count += 1
 
-            start_idx = len(out_infos)
-            for i, info in enumerate(temp_infos):
-                info['prev'] = i - 1 if i > 0 else -1
-                info['next'] = i + 1 if i < len(temp_infos) - 1 else -1
-                out_infos.append(info)
+        if not temp_infos:
+            continue
 
-            for i, info in enumerate(temp_infos):
-                if info['prev'] != -1:
-                    info['prev'] = start_idx + info['prev']
-                if info['next'] != -1:
-                    info['next'] = start_idx + info['next']
+        start_idx = len(out_infos)
+        for i, info in enumerate(temp_infos):
+            info['prev'] = i - 1 if i > 0 else -1
+            info['next'] = i + 1 if i < len(temp_infos) - 1 else -1
+            out_infos.append(info)
 
-            for i in range(len(temp_infos)):
-                idx = start_idx + i
-                info = out_infos[idx]
-                sweeps = []
-                prev_idx = info['prev']
-                count = 0
-                while prev_idx != -1 and count < max_sweeps:
-                    prev_info = out_infos[prev_idx]
+        for i, info in enumerate(temp_infos):
+            if info['prev'] != -1:
+                info['prev'] = start_idx + info['prev']
+            if info['next'] != -1:
+                info['next'] = start_idx + info['next']
 
-                    ego2global_cur = np.array(info['ego2global'])
-                    ego2global_prev = np.array(prev_info['ego2global'])
-                    T_prev_to_cur = np.linalg.inv(ego2global_cur) @ ego2global_prev
+        for i in range(len(temp_infos)):
+            idx = start_idx + i
+            info = out_infos[idx]
+            sweeps = []
+            prev_idx = info['prev']
+            count = 0
+            while prev_idx != -1 and count < max_sweeps:
+                prev_info = out_infos[prev_idx]
+                ego2global_cur = np.array(info['ego2global'])
+                ego2global_prev = np.array(prev_info['ego2global'])
+                T_prev_to_cur = np.linalg.inv(ego2global_cur) @ ego2global_prev
+                R = T_prev_to_cur[:3, :3]
+                t = T_prev_to_cur[:3, 3]
+                sweep = {
+                    'data_path': prev_info['lidar_path'],
+                    'timestamp': prev_info['timestamp'],
+                    'human_time': prev_info['human_time'],
+                    'sensor2lidar_rotation': R,
+                    'sensor2lidar_translation': t,
+                    'transform': T_prev_to_cur.tolist()
+                }
+                sweeps.append(sweep)
+                prev_idx = prev_info['prev']
+                count += 1
+            info['sweeps'] = sweeps
 
-                    # 分解变换矩阵为旋转矩阵和平移向量
-                    R = T_prev_to_cur[:3, :3]
-                    t = T_prev_to_cur[:3, 3]
-
-                    # 将旋转矩阵转换为四元数（[w,x,y,z]）
-                    # quat = CalibrationProcessor.rotation_matrix_to_quaternion(R)
-
-                    sweep = {
-                        'data_path': prev_info['lidar_path'],
-                        'timestamp': prev_info['timestamp'],
-                        'human_time': prev_info['human_time'],
-                        'sensor2lidar_rotation': R,                 # 直接存储旋转矩阵（numpy 数组）
-                        'sensor2lidar_translation': t,              # 平移向量
-                        'transform': T_prev_to_cur.tolist()
-                    }
-                    sweeps.append(sweep)
-                    prev_idx = prev_info['prev']
-                    count += 1
-
-                info['sweeps'] = sweeps
     after_count = len(out_infos)
     sample_count = after_count - before_count
-    print(f"  数据包 {pkg_name} 生成 {sample_count} 个样本")
-    # 打印该包的跳过原因统计
-    if pkg_name in skip_stats:
-        print(f"  数据包 {pkg_name} 跳过统计:")
-        for reason, cnt in skip_stats[pkg_name].items():
-            print(f"      {reason}: {cnt}")
+
+    # ========== 统计总点云数（仅在 VERBOSE 时执行，耗时） ==========
+    if ENABLE_LIDAR_FILE_COUNT:
+        all_lidar_count = 0
+        for sub_pkt in (pkg_path / "datasets").iterdir():
+            if sub_pkt.is_dir():
+                lidar_dir = sub_pkt / "lidar" / "pcd"
+                if lidar_dir.exists():
+                    all_lidar_count += len(list(lidar_dir.glob("*.npy")))
+    else:
+        all_lidar_count = None
+
+    # 打印树状统计图
+    print_package_stats(
+        pkg_name,
+        all_lidar_count,
+        total_scanned,
+        early_filter_detail.get(pkg_name, {}),
+        skip_detail.get(pkg_name, {}).get('final_missing_CAM_C', 0),
+        sample_count
+    )
 
     return sample_count
 
