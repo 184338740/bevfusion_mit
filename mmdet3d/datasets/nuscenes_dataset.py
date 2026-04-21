@@ -15,6 +15,12 @@ from ..core.bbox import LiDARInstance3DBoxes
 from .custom_3d import Custom3DDataset
 
 
+Debug = False
+print(f"\n>>>[xmy]🔵[nuscenes_dataset]🔵[mmdet3d/datasets/nuscenes_dataset.py] >>> [Debug Mode] = {Debug} ")
+if Debug:
+    import time, json
+    from collections import Counter
+
 @DATASETS.register_module()
 class NuScenesDataset(Custom3DDataset):
     r"""NuScenes Dataset.
@@ -139,6 +145,13 @@ class NuScenesDataset(Custom3DDataset):
         use_valid_flag=False,
     ) -> None:
         self.load_interval = load_interval
+        if Debug:
+            # 🔵 添加调试
+            print(f">>>[nuscenes_dataset.py]🔵 [DEBUG __init__] load_interval = {self.load_interval}")
+            print(f">>>[nuscenes_dataset.py]🔵 [DEBUG __init__] ann_file = {ann_file}")
+            print(f">>>[nuscenes_dataset.py]🔵 [DEBUG __init__] test_mode = {test_mode}")
+
+
         self.use_valid_flag = use_valid_flag
         super().__init__(
             dataset_root=dataset_root,
@@ -204,6 +217,7 @@ class NuScenesDataset(Custom3DDataset):
         data_infos = data_infos[:: self.load_interval]
         self.metadata = data["metadata"]
         self.version = self.metadata["version"]
+        print(f">>>[xmy]🔵[nuscenes_dataset]🔵[nuscenes_dataset.py] >>> load_annotations(); self.version  = {self.version}")
         return data_infos
 
     def get_data_info(self, index: int) -> Dict[str, Any]:
@@ -350,6 +364,14 @@ class NuScenesDataset(Custom3DDataset):
         mapped_class_names = self.CLASSES
 
         print("Start to convert detection format...")
+
+        if Debug:
+            # 🔵 添加关键调试信息
+            print(f"\n>>>[xmy]🔵[nuscenes_dataset]🔵[nuscenes_dataset.py] >>>[DEBUG] _format_bbox 开始转换")
+            print(f"🔵 self.CLASSES = {self.CLASSES}")
+            print(f"🔵 mapped_class_names = {mapped_class_names}")
+            print(f"🔵 结果数量: {len(results)}")
+
         for sample_id, det in enumerate(mmcv.track_iter_progress(results)):
             annos = []
             boxes = output_to_nusc_box(det)
@@ -427,26 +449,95 @@ class NuScenesDataset(Custom3DDataset):
         Returns:
             dict: Dictionary of evaluation details.
         """
+
+        if Debug:
+            # ========== 添加调试打印 ==========
+            print("\n" + "="*80)
+            print(f">>>[xmy]🔵[nuscenes_dataset]🔵[nuscenes_dataset.py] >>>\n 🔵[xmy.DEBUG]>>>[DEBUG] 开始评估 _evaluate_single")
+            print(f'🔵[xmy.DEBUG]>>> _evaluate_single 开始')
+            print(f'🔵[xmy.DEBUG]>>> self.version = "{self.version}"')
+            print(f'🔵[xmy.DEBUG]>>> self.dataset_root = "{self.dataset_root}"')
+            print(f'🔵[xmy.DEBUG]>>> 结果文件 = "{result_path}"')
+            print(f"🔵 self.CLASSES = {self.CLASSES}")
+            print(f"🔵 len(self.CLASSES) = {len(self.CLASSES)}")
+            print(f"🔵 self.CLASSES索引对照表:")
+            for i, cls in enumerate(self.CLASSES):
+                print(f"  索引{i}: {cls}")
+            print(f"\n🔵 [关键调试] 直接检查验证集bicycle情况")
+            print("="*80)
+
+
+            import pickle
+            import json
+            # 1. 加载PKL数据
+            pkl_path = osp.join(self.dataset_root, 'tyjt_infos_val.pkl')
+            with open(pkl_path, 'rb') as f:
+                pkl_data = pickle.load(f)
+            
+            if isinstance(pkl_data, dict) and 'infos' in pkl_data:
+                pkl_infos = pkl_data['infos']
+            else:
+                pkl_infos = pkl_data
+            
+            pkl_tokens = [info['token'] for info in pkl_infos]
+            
+            # 2. 加载预测数据
+            with open(result_path, 'r') as f:
+                pred_data = json.load(f)
+            
+            pred_tokens = list(pred_data['results'].keys())
+            
+            # 3. 获取评测器GT数据（需要在创建nusc_eval后）
+            # 先保存这些变量，等创建评测器后再用
+            debug_data = {
+                'pkl_tokens': pkl_tokens,
+                'pred_tokens': pred_tokens,
+                'pkl_path': pkl_path,
+                'result_path': result_path
+            }
+            print("="*80)            
+
         from nuscenes import NuScenes
         from nuscenes.eval.detection.evaluate import DetectionEval
 
         output_dir = osp.join(*osp.split(result_path)[:-1])
+	# 🔵 2. 设置评测集 eval_set
         nusc = NuScenes(version=self.version, dataroot=self.dataset_root, verbose=False)
         eval_set_map = {
-            "v1.0-mini": "mini_val",
-            "v1.0-trainval": "val",
+            'v1.0-mini': 'mini_val',
+            'v1.0-trainval': 'val',
+            'v1.0-test': 'test',
+            'v1.0-tyjt': 'val',  
+            'v1.0-tyjt-trainval': 'val',
+            'v1.0-tyjt-train': 'val',
+            'v1.0-tyjt-val': 'val',
+            'v1.0-tyjt-test': 'test',
         }
+        
+        
+        # 根据数据集版本确定eval_set
+        if self.version in eval_set_map:
+            eval_set = eval_set_map[self.version]
+        else:
+            # 默认使用val
+            eval_set = 'val'
+            print(f'>>>[xmy]🔵[TYJT警告]>>> 未知版本 {self.version}, 使用默认eval_set: {eval_set}')
+        
+        print(f'>>>[xmy]🔵[TYJT调试]>>> 使用eval_set: {eval_set}, 数据集版本: {self.version}')
+
+        #  3. 创建评测器
         nusc_eval = DetectionEval(
             nusc,
             config=self.eval_detection_configs,
             result_path=result_path,
-            eval_set=eval_set_map[self.version],
+            eval_set=eval_set,  # 使用修复后的eval_set
             output_dir=output_dir,
-            verbose=False,
+            verbose=True,  # 改为True以显示详细调试信息
         )
         nusc_eval.main(render_curves=False)
 
-        # record metrics
+        # record metrics记录指标
+        print(f'>>>[xmy]🔵[nuscenes_dataset]🔵[nuscenes_dataset.py] >>> 保存: output_dir = {output_dir}')
         metrics = mmcv.load(osp.join(output_dir, "metrics_summary.json"))
         detail = dict()
         for name in self.CLASSES:
@@ -487,7 +578,13 @@ class NuScenesDataset(Custom3DDataset):
         )
 
         if jsonfile_prefix is None:
-            tmp_dir = tempfile.TemporaryDirectory()
+            # tmp_dir = tempfile.TemporaryDirectory()
+            # [xmy] test推理，暂存结果时，经常出现/tmp 空间不足，改成自定义的路径
+            # 自定义临时目录：当前路径下的 ./tmp
+            base_tmp = os.path.join(os.getcwd(), 'tmp')
+            os.makedirs(base_tmp, exist_ok=True)
+            # 在 base_tmp 下创建唯一的子目录，避免多个进程冲突
+            tmp_dir = tempfile.TemporaryDirectory(dir=base_tmp)   # 关键：指定 dir 参数
             jsonfile_prefix = osp.join(tmp_dir.name, "results")
         else:
             tmp_dir = None
