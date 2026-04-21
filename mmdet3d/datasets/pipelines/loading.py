@@ -396,6 +396,28 @@ class LoadPointsFromFile:
         """
         lidar_path = results["lidar_path"]
         points = self._load_points(lidar_path)
+
+        # ========== 新增：维度检查 ==========
+        if points.ndim == 1:
+            # 一维数组，需要 reshape 成 (N, load_dim)
+            total_elements = points.shape[0]
+            if total_elements % self.load_dim != 0:
+                raise ValueError(
+                    f">>>[xmy]🔵[loading.py]>>> 点云文件 {lidar_path} 的总元素数 {total_elements} 无法被 "
+                    f">>>[xmy]🔵[loading.py]>>> load_dim={self.load_dim} 整除，无法 reshape。请检查文件格式或 load_dim 设置。"
+                )
+        elif points.ndim == 2:
+            # 二维数组，检查第二维
+            if points.shape[1] != self.load_dim:
+                raise ValueError(
+                    f">>>[xmy]🔵[loading.py]>>> 点云文件 {lidar_path} 的实际维度为 {points.shape[1]}，"
+                    f">>>[xmy]🔵[loading.py]>>> 但配置中的 load_dim 为 {self.load_dim}。请检查数据或配置。"
+                )
+        else:
+            raise ValueError(f"点云文件 {lidar_path} 的维度异常: {points.shape}")
+        # =================================
+
+
         points = points.reshape(-1, self.load_dim)
         # TODO: make it more general
         if self.reduce_beams and self.reduce_beams < 32:
