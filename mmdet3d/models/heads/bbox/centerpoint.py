@@ -11,6 +11,12 @@ from mmdet3d.models.builder import HEADS, build_loss
 from mmdet3d.ops.iou3d.iou3d_utils import nms_gpu
 from mmdet.core import build_bbox_coder, multi_apply
 
+Debug = False
+
+print(f">>>[xmy]🔵[mmdet3d/models/heads/bbox/centerpoint.py] >>> [Debug Mode = {Debug}] ")
+
+
+
 
 def clip_sigmoid(x: torch.Tensor, eps: float = 1e-4) -> torch.Tensor:
     return torch.clamp(x.sigmoid_(), min=eps, max=1 - eps)
@@ -348,9 +354,19 @@ class CenterHead(BaseModule):
 
         x = self.shared_conv(x)
 
-        for task in self.task_heads:
+        # for task in self.task_heads:
+        for i, task in enumerate(self.task_heads):
             ret_dicts.append(task(x))
-
+            if Debug:
+                out = task(x)
+                # ===== 添加验证 =====
+                print(f"🔵[xmy]>>> centerpoint.py::  ==> [Task {i}] output keys: {list(out.keys())}")
+                for key, tensor in out.items():
+                    print(f"    {key} shape: {tensor.shape}")
+                    # 可选：打印统计信息，例如均值和标准差（对 vel 分支特别有用）
+                    if key == 'vel':
+                        print(f"        vel mean: {tensor.mean().item():.4f}, std: {tensor.std().item():.4f}")
+                # ===================
         return ret_dicts
 
     def forward(self, feats, metas):
@@ -603,16 +619,30 @@ class CenterHead(BaseModule):
             )
             target_box = anno_boxes[task_id]
             # reconstruct the anno_box from multiple reg heads
-            preds_dict[0]["anno_box"] = torch.cat(
-                (
-                    preds_dict[0]["reg"],
-                    preds_dict[0]["height"],
-                    preds_dict[0]["dim"],
-                    preds_dict[0]["rot"],
-                    preds_dict[0]["vel"],
-                ),
-                dim=1,
-            )
+
+            #  [xmy][0318]
+            # 官方：默认有速度
+            # preds_dict[0]["anno_box"] = torch.cat(
+            #     (
+            #         preds_dict[0]["reg"],
+            #         preds_dict[0]["height"],
+            #         preds_dict[0]["dim"],
+            #         preds_dict[0]["rot"],
+            #         preds_dict[0]["vel"],
+            #     ),
+            #     dim=1,
+            # )
+            # xmy: 改成可能没有速度的配置
+            # 构建拼接列表
+            to_cat = [
+                preds_dict[0]["reg"],
+                preds_dict[0]["height"],
+                preds_dict[0]["dim"],
+                preds_dict[0]["rot"],
+            ]
+            if "vel" in preds_dict[0]:
+                to_cat.append(preds_dict[0]["vel"])
+            preds_dict[0]["anno_box"] = torch.cat(to_cat, dim=1)
 
             # Regression loss for dimension, offset, height, rotation
             ind = inds[task_id]
