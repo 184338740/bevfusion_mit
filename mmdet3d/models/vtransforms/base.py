@@ -284,24 +284,29 @@ class BaseDepthTransform(BaseTransform):
 
 
         for b in range(batch_size):
+            # 获取： 当前 batch 的点云坐标 (x,y,z)
             cur_coords = points[b][:, :3]
             cur_img_aug_matrix = img_aug_matrix[b]
             cur_lidar_aug_matrix = lidar_aug_matrix[b]
             cur_lidar2image = lidar2image[b]
 
+            # # 应用数据增强矩阵的逆变换
             # inverse aug
             cur_coords -= cur_lidar_aug_matrix[:3, 3]
             cur_coords = torch.inverse(cur_lidar_aug_matrix[:3, :3]).matmul(
                 cur_coords.transpose(1, 0)
             )
+
+            # # lidar2image 投影
             # lidar2image
             cur_coords = cur_lidar2image[:, :3, :3].matmul(cur_coords)
             cur_coords += cur_lidar2image[:, :3, 3].reshape(-1, 3, 1)
             # get 2d coords
-            dist = cur_coords[:, 2, :]
+            dist = cur_coords[:, 2, :]   # 提取深度 (z 方向距离)
             cur_coords[:, 2, :] = torch.clamp(cur_coords[:, 2, :], 1e-5, 1e5)
-            cur_coords[:, :2, :] /= cur_coords[:, 2:3, :]
+            cur_coords[:, :2, :] /= cur_coords[:, 2:3, :]  # 归一化得到像素坐标
 
+            # # 应用图像增强矩阵
             # imgaug
             cur_coords = cur_img_aug_matrix[:, :3, :3].matmul(cur_coords)
             cur_coords += cur_img_aug_matrix[:, :3, 3].reshape(-1, 3, 1)
@@ -310,25 +315,31 @@ class BaseDepthTransform(BaseTransform):
             # normalize coords for grid sample
             cur_coords = cur_coords[..., [1, 0]]
 
+            # # 判断点是否在图像内
             on_img = (
                 (cur_coords[..., 0] < self.image_size[0])
                 & (cur_coords[..., 0] >= 0)
                 & (cur_coords[..., 1] < self.image_size[1])
                 & (cur_coords[..., 1] >= 0)
             )
+            # 遍历每个相机 
             for c in range(on_img.shape[0]):
                 masked_coords = cur_coords[c, on_img[c]].long()
                 masked_dist = dist[c, on_img[c]]
 
+                # 根据 depth_input 类型填充深度张量
                 if self.depth_input == 'scalar':
+                    # 标量深度：在通道 0 对应像素位置赋值
                     depth[b, c, 0, masked_coords[:, 0], masked_coords[:, 1]] = masked_dist
                 elif self.depth_input == 'one-hot':
+                    # one-hot 编码：将深度值量化为离散区间索引
                     # Clamp depths that are too big to D
                     # These can arise when the point range filter is different from the dbound. 
                     masked_dist = torch.clamp(masked_dist, max=self.D-1)
                     depth[b, c, masked_dist.long(), masked_coords[:, 0], masked_coords[:, 1]] = 1.0
 
                 if self.add_depth_features:
+                    # 可选：附加点云的其他特征（如强度）
                     depth[b, c, -points[b].shape[-1]:, masked_coords[:, 0], masked_coords[:, 1]] = points[b][boolmask2idx(on_img[c])].transpose(0,1)
 
         extra_rots = lidar_aug_matrix[..., :3, :3]
@@ -349,7 +360,8 @@ class BaseDepthTransform(BaseTransform):
             'bda_mat': lidar_aug_matrix,
             'sensor2ego_mats': sensor2ego, 
         }
-        x = self.get_cam_feats(img, depth, mats_dict)
+        # depth 是基于激光雷达点云生成的：  在 BaseDepthTransform.forward 中，通过将点云坐标变换到图像坐标系，筛选出落在图像内的点，并将它们的距离值填充到深度张量 depth 
+        x = self.get_cam_feats(img, depth, mats_dict)    # 将生成的 depth 作为第二个参数传入
 
         use_depth = False
         if type(x) == tuple:

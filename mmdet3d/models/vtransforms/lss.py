@@ -9,6 +9,11 @@ from .base import BaseTransform
 
 __all__ = ["LSSTransform"]
 
+# 全局调试开关
+LSS_DEBUG = True
+
+if LSS_DEBUG:
+    import time
 
 @VTRANSFORMS.register_module()
 class LSSTransform(BaseTransform):
@@ -34,6 +39,17 @@ class LSSTransform(BaseTransform):
             zbound=zbound,
             dbound=dbound,
         )
+
+        # 添加调试计数器
+        if LSS_DEBUG:
+            self.debug_iter = 0
+            self.debug_interval = 100  # 每100次打印一次
+            self.total_depthnet_time = 0
+            self.total_forward_time = 0
+            self.depthnet_times = []
+            self.geometry_times = []
+            self.splat_times = []
+
         self.depthnet = nn.Conv2d(in_channels, self.D + self.C, 1)
         if downsample > 1:
             assert downsample == 2, downsample
@@ -60,6 +76,10 @@ class LSSTransform(BaseTransform):
 
     @force_fp32()
     def get_cam_feats(self, x):
+        """提取相机特征（深度预测）"""
+        if LSS_DEBUG:
+            depthnet_start = time.time()
+
         B, N, C, fH, fW = x.shape
 
         x = x.view(B * N, C, fH, fW)
@@ -70,6 +90,13 @@ class LSSTransform(BaseTransform):
 
         x = x.view(B, N, self.C, self.D, fH, fW)
         x = x.permute(0, 1, 3, 4, 5, 2)
+
+        if LSS_DEBUG:
+            depthnet_time = time.time() - depthnet_start
+            
+            # 记录时间
+            self.total_depthnet_time += depthnet_time
+            self.depthnet_times.append(depthnet_time)
         return x
 
     def forward(self, *args, **kwargs):
