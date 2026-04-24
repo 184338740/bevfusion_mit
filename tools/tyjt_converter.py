@@ -3,6 +3,13 @@
 TYJT 数据集预处理脚本，生成 BEVFusion 所需的 info pkl 文件。
 基于 tyjt_calib_utils.py 中的 CalibrationProcessor 进行标定解析
 
+- 版本 v9.4.8 (0424)
+    - 重要修复：修正 TYJT 数据转换中 gt_boxes 尺寸顺序错误。
+    - 原顺序 [cx, cy, cz, l, w, h] (长、宽、高) 与 nuScenes 官方格式 [cx, cy, cz, w, l, h] (宽、长、高) 不一致，导致模型学习到颠倒的尺寸预测。
+    - 现已更正转换逻辑，在 build_sample_info 中将 box3d 的 [l, w, h] 交换为 [w, l, h]，输出 gt_boxes = [cx, cy, cz, w, l, h, yaw]。
+    - 影响：修正后需重新生成数据集（.pkl 文件）并重新训练/微调模型，否则 KITTI 评估仍为 0。
+    - 同步更新 tyjt_converter.py 及数据层相关注释，确保与 MMDetection3D / nuScenes 标准严格对齐。
+
 版本 v9.4.7 (0421)
     - 标注目录自动探测：支持 ["label","labels","perc"] 候选列表，解决 2d3d4d_20241122_wuxi 使用 perc 的问题
     - 图像目录可配置：支持数据包级 image_subdir（默认 image_dc），适配非标准图像目录
@@ -764,7 +771,27 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
                 label_data = json.load(f)
             objects = label_data.get('objects', []) if isinstance(label_data, dict) else label_data
             for obj in objects:
-                box3d = obj['box3d']  # [cx, cy, cz, l, w, h]
+                # [bugfix][xmy] converter时，尺寸的长宽顺序错位了
+                # 1. tyjt的标注规则：https://tyjt.yuque.com/lz6a2x/perc/ptkaar
+                # "type": "car",
+                # "box3d": [x, y, z, l, w, h],
+                # "rotation": [yaw, roll, pitch],
+                # "pointNum": n,
+                # "id": "abcde01234",
+                # "door_open": 0,
+                # "trunk_open": 0,
+                # "hood_open": 0
+                # 2. 因此此处： box3d = obj['box3d'] 获取的顺序为： [cx, cy, cz, l, w, h]
+                # 3. nusc官方需求为： [cx, cy, cz, w, l, h]
+                # ==> 需要修复bug ==> 重新生成 数据集 ==> 重新训练
+
+                # box3d = obj['box3d']  # [cx, cy, cz, l, w, h]
+                # yaw = obj['rotation'][0]
+                # gt_boxes.append(box3d + [yaw])  # 7维
+                cx, cy, cz, l, w, h = obj['box3d']  # 解析原始顺序
+                yaw = obj['rotation'][0]
+                gt_boxes.append([cx, cy, cz, w, l, h, yaw])   # 交换 w 和 l，并添加 yaw   ==》 nusc 官方 匹配代码
+
                 yaw = obj['rotation'][0]
                 gt_boxes.append(box3d + [yaw])  # 7维
                 gt_names.append(obj['type'])
