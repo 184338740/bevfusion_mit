@@ -788,12 +788,11 @@ def build_sample_info(ts: str, files: Dict, calib_data: Dict,
                 # box3d = obj['box3d']  # [cx, cy, cz, l, w, h]
                 # yaw = obj['rotation'][0]
                 # gt_boxes.append(box3d + [yaw])  # 7维
+                
                 cx, cy, cz, l, w, h = obj['box3d']  # 解析原始顺序
                 yaw = obj['rotation'][0]
                 gt_boxes.append([cx, cy, cz, w, l, h, yaw])   # 交换 w 和 l，并添加 yaw   ==》 nusc 官方 匹配代码
 
-                yaw = obj['rotation'][0]
-                gt_boxes.append(box3d + [yaw])  # 7维
                 gt_names.append(obj['type'])
                 point_num = obj.get('pointNum')
                 if point_num is None:
