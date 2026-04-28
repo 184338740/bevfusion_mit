@@ -51,7 +51,7 @@
     - 文件名包含元信息, 打印标注数量
 
 使用说明(v04.3): 
-    python tyjt_tools_Vis_Gt_pkl.py --pkl ./tyjt_infos_train.pkl --out_dir ./vis --num_samples=20
+    python step2_tyjt_tools_Vis_Gt_pkl.py --pkl ./tyjt_infos_train.pkl --out_dir ./vis --num_samples=20
 """
 
 
