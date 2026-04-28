@@ -2,14 +2,20 @@
 """
 验证 TYJT 数据预处理生成的 pkl 文件，检查标定准确性。
 
+版本v04.0 (0427)：
+    - 相机投影点云：按深度渐变色（近红远蓝），点尺寸 1 像素，透明度 0.3
+    - 无点云降采样，保留原始全部点云（通过半透明减少遮挡）
+    - BEV 参数说明（修改鸟瞰图效果）：
+        - BEV_POINT_CLOUD_DOWNSAMPLE：BEV中点云最大显示点数，超过则随机降采样（设极大值如1e9可禁用）
+        - BEV_POINT_SIZE：BEV每个点的大小，默认0.5
+        - BEV_POINT_ALPHA：BEV点云透明度，默认0.6
+
 版本 v03.1 (0316)：
     - BEV 图降采样点云，提高清晰度
-    - 文件名包含元信息
-    - 打印标注数量
+    - 文件名包含元信息，打印标注数量
 
 使用说明：
-    python tyjt_tools_Vis_pkl.py --pkl ./tyjt_data_infos/tyjt_infos_train.pkl --out_dir tyjt_data_infos/Vis --num_samples=20
-    python tyjt_tools_Vis_pkl_v03_0316.py --pkl ./tyjt_data_infos_v0942/tyjt_infos_train.pkl --out_dir tyjt_data_infos/Vis --num_samples=20
+    python tyjt_tools_Vis_Gt_pkl.py --pkl ./tyjt_infos_train.pkl --out_dir ./vis --num_samples=20
 """
 
 import os
@@ -21,46 +27,34 @@ import cv2
 import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
-
 import shutil
 
-import matplotlib.pyplot as plt
-import cv2
-
-
-# 导入标定工具（与 tyjt_converter 共用）
 from tyjt_utils.tyjt_calib_utils import CalibrationProcessor
 
-# 相机顺序映射（与 info 中的键一致）
 CAM_NAMES = ['CAM_A', 'CAM_B', 'CAM_C', 'CAM_D']
 
-# BEV 图点云降采样参数
-BEV_POINT_CLOUD_DOWNSAMPLE = 30000  # 最多显示的点数
-BEV_POINT_SIZE = 0.5                # 点的大小
-BEV_POINT_ALPHA = 0.6                # 透明度
+# BEV 参数保持不变
+BEV_POINT_CLOUD_DOWNSAMPLE = 30000
+BEV_POINT_SIZE = 0.5
+BEV_POINT_ALPHA = 0.6
 
 def quaternion_to_rotation_matrix(q):
-    """四元数 [w,x,y,z] 转旋转矩阵"""
     return CalibrationProcessor.quaternion_to_rotation_matrix(q)
 
 def load_sample(info: Dict):
-    """加载点云、图像、标注（适配新版 info 格式）"""
-    # 加载点云
+    # 与原版相同
     points = np.load(info['lidar_path']).astype(np.float32)
     if points.shape[1] >= 3:
-        points = points[:, :3]  # 只取 xyz
+        points = points[:, :3]
     else:
         raise ValueError(f"点云维度不足: {points.shape}")
 
-    # 加载图像（新版使用 data_path）
     images = {}
     for cam in CAM_NAMES:
-        # 获取相机数据
         cam_data = info['cams'].get(cam)
         if cam_data is None:
             images[cam] = None
             continue
-        # 新版使用 data_path 字段
         img_path = cam_data['data_path']
         img = cv2.imread(img_path)
         if img is None:
@@ -69,10 +63,8 @@ def load_sample(info: Dict):
         else:
             images[cam] = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    # 加载标注，兼容字典和列表格式
     with open(info['label_path'], 'r') as f:
         label_data = json.load(f)
-
     objects = []
     if isinstance(label_data, dict):
         objects = label_data.get('objects', [])
@@ -95,17 +87,16 @@ def load_sample(info: Dict):
                 'size': box3d[3:6],
                 'yaw': rotation[0],
                 'type': obj.get('type', 'unknown'),
-                'id': obj.get('id', -1)   # 添加 id 字段
+                'id': obj.get('id', -1)
             })
     return points, images, boxes_3d
 
-def project_points_to_image(points: np.ndarray, cam_info: Dict) -> Tuple[np.ndarray, np.ndarray]:
+def project_points_to_image(points: np.ndarray, cam_info: Dict) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    将点云投影到相机图像平面。
-    返回 UV 坐标 (N,2) 和有效标志。
+    返回 (uv, valid, depths)
     """
     t_cam2ego = np.array(cam_info['cam2ego_translation'], dtype=np.float32)
-    q = np.array(cam_info['cam2ego_rotation'], dtype=np.float32)  # [w,x,y,z]
+    q = np.array(cam_info['cam2ego_rotation'], dtype=np.float32)
     R_cam2ego = quaternion_to_rotation_matrix(q)
     intrinsic = np.array(cam_info['cam_intrinsic'], dtype=np.float32)
 
@@ -124,12 +115,10 @@ def project_points_to_image(points: np.ndarray, cam_info: Dict) -> Tuple[np.ndar
         v = intrinsic[1, 1] * y / z_valid + intrinsic[1, 2]
         uv[valid, 0] = u
         uv[valid, 1] = v
-    return uv, valid
+    return uv, valid, z   # 返回深度
 
 def project_box_to_image(box: Dict, cam_info: Dict) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    将单个 3D 框投影到图像平面，返回 8 个角点的 2D 坐标 (8,2) 和是否在图像内。
-    """
+    # 与原版相同
     cx, cy, cz = box['center']
     l, w, h = box['size']
     yaw = box['yaw']
@@ -142,8 +131,8 @@ def project_box_to_image(box: Dict, cam_info: Dict) -> Tuple[np.ndarray, np.ndar
 
     dx = np.array([l/2, w/2, h/2])
     offsets = np.array([
-        [-1, -1, -1], [ 1, -1, -1], [ 1,  1, -1], [-1,  1, -1],
-        [-1, -1,  1], [ 1, -1,  1], [ 1,  1,  1], [-1,  1,  1]
+        [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+        [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]
     ]) * dx
 
     corners_ego = (R_yaw @ offsets.T).T + np.array([cx, cy, cz])
@@ -169,20 +158,61 @@ def project_box_to_image(box: Dict, cam_info: Dict) -> Tuple[np.ndarray, np.ndar
         uv[valid, 1] = v
     return uv, valid
 
-def draw_projected_points(image: np.ndarray, uv: np.ndarray, valid: np.ndarray, color=(0, 255, 0), point_size=2):
-    """在图像上绘制点云投影"""
+def draw_projected_points_blend(image: np.ndarray, uv: np.ndarray, valid: np.ndarray,
+                               depths: np.ndarray, point_size: int = 1, alpha: float = 0.6):
+    """
+    按深度渐变颜色绘制点，并支持透明度 (alpha)
+    - 深度范围: 0~80 米，近处红色，远处蓝色
+    - 透明度: 0完全透明，1完全不透明
+    """
     img_copy = image.copy()
     h, w = img_copy.shape[:2]
-    u, v = uv[valid, 0], uv[valid, 1]
-    in_image = (u >= 0) & (u < w) & (v >= 0) & (v < h)
-    u = u[in_image].astype(int)
-    v = v[in_image].astype(int)
-    for x, y in zip(u, v):
-        cv2.circle(img_copy, (x, y), point_size, color, -1)
+    # 获取有效点的投影坐标和深度
+    u_vals = uv[valid, 0]
+    v_vals = uv[valid, 1]
+    # 过滤图像内点
+    in_image = (u_vals >= 0) & (u_vals < w) & (v_vals >= 0) & (v_vals < h)
+    u_vals = u_vals[in_image].astype(int)
+    v_vals = v_vals[in_image].astype(int)
+    depths_valid = depths[valid][in_image]
+
+    # 为每个点计算颜色（BGR）
+    colors = []
+    for d in depths_valid:
+        d_norm = np.clip(d / 80.0, 0, 1)   # 深度归一化
+        # 红色 (0,0,255) -> 蓝色 (255,0,0) 在BGR中是 (0,0,255) -> (255,0,0)
+        b = int(d_norm * 255)
+        g = 0
+        r = int((1 - d_norm) * 255)
+        colors.append((b, g, r))   # (B, G, R)
+
+    # 半透明绘制：创建一个小ROI，将圆形以alpha比例融合
+    # 为提高性能，对每个点单独处理（因为点数量不会特别大，例如几万个）
+    for (x, y), color in zip(zip(u_vals, v_vals), colors):
+        # 定义圆形区域半径
+        r = point_size
+        # 获取感兴趣区域（略大于圆）
+        x1, x2 = max(x - r, 0), min(x + r + 1, w)
+        y1, y2 = max(y - r, 0), min(y + r + 1, h)
+        roi = img_copy[y1:y2, x1:x2]
+        if roi.size == 0:
+            continue
+        # 创建同尺寸的圆形掩码（单通道）
+        mask = np.zeros((y2-y1, x2-x1), dtype=np.uint8)
+        cv2.circle(mask, (x - x1, y - y1), r, 255, -1)
+        # 前景颜色填充
+        color_np = np.array(color, dtype=np.uint8)
+        foreground = np.full_like(roi, color_np)
+        # 混合
+        mask_float = mask.astype(np.float32) / 255.0 * alpha
+        mask_float = mask_float[..., np.newaxis]  # (H,W,1)
+        blended = roi * (1 - mask_float) + foreground * mask_float
+        img_copy[y1:y2, x1:x2] = blended.astype(np.uint8)
+
     return img_copy
 
 def draw_projected_box(image: np.ndarray, uv: np.ndarray, valid: np.ndarray, color=(255, 0, 0), thickness=2):
-    """在图像上绘制投影的 3D 框（线框）"""
+    # 与原版相同
     if not np.any(valid):
         return image
     img_copy = image.copy()
@@ -198,18 +228,8 @@ def draw_projected_box(image: np.ndarray, uv: np.ndarray, valid: np.ndarray, col
             cv2.line(img_copy, pt1, pt2, color, thickness)
     return img_copy
 
-
-
 def visualize_sample(sample_idx: int, info: Dict, out_dir: Path):
-    """
-    为单个样本生成可视化图像，并输出统计信息。
-    - 4 张相机图像（点云投影 + 3D 框投影）
-    - 1 张 BEV 图（降采样点云 + 3D 框）
-    包含每相机的框可见性统计。
-    """
-    DEBUG = True  # 设为 True 开启调试统计，但输出已精简为每框一行
-
-    # 提取元信息用于文件名
+    DEBUG = True
     pkg_name = info.get('package_name', 'unknown_pkg')
     road_id = info.get('road_id', 'unknown_road')
     timestamp = info.get('timestamp', sample_idx)
@@ -218,48 +238,41 @@ def visualize_sample(sample_idx: int, info: Dict, out_dir: Path):
     sub_packet = Path(lidar_path).parent.parent.parent.name
     base_name = f"{pkg_name}_{road_id}_{sub_packet}_{timestamp}"
 
-    # 加载数据
     points, images, boxes_3d = load_sample(info)
     total_labels = len(boxes_3d)
     if DEBUG:
-        print(f"\n>>> 样本 {sample_idx}: {base_name} 总标注数: {total_labels} label_path: {label_path} ")
+        print(f"\n>>> 样本 {sample_idx}: {base_name} 总标注数: {total_labels} label_path: {label_path}")
 
-    # 用于统计每个相机的显示情况
     cam_stats = {cam: {'total': total_labels, 'full': 0, 'partial': 0, 'none': 0} for cam in CAM_NAMES}
 
-    # --- 相机图像投影 ---
     for cam in CAM_NAMES:
         if images[cam] is None:
             continue
         img = images[cam].copy()
         h, w = img.shape[:2]
 
-        # 获取该相机的数据（新版格式）
         cam_data = info['cams'][cam]
-        # 构造一个兼容旧版投影函数的字典（使用 sensor2ego 字段映射到旧字段名）
         cam_info_proj = {
             'cam2ego_translation': cam_data['sensor2ego_translation'],
             'cam2ego_rotation': cam_data['sensor2ego_rotation'],
             'cam_intrinsic': cam_data['cam_intrinsic']
         }
 
-        # 投影点云
-        uv_pts, valid_pts = project_points_to_image(points, cam_info_proj)
-        img = draw_projected_points(img, uv_pts, valid_pts, color=(0,255,0), point_size=2)
+        # 投影点云（获得深度）
+        uv_pts, valid_pts, depths = project_points_to_image(points, cam_info_proj)
+        # 使用升级后的绘制函数：点大小1，透明度0.6，渐变色
+        img = draw_projected_points_blend(img, uv_pts, valid_pts, depths, point_size=1, alpha=0.6)
 
-        # 对每个框进行投影和绘制
+        # 绘制3D框（与原版相同）
         for i, box in enumerate(boxes_3d):
             uv_box, valid_box = project_box_to_image(box, cam_info_proj)
-
-            # 判断哪些角点在图像内
+            # 可见性统计（与原版相同）
             in_image = np.zeros(8, dtype=bool)
             for j in range(8):
                 if valid_box[j]:
                     u, v = uv_box[j]
                     if 0 <= u < w and 0 <= v < h:
                         in_image[j] = True
-
-            # 统计该框的可见性
             num_in_image = np.sum(in_image)
             if num_in_image == 8:
                 cam_stats[cam]['full'] += 1
@@ -271,11 +284,10 @@ def visualize_sample(sample_idx: int, info: Dict, out_dir: Path):
                 cam_stats[cam]['none'] += 1
                 visible = '不可见'
 
-            # 绘制框（函数内部会过滤无效点）
             img = draw_projected_box(img, uv_box, valid_box, color=(255,0,0), thickness=2)
 
-            # 计算中心点投影（使用 cam_info_proj）
-            center_ego = np.array([box['center']])  # shape (1,3)
+            # 可选：绘制中心点ID（保留原逻辑）
+            center_ego = np.array([box['center']])
             t_cam2ego = np.array(cam_info_proj['cam2ego_translation'])
             q = np.array(cam_info_proj['cam2ego_rotation'])
             R_cam2ego = quaternion_to_rotation_matrix(q)
@@ -287,43 +299,34 @@ def visualize_sample(sample_idx: int, info: Dict, out_dir: Path):
                 intrinsic = np.array(cam_info_proj['cam_intrinsic'])
                 u = intrinsic[0,0] * center_cam[0,0] / z + intrinsic[0,2]
                 v = intrinsic[1,1] * center_cam[0,1] / z + intrinsic[1,2]
-                h_img, w_img = img.shape[:2]
-                if 0 <= u < w_img and 0 <= v < h_img:
+                if 0 <= u < w and 0 <= v < h:
                     cv2.putText(img, str(box['id']), (int(u), int(v)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-            # 调试打印：一行一个框
             if DEBUG:
                 print(f"  相机 {cam}, 框 {i}: 有效角点={np.sum(valid_box)}, 图像内角点={num_in_image}, 状态={visible}")
 
-        # 保存相机图像
         out_path = out_dir / f"{base_name}_{cam}.jpg"
         cv2.imwrite(str(out_path), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-
-        # 输出该相机统计
         if DEBUG:
             stat = cam_stats[cam]
             print(f"  相机 {cam} 统计: 完全可见={stat['full']}, 部分可见={stat['partial']}, 不可见={stat['none']} (总框={total_labels})")
 
-    # --- BEV 图 (范围 -100~100) ---
+    # BEV 图保持原状
     fig, ax = plt.subplots(1, 1, figsize=(16, 16), dpi=200)
     x_range = [-100, 100]
     y_range = [-100, 100]
     mask = (points[:, 0] >= x_range[0]) & (points[:, 0] <= x_range[1]) & \
            (points[:, 1] >= y_range[0]) & (points[:, 1] <= y_range[1])
     points_filtered = points[mask]
-
-    # 降采样
     if len(points_filtered) > BEV_POINT_CLOUD_DOWNSAMPLE:
         idx = np.random.choice(len(points_filtered), BEV_POINT_CLOUD_DOWNSAMPLE, replace=False)
         points_plot = points_filtered[idx]
     else:
         points_plot = points_filtered
 
-    # 绘制点云（使用全局常量）
     ax.scatter(points_plot[:, 0], points_plot[:, 1],
                s=BEV_POINT_SIZE, c='blue', alpha=BEV_POINT_ALPHA)
 
-    # 绘制 3D 框
     for box in boxes_3d:
         cx, cy, cz = box['center']
         l, w, h = box['size']
@@ -351,27 +354,21 @@ def visualize_sample(sample_idx: int, info: Dict, out_dir: Path):
     plt.savefig(out_path, dpi=200, bbox_inches='tight')
     plt.close()
 
-    # 汇总所有相机的显示情况
     if DEBUG:
         total_full = sum(cam_stats[cam]['full'] for cam in CAM_NAMES)
         total_partial = sum(cam_stats[cam]['partial'] for cam in CAM_NAMES)
         total_none = sum(cam_stats[cam]['none'] for cam in CAM_NAMES)
         print(f"  汇总: 完全可见框总数={total_full}, 部分可见框总数={total_partial}, 不可见框总数={total_none}")
 
-    # copy json
     json_src = info['label_path']
     json_dst = out_dir / f"{base_name}.json"
     shutil.copy2(json_src, json_dst)
 
-
 def main():
-    parser = argparse.ArgumentParser(description="验证 TYJT pkl 文件标定")
-    parser.add_argument('--pkl', type=str, required=True,
-                        help='生成的 info pkl 文件路径 (如 data/tyjt/annotations/tyjy_infos_train.pkl)')
-    parser.add_argument('--out_dir', type=str, default='./vis_output',
-                        help='输出图像目录')
-    parser.add_argument('--num_samples', type=int, default=20,
-                        help='要采样的样本数')
+    parser = argparse.ArgumentParser(description="TYJT pkl 可视化升级版 v04 (点云渐变+半透明)")
+    parser.add_argument('--pkl', type=str, required=True, help='info pkl 文件')
+    parser.add_argument('--out_dir', type=str, default='./vis_output', help='输出目录')
+    parser.add_argument('--num_samples', type=int, default=20, help='样本数量')
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -380,12 +377,11 @@ def main():
     with open(args.pkl, 'rb') as f:
         data = pickle.load(f)
     if isinstance(data, dict) and 'infos' in data:
-        infos = data['infos']  # 新版字典结构
+        infos = data['infos']
     else:
-        infos = data            # 兼容旧版直接列表
+        infos = data
 
     print(f"加载了 {len(infos)} 个样本")
-
     total = len(infos)
     if total < args.num_samples:
         indices = list(range(total))
