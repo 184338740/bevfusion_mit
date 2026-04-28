@@ -2,6 +2,15 @@
 """
 验证 TYJT 数据预处理生成的 pkl 文件，检查标定准确性。
 
+版本v04.3 (0428)：
+    - 引入任务（tasks）机制，支持一次运行生成多种不同布局的组合图
+    - 每个任务可独立定义输出后缀（suffix）和布局（layout），支持任意行、列组合
+    - 布局单元格支持 "CAM_X_boxes", "CAM_X_points", "CAM_X_both", "BEV"
+    - 新增全局参数:
+        - COMBINED_IMG_HEIGHT: 统一控制相机图像高度（像素），BEV 图自动适配该高度，解决图像压缩问题
+    - 所有相机图像仅渲染一次，多种模式（points/boxes/both）复用，提升性能
+    - 优化组合图排版：按固定高度缩放，保持宽高比，自动对齐行列
+
 版本v04.2 (0428)：
     - 支持两种可视化模式：'boxes'（只显示3D框）、'points'（只显示点云）
     - 自动生成组合图（4相机+BEV）
@@ -41,10 +50,10 @@
     - BEV 图降采样点云, 提高清晰度
     - 文件名包含元信息, 打印标注数量
 
-使用说明: 
-    # v04.2
+使用说明(v04.3): 
     python tyjt_tools_Vis_Gt_pkl.py --pkl ./tyjt_infos_train.pkl --out_dir ./vis --num_samples=20
 """
+
 
 import os
 import json
@@ -60,76 +69,71 @@ import shutil
 from tyjt_utils.tyjt_calib_utils import CalibrationProcessor
 
 # ==================== 全局配置参数 ====================
+# 相机名称列表（固定，请勿修改）
 CAM_NAMES = ['CAM_A', 'CAM_B', 'CAM_C', 'CAM_D']
 
-# -------------------- 3Dto2D 点云参数 --------------------
-CAM_PROJ_POINT_SIZE = 1              # 点云投影点半径（像素）
-CAM_PROJ_ALPHA = 0.3                 # 点云透明度 (0~1)
-CAM_PROJ_COLOR_MODE = 'depth'        # 'depth' 深度渐变色，'fixed' 固定颜色
-CAM_PROJ_FIXED_COLOR = (0, 255, 0)   # 固定颜色（BGR），绿色
+# -------------------- 模块1：相机投影点云样式 --------------------
+CAM_PROJ_POINT_SIZE = 1          # 点云投影点半径（像素），1为最小，避免遮挡
+CAM_PROJ_ALPHA = 0.3             # 点云透明度，0完全透明，1不透明，建议0.2~0.6
+CAM_PROJ_COLOR_MODE = 'depth'    # 颜色模式：'depth'（深度渐变色，近红远蓝）或 'fixed'（固定颜色）
+CAM_PROJ_FIXED_COLOR = (0, 255, 0)  # 固定颜色（BGR），当 COLOR_MODE='fixed' 时生效，此处为绿色
 
-# -------------------- 3Dto2D 3D框参数 --------------------
-CAM_PROJ_BOX_COLOR = 'orange'        # 框颜色，支持颜色名或BGR元组
-CAM_PROJ_BOX_THICKNESS = 2           # 框线宽（像素）
+# -------------------- 模块2：相机投影3D框样式 --------------------
+CAM_PROJ_BOX_COLOR = 'orange'    # 3D框颜色，支持颜色名（如'red'）或BGR元组
+CAM_PROJ_BOX_THICKNESS = 2       # 框线宽（像素）
 
-# -------------------- 3Dto2D ID文字样式 --------------------
-CAM_PROJ_ID_FONTSIZE = 0.5           # 字体大小
-CAM_PROJ_ID_COLOR = 'green'          # 文字颜色（支持颜色名）
-CAM_PROJ_ID_THICKNESS = 1            # 文字粗细
+# -------------------- 模块3：相机投影目标ID文字样式 --------------------
+CAM_PROJ_ID_FONTSIZE = 0.5       # 字体大小
+CAM_PROJ_ID_COLOR = 'green'      # 文字颜色，支持颜色名或BGR元组
+CAM_PROJ_ID_THICKNESS = 1        # 文字粗细（笔画宽度）
 
-# -------------------- BEV 参数 --------------------
-BEV_POINT_CLOUD_DOWNSAMPLE = 30000   # BEV中最大显示点数（超过随机采样）
-BEV_POINT_SIZE = 0.5                 # BEV点的大小
-BEV_POINT_ALPHA = 0.6                # BEV点透明度
-BEV_BOX_COLOR = 'red'                # BEV框颜色
-BEV_BOX_LINEWIDTH = 1.5              # BEV框线宽
-BEV_FRONT_LINEWIDTH = 1.5            # BEV前向线宽
+# -------------------- 模块4：BEV（鸟瞰图）整体样式 --------------------
+BEV_POINT_CLOUD_DOWNSAMPLE = 30000   # BEV中最大显示点数，超过则随机降采样（设极大值如1e9可禁用）
+BEV_POINT_SIZE = 0.5                # BEV点云散点大小
+BEV_POINT_ALPHA = 0.6               # BEV点云透明度
+BEV_BOX_COLOR = 'red'               # BEV中3D框的颜色
+BEV_BOX_LINEWIDTH = 1.5             # BEV中3D框的线宽
+BEV_FRONT_LINEWIDTH = 1.5           # BEV中前向线（车头方向指示线）线宽
 
-# -------------------- BEV ID文字样式 --------------------
-BEV_ID_FONTSIZE = 6                  # 文字大小
-BEV_ID_COLOR = 'white'               # 文字颜色
-BEV_ID_BBOX = None                   # 背景框，None无背景；若需要可设为 dict(facecolor='red', alpha=0.2)
+# -------------------- 模块5：BEV中目标ID文字样式 --------------------
+BEV_ID_FONTSIZE = 6                 # 文字大小
+BEV_ID_COLOR = 'white'              # 文字颜色
+BEV_ID_BBOX = None                  # 文字背景框，None表示无背景；如需背景设为 dict(facecolor='red', alpha=0.2)
 
-# -------------------- 箭头参数 --------------------
-ARROW_LEN = 2.0                      # 箭头长度（米）
+# -------------------- 模块6：朝向箭头参数 --------------------
+ARROW_LEN = 2.0                     # 箭头长度（米），仅用于相机投影中的3D框朝向指示
 
-# -------------------- 输出布局 --------------------
-SAVE_COMBINED = True                 # True：保存组合图（推荐）；False：分别保存每个相机和BEV
-COMBINED_IMG_WIDTH = 640             # 组合图中每个相机图像的宽度（像素）
-
-# -------------------- 可视化模式 --------------------
-VISUALIZATION_MODE = 'both'         # 'boxes': 只显示3D框; 'points': 只显示点云; 'both': 两者都显示
+# -------------------- 模块7：输出布局尺寸 --------------------
+# COMBINED_IMG_WIDTH = 640          # 旧版按宽度控制（已废弃）
+COMBINED_IMG_HEIGHT = 1080          # 组合图中每个相机图像的固定高度（像素），BEV图自动适配此高度
+                                    # 建议值：1080（适配4K高度），720（适中），540（紧凑）
 
 # ==================== 辅助函数 ====================
 def quaternion_to_rotation_matrix(q):
     return CalibrationProcessor.quaternion_to_rotation_matrix(q)
 
 def get_bgr_color(color):
-    """将颜色名或BGR元组统一转换为BGR三元组"""
     if isinstance(color, tuple) and len(color) == 3:
         return color
     if isinstance(color, str):
         color_map = {
-            'red': (0, 0, 255),
-            'green': (0, 255, 0),
-            'blue': (255, 0, 0),
-            'yellow': (0, 255, 255),
-            'cyan': (255, 255, 0),
-            'magenta': (255, 0, 255),
-            'white': (255, 255, 255),
-            'black': (0, 0, 0),
-            'orange': (0, 165, 255),
-            'purple': (128, 0, 128),
-            'pink': (203, 192, 255),
-            'gray': (128, 128, 128),
-            'lightgray': (211, 211, 211),
-            'darkgray': (169, 169, 169)
+            'red': (0,0,255), 'green': (0,255,0), 'blue': (255,0,0),
+            'yellow': (0,255,255), 'cyan': (255,255,0), 'magenta': (255,0,255),
+            'white': (255,255,255), 'black': (0,0,0), 'orange': (0,165,255),
+            'purple': (128,0,128), 'pink': (203,192,255), 'gray': (128,128,128)
         }
-        return color_map.get(color.lower(), (0, 0, 255))
-    return (0, 0, 255)
+        return color_map.get(color.lower(), (0,0,255))
+    return (0,0,255)
+
+def resize_image_to_height(img, target_height):
+    h, w = img.shape[:2]
+    if h == target_height:
+        return img
+    ratio = target_height / h
+    new_w = int(w * ratio)
+    return cv2.resize(img, (new_w, target_height), interpolation=cv2.INTER_LINEAR)
 
 def resize_image_to_width(img, target_width):
-    """按宽度缩放图像，保持宽高比"""
     h, w = img.shape[:2]
     if w == target_width:
         return img
@@ -138,13 +142,12 @@ def resize_image_to_width(img, target_width):
     return cv2.resize(img, (target_width, new_h), interpolation=cv2.INTER_LINEAR)
 
 def fig_to_cv2(fig):
-    """将 matplotlib Figure 转换为 OpenCV 图像 (BGR)"""
     fig.canvas.draw()
     buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
     buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     return cv2.cvtColor(buf, cv2.COLOR_RGB2BGR)
 
-# ==================== 核心功能函数 ====================
+# ==================== 核心功能函数（与 v04.4 相同） ====================
 def load_sample(info: Dict):
     points = np.load(info['lidar_path']).astype(np.float32)
     if points.shape[1] >= 3:
@@ -168,13 +171,7 @@ def load_sample(info: Dict):
 
     with open(info['label_path'], 'r') as f:
         label_data = json.load(f)
-    objects = []
-    if isinstance(label_data, dict):
-        objects = label_data.get('objects', [])
-    elif isinstance(label_data, list):
-        objects = label_data
-    else:
-        print(f"  警告：未知的标注格式，类型为 {type(label_data)}")
+    objects = label_data.get('objects', []) if isinstance(label_data, dict) else label_data
 
     boxes_3d = []
     for obj in objects:
@@ -372,28 +369,145 @@ def create_bev_figure(points: np.ndarray, boxes_3d: List[Dict], base_name: str, 
     ax.set_ylim(y_range)
     return fig
 
-def visualize_sample(sample_idx: int, info: Dict, out_dir: Path):
-    DEBUG = True
+# ==================== 渲染工厂函数 ====================
+def render_camera_points(cam_info_proj, intrinsic, ego2cam, img_rgb, points):
+    uv_pts, valid_pts, depths = project_points_to_image(points, cam_info_proj)
+    img = draw_projected_points_blend(img_rgb, uv_pts, valid_pts, depths,
+                                      point_size=CAM_PROJ_POINT_SIZE,
+                                      alpha=CAM_PROJ_ALPHA,
+                                      color_mode=CAM_PROJ_COLOR_MODE,
+                                      fixed_color=CAM_PROJ_FIXED_COLOR)
+    return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+def render_camera_boxes(cam_info_proj, intrinsic, ego2cam, img_rgb, boxes_3d):
+    h, w = img_rgb.shape[:2]
+    img = img_rgb.copy()
+    for box in boxes_3d:
+        uv_box, valid_box = project_box_to_image(box, cam_info_proj)
+        img = draw_projected_box(img, uv_box, valid_box,
+                                 color=get_bgr_color(CAM_PROJ_BOX_COLOR),
+                                 thickness=CAM_PROJ_BOX_THICKNESS)
+        # 箭头和 ID
+        cx, cy, cz = box['center']
+        yaw = box['yaw']
+        arrow_end_ego = np.array([cx + ARROW_LEN * np.cos(yaw),
+                                   cy + ARROW_LEN * np.sin(yaw),
+                                   cz])
+        start_uv = project_point_to_image(np.array([cx, cy, cz]), cam_info_proj, intrinsic, ego2cam)
+        end_uv = project_point_to_image(arrow_end_ego, cam_info_proj, intrinsic, ego2cam)
+        if start_uv is not None and end_uv is not None:
+            if 0 <= start_uv[0] < w and 0 <= start_uv[1] < h and 0 <= end_uv[0] < w and 0 <= end_uv[1] < h:
+                img = draw_arrow_on_image(img, start_uv, end_uv, color=(0,255,0), thickness=2)
+        center_ego = np.array(box['center'])
+        center_ego_4d = np.append(center_ego, 1.0)
+        center_cam = (ego2cam @ center_ego_4d)[:3]
+        z = center_cam[2]
+        if z > 0:
+            u = intrinsic[0,0] * center_cam[0] / z + intrinsic[0,2]
+            v = intrinsic[1,1] * center_cam[1] / z + intrinsic[1,2]
+            if 0 <= u < w and 0 <= v < h:
+                cv2.putText(img, str(box['id']), (int(u), int(v)), cv2.FONT_HERSHEY_SIMPLEX,
+                            CAM_PROJ_ID_FONTSIZE, get_bgr_color(CAM_PROJ_ID_COLOR), CAM_PROJ_ID_THICKNESS)
+    return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+def render_camera_both(cam_info_proj, intrinsic, ego2cam, img_rgb, points, boxes_3d):
+    img = render_camera_points(cam_info_proj, intrinsic, ego2cam, img_rgb, points)
+    img = render_camera_boxes(cam_info_proj, intrinsic, ego2cam, img_rgb, boxes_3d)
+    return img
+
+def get_camera_image(cam: str, mode: str, points, boxes_3d, cam_info_proj, intrinsic, ego2cam, img_rgb):
+    """返回对应模式的相机图像 (BGR)"""
+    if mode == 'points':
+        return render_camera_points(cam_info_proj, intrinsic, ego2cam, img_rgb, points)
+    elif mode == 'boxes':
+        return render_camera_boxes(cam_info_proj, intrinsic, ego2cam, img_rgb, boxes_3d)
+    else:  # both
+        return render_camera_both(cam_info_proj, intrinsic, ego2cam, img_rgb, points, boxes_3d)
+
+# ==================== 布局渲染 ====================
+def render_combined_image(layout: List[List[str]], cam_images: Dict[str, Dict[str, np.ndarray]],
+                          bev_cv: np.ndarray, target_height: int = 540) -> Optional[np.ndarray]:
+    rows = []
+    for row_cells in layout:
+        row_imgs = []
+        for cell in row_cells:
+            if cell == "BEV":
+                row_imgs.append(('bev', bev_cv))
+            elif cell.startswith("CAM_"):
+                parts = cell.split('_')
+                if len(parts) >= 3:
+                    cam_short = parts[1]
+                    mode = parts[2]
+                    cam_full = f"CAM_{cam_short}"
+                    if cam_full in cam_images and mode in cam_images[cam_full]:
+                        img = cam_images[cam_full][mode]
+                        # 先缩放到目标高度
+                        img_resized = resize_image_to_height(img, target_height)
+                        row_imgs.append(('cam', img_resized))
+                    else:
+                        print(f"  警告：缺少相机 {cam_full} 模式 {mode} 的图像")
+                else:
+                    print(f"  警告：无效的相机单元格格式: {cell}")
+            else:
+                print(f"  警告：未知布局项 '{cell}'，跳过")
+        if not row_imgs:
+            continue
+        # 处理该行：将 BEV 图缩放到与相机图像相同高度（取第一个相机图像的高度）
+        # 找出该行中第一个相机图像的高度（所有相机图像高度已统一）
+        first_cam_height = None
+        for typ, img in row_imgs:
+            if typ == 'cam':
+                first_cam_height = img.shape[0]
+                break
+        if first_cam_height is None:
+            # 整行只有 BEV，则 BEV 高度可设为 target_height（或保持原样）
+            first_cam_height = target_height
+        final_row_imgs = []
+        for typ, img in row_imgs:
+            if typ == 'bev':
+                h, w = img.shape[:2]
+                ratio = first_cam_height / h
+                new_w = int(w * ratio)
+                img_resized = cv2.resize(img, (new_w, first_cam_height), interpolation=cv2.INTER_LINEAR)
+                final_row_imgs.append(img_resized)
+            else:
+                final_row_imgs.append(img)
+        # 水平拼接
+        row_combined = cv2.hconcat(final_row_imgs)
+        rows.append(row_combined)
+    if rows:
+        # 垂直拼接时，统一所有行的宽度（取最小宽度，避免拉伸）
+        widths = [row.shape[1] for row in rows]
+        target_w = min(widths)
+        resized_rows = []
+        for row in rows:
+            h, w = row.shape[:2]
+            if w != target_w:
+                ratio = target_w / w
+                new_h = int(h * ratio)
+                row = cv2.resize(row, (target_w, new_h), interpolation=cv2.INTER_LINEAR)
+            resized_rows.append(row)
+        return cv2.vconcat(resized_rows)
+    return None
+
+# ==================== 主函数 ====================
+def visualize_sample(sample_idx: int, info: Dict, out_dir: Path, tasks: List[Dict]):
     pkg_name = info.get('package_name', 'unknown_pkg')
     road_id = info.get('road_id', 'unknown_road')
     timestamp = info.get('timestamp', sample_idx)
     lidar_path = info['lidar_path']
     sub_packet = Path(lidar_path).parent.parent.parent.name
     base_name = f"{pkg_name}_{road_id}_{sub_packet}_{timestamp}"
+    print(f"\n>>> 样本 {sample_idx}: {base_name}")
 
     points, images, boxes_3d = load_sample(info)
     total_labels = len(boxes_3d)
-    if DEBUG:
-        print(f"\n>>> 样本 {sample_idx}: {base_name} 总标注数: {total_labels}")
 
-    cam_imgs = {}
+    # 预先计算每个相机的三种模式图像（BGR）
+    cam_images = {cam: {} for cam in CAM_NAMES}
     for cam in CAM_NAMES:
         if images[cam] is None:
-            cam_imgs[cam] = None
             continue
-        img = images[cam].copy()  # RGB
-        h, w = img.shape[:2]
-
         cam_data = info['cams'][cam]
         cam_info_proj = {
             'cam2ego_translation': cam_data['sensor2ego_translation'],
@@ -407,125 +521,40 @@ def visualize_sample(sample_idx: int, info: Dict, out_dir: Path):
         cam2ego[:3, :3] = R_cam2ego
         cam2ego[:3, 3] = t_cam2ego
         ego2cam = np.linalg.inv(cam2ego)
+        img_rgb = images[cam].copy()
+        try:
+            cam_images[cam]['points'] = get_camera_image(cam, 'points', points, boxes_3d, cam_info_proj, intrinsic, ego2cam, img_rgb)
+            cam_images[cam]['boxes'] = get_camera_image(cam, 'boxes', points, boxes_3d, cam_info_proj, intrinsic, ego2cam, img_rgb)
+            cam_images[cam]['both'] = get_camera_image(cam, 'both', points, boxes_3d, cam_info_proj, intrinsic, ego2cam, img_rgb)
+        except Exception as e:
+            print(f"  渲染相机 {cam} 失败: {e}")
 
-        # 1. 点云投影（如果需要）
-        if VISUALIZATION_MODE in ['points', 'both']:
-            uv_pts, valid_pts, depths = project_points_to_image(points, cam_info_proj)
-            img = draw_projected_points_blend(img, uv_pts, valid_pts, depths,
-                                              point_size=CAM_PROJ_POINT_SIZE,
-                                              alpha=CAM_PROJ_ALPHA,
-                                              color_mode=CAM_PROJ_COLOR_MODE,
-                                              fixed_color=CAM_PROJ_FIXED_COLOR)
-
-        # 2. 3D框、箭头、ID（如果需要）
-        if VISUALIZATION_MODE in ['boxes', 'both']:
-            for box in boxes_3d:
-                uv_box, valid_box = project_box_to_image(box, cam_info_proj)
-                img = draw_projected_box(img, uv_box, valid_box,
-                                         color=get_bgr_color(CAM_PROJ_BOX_COLOR),
-                                         thickness=CAM_PROJ_BOX_THICKNESS)
-
-                # 箭头和ID仅在 both 模式下显示（避免点云模式下干扰）
-                if VISUALIZATION_MODE == 'both':
-                    cx, cy, cz = box['center']
-                    yaw = box['yaw']
-                    arrow_end_ego = np.array([cx + ARROW_LEN * np.cos(yaw),
-                                               cy + ARROW_LEN * np.sin(yaw),
-                                               cz])
-                    start_uv = project_point_to_image(np.array([cx, cy, cz]), cam_info_proj, intrinsic, ego2cam)
-                    end_uv = project_point_to_image(arrow_end_ego, cam_info_proj, intrinsic, ego2cam)
-                    if start_uv is not None and end_uv is not None:
-                        if (0 <= start_uv[0] < w and 0 <= start_uv[1] < h and
-                            0 <= end_uv[0] < w and 0 <= end_uv[1] < h):
-                            img = draw_arrow_on_image(img, start_uv, end_uv, color=(0, 255, 0), thickness=2)
-
-                    # ID 文字
-                    center_ego = np.array(box['center'])
-                    center_ego_4d = np.append(center_ego, 1.0)
-                    center_cam = (ego2cam @ center_ego_4d)[:3]
-                    z = center_cam[2]
-                    if z > 0:
-                        u = intrinsic[0,0] * center_cam[0] / z + intrinsic[0,2]
-                        v = intrinsic[1,1] * center_cam[1] / z + intrinsic[1,2]
-                        if 0 <= u < w and 0 <= v < h:
-                            cv2.putText(img, str(box['id']), (int(u), int(v)), cv2.FONT_HERSHEY_SIMPLEX,
-                                        CAM_PROJ_ID_FONTSIZE, get_bgr_color(CAM_PROJ_ID_COLOR), CAM_PROJ_ID_THICKNESS)
-
-        cam_imgs[cam] = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
-    # 3. 生成 BEV 图
+    # BEV 图
     fig_bev = create_bev_figure(points, boxes_3d, base_name, total_labels)
-
-    # 4. 保存组合图或单张图
-    if SAVE_COMBINED:
-        # 缩放相机图像至统一宽度
-        resized = {}
-        for cam in CAM_NAMES:
-            if cam_imgs[cam] is not None:
-                resized[cam] = resize_image_to_width(cam_imgs[cam], COMBINED_IMG_WIDTH)
-            else:
-                resized[cam] = None
-
-        # 构建第一行 (CAM_A, CAM_B)
-        row1_imgs = []
-        for cam in ['CAM_A', 'CAM_B']:
-            if resized[cam] is not None:
-                row1_imgs.append(resized[cam])
-        if len(row1_imgs) == 2:
-            row1 = cv2.hconcat(row1_imgs)
-        elif len(row1_imgs) == 1:
-            row1 = row1_imgs[0]
-        else:
-            row1 = None
-
-        # 构建第二行 (CAM_C, CAM_D)
-        row2_imgs = []
-        for cam in ['CAM_C', 'CAM_D']:
-            if resized[cam] is not None:
-                row2_imgs.append(resized[cam])
-        if len(row2_imgs) == 2:
-            row2 = cv2.hconcat(row2_imgs)
-        elif len(row2_imgs) == 1:
-            row2 = row2_imgs[0]
-        else:
-            row2 = None
-
-        # 处理 BEV 图：转换为 OpenCV 图像并缩放至两倍宽度（占满一行）
-        bev_cv = fig_to_cv2(fig_bev)
-        bev_cv = resize_image_to_width(bev_cv, 2 * COMBINED_IMG_WIDTH)
-
-        # 垂直拼接
-        rows = []
-        if row1 is not None:
-            rows.append(row1)
-        if row2 is not None:
-            rows.append(row2)
-        rows.append(bev_cv)
-        combined = cv2.vconcat(rows)
-
-        out_path_combined = out_dir / f"{base_name}_combined.jpg"
-        cv2.imwrite(str(out_path_combined), combined)
-        print(f"已保存组合图: {out_path_combined}")
-    else:
-        # 保存单独相机图和 BEV 图（传统模式）
-        for cam, img_bgr in cam_imgs.items():
-            if img_bgr is not None:
-                out_path = out_dir / f"{base_name}_{cam}.jpg"
-                cv2.imwrite(str(out_path), img_bgr)
-        bev_path = out_dir / f"{base_name}_bev.jpg"
-        fig_bev.savefig(bev_path, dpi=200, bbox_inches='tight')
-        print(f"已保存BEV图: {bev_path}")
-
+    bev_cv = fig_to_cv2(fig_bev)
     plt.close(fig_bev)
 
-    # 复制 JSON 标注文件（可选）
+    # 循环处理每个任务
+    for task in tasks:
+        suffix = task.get('suffix', 'output')
+        layout = task['layout']
+        # combined = render_combined_image(layout, cam_images, bev_cv, COMBINED_IMG_WIDTH)
+        combined = render_combined_image(layout, cam_images, bev_cv, COMBINED_IMG_HEIGHT)
+        if combined is not None:
+            out_path = out_dir / f"{base_name}_{suffix}.jpg"
+            cv2.imwrite(str(out_path), combined)
+            print(f"  已保存组合图: {out_path} (suffix={suffix})")
+        else:
+            print(f"  警告：任务 '{suffix}' 未生成有效图像")
+
+    # 复制 JSON
     shutil.copy2(info['label_path'], out_dir / f"{base_name}.json")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--pkl', required=True, help='info pkl 文件')
-    parser.add_argument('--out_dir', default='./vis_output', help='输出目录')
-    parser.add_argument('--num_samples', type=int, default=20, help='样本数量')
+    parser.add_argument('--pkl', required=True)
+    parser.add_argument('--out_dir', default='./vis_output')
+    parser.add_argument('--num_samples', type=int, default=20)
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -534,13 +563,72 @@ def main():
     with open(args.pkl, 'rb') as f:
         data = pickle.load(f)
     infos = data['infos'] if isinstance(data, dict) else data
-
     print(f"加载了 {len(infos)} 个样本")
+
+    # ========== 定义多个可视化任务 ==========
+    # 每个任务包含:
+    #   suffix: 输出文件名后缀 (e.g., "CamA_boxes")
+    #   layout: 二维列表，单元格格式 "CAM_X_mode" 或 "BEV"
+    TASKS = [
+        {
+            "suffix": "BEV",
+            "layout": [["BEV"]]
+        },
+        {
+            "suffix": "3DBoxes",
+            "layout": [
+                ["CAM_A_boxes", "CAM_B_boxes"],
+                ["CAM_C_boxes", "CAM_D_boxes"]
+            ]
+        },
+        {
+            "suffix": "3DPoints",
+            "layout": [
+                ["CAM_A_points", "CAM_B_points"],
+                ["CAM_C_points", "CAM_D_points"]
+            ]
+        }
+    ]
+    # TASKS = [
+    #     {
+    #         "suffix": "CamA_boxes",
+    #         "layout": [["CAM_A_boxes"]]
+    #     },
+    #     {
+    #         "suffix": "CamA_points",
+    #         "layout": [["CAM_A_points"]]
+    #     },
+    #     {
+    #         "suffix": "BEV",
+    #         "layout": [["BEV"]]
+    #     },
+    #     {
+    #         "suffix": "boxes_vs_points",
+    #         "layout": [["CAM_A_points", "CAM_A_boxes"], ["BEV"]]
+    #     },
+    #     {
+    #         "suffix": "mixed_layout",
+    #         "layout": [
+    #             ["CAM_A_points", "CAM_B_points"],
+    #             ["CAM_C_boxes", "CAM_D_both"],
+    #             ["BEV"]
+    #         ]
+    #     },
+    #     {
+    #         "suffix": "extra",
+    #         "layout": [
+    #             ["CAM_A_points", "CAM_B_points"],
+    #             ["CAM_C_boxes", "CAM_D_both"],
+    #             ["BEV", "CAM_C_both"]
+    #         ]
+    #     }
+    # ]
+    # =======================================
+
     total = len(infos)
     indices = np.linspace(0, total-1, min(args.num_samples, total), dtype=int)
-
     for i, idx in enumerate(indices):
-        visualize_sample(i, infos[idx], out_dir)
+        visualize_sample(i, infos[idx], out_dir, TASKS)
 
     print("完成")
 
