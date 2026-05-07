@@ -428,8 +428,29 @@ class BEVFusion(Base3DFusionModel):
                     lidar_aug_matrix,
                     gt_depths=depths
                 )
+                # 【xmy-bugfix】【0507】 修复 BEVDepth loss 的深度监督
+                #  输入：
+                #   ==> mmdet3d/models/vtransforms/aware_bevdepth.py 的 class AwareBEVDepth(BaseTransform): forward()
+                #     训练模式：返回 元组（x, depth_loss）=（图像特征的torch.Tensor，深度监督loss的torch.Tensor）
+                #     验证模式：返回 torch.Tensor x = 图像特征
+                #   ==> 【老代码错误】forward_single()对 输入做解包处理时 feature, depth_data = feature[0], feature[-1]: 
+                #     训练模式：feature <== x 图像特征; depth_data <== depth_loss 深度监督loss
+                #     验证模式：feature <== feature[0] <== x[0], 错误取的是batch中第一个样本数据；  depth_data <== feature[-1] <== x[-1]，取最后一维 【错误】
+                #   ==> 【新代码修复】forward_single()对 输入做解包处理时，应分支处理
+                #     训练模式：feature <== x 图像特征; depth_data <== depth_loss 深度监督loss
+                #     验证模式：feature <== feature， 不做索引提取
+                # if self.use_depth_loss:
+                #     feature, auxiliary_losses['depth'] = feature[0], feature[-1]
                 if self.use_depth_loss:
-                    feature, auxiliary_losses['depth'] = feature[0], feature[-1]
+                    # 兼容训练返回元组、验证返回单张量的情况
+                    if isinstance(feature, (tuple, list)):
+                        feature, depth_data = feature[0], feature[-1]
+                        # 仅在训练时记录深度损失（验证时不添加）
+                        if self.training:
+                            auxiliary_losses['depth'] = depth_data
+                    else:
+                        # 验证时 feature 是单张量，不需要深度损失。直接使用feature即可
+                        pass
             elif sensor == "lidar":
                 feature = self.extract_features(points, sensor)
             elif sensor == "radar":
