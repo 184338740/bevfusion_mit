@@ -481,7 +481,11 @@ class AwareBEVDepth(BaseTransform):
         x = super().forward(*args, **kwargs)
         x, depth_pred = x[0], x[-1]
         x = self.downsample(x)
-        if kwargs.get('depth_loss', False):
+        #【xmy-bugfix】0507
+        # - 验证模式下，无gt_depths，但依旧调用get_depth_loss()，而报错
+        # - 添加 self.training 条件，仅在训练模式且 depth_loss=True 时计算深度损失
+        # if kwargs.get('depth_loss', False):
+        if self.training and kwargs.get('depth_loss', False):  # 【xmy】BEVDepth的深度监督，仅 训练时启用 get_depth_loss()
             # print(kwargs['gt_depths'])
             depth_loss = self.get_depth_loss(kwargs['gt_depths'], depth_pred) 
             return x, depth_loss
