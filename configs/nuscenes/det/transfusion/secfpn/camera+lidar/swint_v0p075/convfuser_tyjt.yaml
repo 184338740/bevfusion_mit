@@ -1,0 +1,31 @@
+# 继承基础配置
+_base_: ./convfuser.yaml
+
+# 数据配置 - 使用绝对路径
+data:
+  train:
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/tyjt_infos_train.pkl
+  val:
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/tyjt_infos_val.pkl
+  test:
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/tyjt_infos_test.pkl
+
+# 类别配置
+class_names:
+  - car
+  - truck
+  - construction_vehicle
+  - bus
+  - trailer
+  - pedestrian
+  - motorcycle
+  - bicycle
+  - traffic_cone
+  - barrier
+
+model:
+  pts_bbox_head:
+    num_classes: 10

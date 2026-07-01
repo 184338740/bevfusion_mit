@@ -1,0 +1,16 @@
+[
+  {
+    "token": "ed790a5d-6ffa-c98b-f443-3882a0f7d752",
+    "logfile": "2d3d_20250114_hikvision.log",
+    "vehicle": "tyjt_system",
+    "date_captured": "2025-12-26",
+    "location": "2d3d_20250114"
+  },
+  {
+    "token": "a92cb76c-5081-5695-c855-9da37664c34a",
+    "logfile": "2d3d4d_20250728_weiyuan_all_in_one.log",
+    "vehicle": "tyjt_system",
+    "date_captured": "2025-12-26",
+    "location": "2d3d4d_20250728_weiyuan"
+  }
+]

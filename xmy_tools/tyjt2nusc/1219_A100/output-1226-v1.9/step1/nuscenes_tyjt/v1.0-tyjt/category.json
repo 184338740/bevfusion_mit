@@ -1,0 +1,77 @@
+[
+  {
+    "token": "34fbe05b-8307-1182-454d-4c25d254c49a",
+    "name": "tyjt.car",
+    "description": "From tyjt: car"
+  },
+  {
+    "token": "39c2ecb7-ef07-f0cb-f529-958dbc2c604c",
+    "name": "tyjt.truck",
+    "description": "From tyjt: truck"
+  },
+  {
+    "token": "6d4e10ef-9f4f-f31c-d13a-8681bb8fb794",
+    "name": "tyjt.construction_truck",
+    "description": "From tyjt: construction_truck"
+  },
+  {
+    "token": "d211023e-442c-eab7-e1c0-cec33400e3e8",
+    "name": "tyjt.van",
+    "description": "From tyjt: van"
+  },
+  {
+    "token": "0146c2c6-0537-2e19-bb31-6a9f7f0ea56f",
+    "name": "tyjt.bus",
+    "description": "From tyjt: bus"
+  },
+  {
+    "token": "5f466d6e-6e35-186d-8dbf-d32a7f625194",
+    "name": "tyjt.robot",
+    "description": "From tyjt: robot"
+  },
+  {
+    "token": "f8eab30f-9a37-8310-0d7e-98d12e4caf3c",
+    "name": "tyjt.pedestrian",
+    "description": "From tyjt: pedestrian"
+  },
+  {
+    "token": "65183a5c-ad49-2d40-2c79-64c341f15518",
+    "name": "tyjt.cyclist",
+    "description": "From tyjt: cyclist"
+  },
+  {
+    "token": "920724a7-9118-c9fd-b24b-e90b1b776954",
+    "name": "tyjt.bicycle",
+    "description": "From tyjt: bicycle"
+  },
+  {
+    "token": "4b44a0ee-f1a1-6b03-db29-4e7b034bc659",
+    "name": "tyjt.tricycle",
+    "description": "From tyjt: tricycle"
+  },
+  {
+    "token": "dee9b835-1247-1d2a-a0ec-5e02820558e4",
+    "name": "tyjt.tricyclist",
+    "description": "From tyjt: tricyclist"
+  },
+  {
+    "token": "dd42ea02-fa45-be4e-0bbb-df5cc685f457",
+    "name": "tyjt.trolley",
+    "description": "From tyjt: trolley"
+  },
+  {
+    "token": "a2bd4017-3b8d-65f5-95f6-9a5a9ea472d7",
+    "name": "tyjt.cone",
+    "description": "From tyjt: cone"
+  },
+  {
+    "token": "e2b28da8-708d-1019-2703-5c5e7b73314d",
+    "name": "tyjt.barrier",
+    "description": "From tyjt: barrier"
+  },
+  {
+    "token": "fb9395cf-468e-9479-3f49-a3f054025887",
+    "name": "tyjt.other",
+    "description": "From tyjt: other"
+  }
+]

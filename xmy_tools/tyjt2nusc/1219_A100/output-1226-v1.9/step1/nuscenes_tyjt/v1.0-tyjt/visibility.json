@@ -1,0 +1,22 @@
+[
+  {
+    "token": "2014bcd5-5a57-2175-1cda-37cf1279e87b",
+    "level": "v0-40",
+    "description": "visibility 0-40%"
+  },
+  {
+    "token": "8dad3132-4011-2172-06c1-759d0de8a46a",
+    "level": "v40-60",
+    "description": "visibility 40-60%"
+  },
+  {
+    "token": "d014d3ee-f10b-00de-8629-f5eabec1fcaf",
+    "level": "v60-80",
+    "description": "visibility 60-80%"
+  },
+  {
+    "token": "0aa2fc2c-d13d-45a0-3762-171192d809df",
+    "level": "v80-100",
+    "description": "visibility 80-100%"
+  }
+]

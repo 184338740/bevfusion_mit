@@ -1,0 +1,27 @@
+[
+  {
+    "token": "4ca3f18d-dab0-5919-41d7-0114c176ac00",
+    "channel": "CAM_FRONT",
+    "modality": "camera"
+  },
+  {
+    "token": "ebac5caf-054d-1627-3316-9af717d35734",
+    "channel": "CAM_FRONT_RIGHT",
+    "modality": "camera"
+  },
+  {
+    "token": "72d1d93d-267c-e8c6-1ad9-ad16840dc551",
+    "channel": "CAM_BACK",
+    "modality": "camera"
+  },
+  {
+    "token": "017513f9-c4a6-225b-7ae8-4f50a26eb7d0",
+    "channel": "CAM_FRONT_LEFT",
+    "modality": "camera"
+  },
+  {
+    "token": "12a546d7-d13d-cf4c-9825-88120d18f85a",
+    "channel": "LIDAR_TOP",
+    "modality": "lidar"
+  }
+]

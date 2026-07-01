@@ -1,0 +1,38 @@
+{
+  "analysis_summary": {
+    "total_packages": 2,
+    "total_samples": 354,
+    "valid_samples": 354,
+    "sub_packets": 3,
+    "analysis_time": "2025-12-26T10:08:52.346533",
+    "data_version": "v1.9-fixed"
+  },
+  "packages": [
+    {
+      "name": "2d3d4d_20250728_weiyuan",
+      "type": "all_in_one",
+      "sub_packets": 2,
+      "samples": 235,
+      "valid_samples": 235,
+      "quality_distribution": {
+        "excellent": 470,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d_20250114",
+      "type": "hikvision",
+      "sub_packets": 1,
+      "samples": 119,
+      "valid_samples": 119,
+      "quality_distribution": {
+        "excellent": 238,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    }
+  ]
+}

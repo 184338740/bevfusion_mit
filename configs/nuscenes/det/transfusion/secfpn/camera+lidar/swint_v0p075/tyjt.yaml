@@ -1,0 +1,43 @@
+_base_: ['./default.yaml']
+
+# 数据配置
+data:
+  train:
+    dataset:
+      ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_train.pkl'
+      dataset_root: '/mnt/dataset/tyjt_RawData'
+  val:
+    ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_val.pkl'
+    dataset_root: '/mnt/dataset/tyjt_RawData'
+  test:
+    ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_val.pkl'
+    dataset_root: '/mnt/dataset/tyjt_RawData'
+
+dataset_root: '/mnt/dataset/tyjt_RawData'
+
+# 类别配置
+object_classes:
+- car
+- truck
+- bus
+- pedestrian
+- bicycle
+- motorcycle
+- traffic_cone
+
+# 模型配置
+model:
+  heads:
+    object:
+      num_classes: 7
+
+# 点云配置 - 覆盖默认的5维配置
+load_dim: 4
+use_dim: [0, 1, 2, 3]
+
+# 训练配置
+optimizer:
+  lr: 0.0001
+
+runner:
+  max_epochs: 10

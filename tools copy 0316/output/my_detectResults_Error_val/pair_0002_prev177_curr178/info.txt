@@ -1,0 +1,32 @@
+异常类型: decrease
+prev_idx: 177, curr_idx: 178
+prev_objects: 55, curr_objects: 44
+变化比例: 0.20, 变化绝对值: 11
+
+【类别统计对比】
+  car: 16 → 15 (变化 -1)
+  cone: 1 → 0 (变化 -1)
+  cyclist: 14 (不变)
+  pedestrian: 3 → 4 (变化 +1)
+  tricycle: 10 → 0 (变化 -10)
+  tricyclist: 1 (不变)
+  truck: 5 (不变)
+  van: 5 (不变)
+
+【前一帧】
+  base_name: 2d3d4d_20250728_weiyuan_R01_G51102400001M00_20250728195827_2.0HZ_1753703936999710560
+  human_time: 2025-07-28 11:58:56.999
+  label_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/lidar/label/1753703936999710560.json
+  CAM_A_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/SC_1A_CamR/image_dc/1753703936999710560.jpg
+  CAM_B_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/SC_1B_CamR/image_dc/1753703936999710560.jpg
+  CAM_C_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/SC_1C_CamR/image_dc/1753703936999710560.jpg
+  CAM_D_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/SC_1D_CamR/image_dc/1753703936999710560.jpg
+
+【当前帧】
+  base_name: 2d3d4d_20250728_weiyuan_R01_G51102400001M00_20250728195827_2.0HZ_1753703937499716759
+  human_time: 2025-07-28 11:58:57.499
+  label_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/lidar/label/1753703937499716759.json
+  CAM_A_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/SC_1A_CamR/image_dc/1753703937499716759.jpg
+  CAM_B_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/SC_1B_CamR/image_dc/1753703937499716759.jpg
+  CAM_C_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/SC_1C_CamR/image_dc/1753703937499716759.jpg
+  CAM_D_path: /mnt/dataset/tyjt_RawData_all/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728195827_2.0HZ/SC_1D_CamR/image_dc/1753703937499716759.jpg

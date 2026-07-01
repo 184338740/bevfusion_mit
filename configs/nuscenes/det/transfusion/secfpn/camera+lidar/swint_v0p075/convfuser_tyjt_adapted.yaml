@@ -1,0 +1,287 @@
+# 基于原始配置，适配tyjt数据集特性
+
+# 数据路径
+dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+
+data:
+  samples_per_gpu: 1
+  workers_per_gpu: 4
+  
+  # 测试集
+  test:
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/tyjt_infos_test.pkl
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+    box_type_3d: LiDAR
+    modality:
+      use_camera: true
+      use_external: false
+      use_lidar: true
+      use_map: false
+      use_radar: false  # tyjt没有radar
+    object_classes:
+    - car
+    - truck
+    - construction_vehicle
+    - bus
+    - trailer
+    - barrier
+    - motorcycle
+    - bicycle
+    - pedestrian
+    - traffic_cone
+    pipeline:
+    - to_float32: true
+      type: LoadMultiViewImageFromFiles
+    - coord_type: LIDAR
+      load_dim: 5
+      type: LoadPointsFromFile
+      use_dim: [0, 1, 2, 3, 4]
+    - load_dim: 5
+      pad_empty_sweeps: true
+      remove_close: true
+      sweeps_num: 0  # tyjt没有多帧sweeps
+      type: LoadPointsFromMultiSweeps
+      use_dim: [0, 1, 2, 3, 4]
+    # 移除radar相关pipeline
+    - type: LoadAnnotations3D
+      with_bbox_3d: true
+      with_label_3d: true
+    - bot_pct_lim: [0.0, 0.0]
+      final_dim: [256, 704]
+      is_train: false
+      rand_flip: false
+      resize_lim: [0.48, 0.48]
+      rot_lim: [0.0, 0.0]
+      type: ImageAug3D
+    - is_train: false
+      resize_lim: [1.0, 1.0]
+      rot_lim: [0.0, 0.0]
+      trans_lim: 0.0
+      type: GlobalRotScaleTrans
+    - point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+      type: PointsRangeFilter
+    - mean: [123.675, 116.28, 103.53]
+      std: [58.395, 57.12, 57.375]
+      type: ImageNormalize
+    - classes:
+      - car
+      - truck
+      - construction_vehicle
+      - bus
+      - trailer
+      - barrier
+      - motorcycle
+      - bicycle
+      - pedestrian
+      - traffic_cone
+      type: DefaultFormatBundle3D
+    - keys: ['points', 'img', 'gt_bboxes_3d', 'gt_labels_3d']  # 移除radar
+      meta_keys:
+      - camera_intrinsics
+      - camera2ego
+      - lidar2ego
+      - lidar2camera
+      - lidar2image
+      - camera2lidar
+      - img_aug_matrix
+      - lidar_aug_matrix
+      type: Collect3D
+    test_mode: true
+    type: NuScenesDataset
+
+  # 训练集
+  train:
+    dataset:
+      ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/tyjt_infos_train.pkl
+      dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+      box_type_3d: LiDAR
+      modality:
+        use_camera: true
+        use_external: false
+        use_lidar: true
+        use_map: false
+        use_radar: false  # tyjt没有radar
+      object_classes:
+      - car
+      - truck
+      - construction_vehicle
+      - bus
+      - trailer
+      - barrier
+      - motorcycle
+      - bicycle
+      - pedestrian
+      - traffic_cone
+      pipeline:
+      - to_float32: true
+        type: LoadMultiViewImageFromFiles
+      - coord_type: LIDAR
+        load_dim: 5
+        type: LoadPointsFromFile
+        use_dim: [0, 1, 2, 3, 4]
+      - load_dim: 5
+        pad_empty_sweeps: true
+        remove_close: true
+        sweeps_num: 0  # tyjt没有多帧sweeps
+        type: LoadPointsFromMultiSweeps
+        use_dim: [0, 1, 2, 3, 4]
+      # 移除radar相关pipeline
+      - type: LoadAnnotations3D
+        with_bbox_3d: true
+        with_label_3d: true
+      # 移除数据库采样器（tyjt可能没有dbinfos）
+      - bot_pct_lim: [0.0, 0.0]
+        final_dim: [256, 704]
+        is_train: true
+        rand_flip: true
+        resize_lim: [0.38, 0.55]
+        rot_lim: [-5.4, 5.4]
+        type: ImageAug3D
+      - is_train: true
+        resize_lim: [0.9, 1.1]
+        rot_lim: [-0.78539816, 0.78539816]
+        trans_lim: 0.5
+        type: GlobalRotScaleTrans
+      - type: RandomFlip3D
+      - point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+        type: PointsRangeFilter
+      - point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+        type: ObjectRangeFilter
+      - classes:
+        - car
+        - truck
+        - construction_vehicle
+        - bus
+        - trailer
+        - barrier
+        - motorcycle
+        - bicycle
+        - pedestrian
+        - traffic_cone
+        type: ObjectNameFilter
+      - mean: [123.675, 116.28, 103.53]
+        std: [58.395, 57.12, 57.375]
+        type: ImageNormalize
+      - fixed_prob: true
+        max_epoch: 6
+        mode: 1
+        offset: false
+        prob: 0.0
+        ratio: 0.5
+        rotate: 1
+        type: GridMask
+        use_h: true
+        use_w: true
+      - type: PointShuffle
+      - classes:
+        - car
+        - truck
+        - construction_vehicle
+        - bus
+        - trailer
+        - barrier
+        - motorcycle
+        - bicycle
+        - pedestrian
+        - traffic_cone
+        type: DefaultFormatBundle3D
+      - keys: ['points', 'img', 'gt_bboxes_3d', 'gt_labels_3d']  # 移除radar
+        meta_keys:
+        - camera_intrinsics
+        - camera2ego
+        - lidar2ego
+        - lidar2camera
+        - lidar2image
+        - camera2lidar
+        - img_aug_matrix
+        - lidar_aug_matrix
+        type: Collect3D
+      test_mode: false
+      type: NuScenesDataset
+      use_valid_flag: true
+    type: CBGSDataset
+
+  # 验证集
+  val:
+    ann_file: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/tyjt_infos_val.pkl
+    dataset_root: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/1106_deep/output/step1/nuscenes_tyjt/
+    box_type_3d: LiDAR
+    modality:
+      use_camera: true
+      use_external: false
+      use_lidar: true
+      use_map: false
+      use_radar: false  # tyjt没有radar
+    object_classes:
+    - car
+    - truck
+    - construction_vehicle
+    - bus
+    - trailer
+    - barrier
+    - motorcycle
+    - bicycle
+    - pedestrian
+    - traffic_cone
+    pipeline:
+    - to_float32: true
+      type: LoadMultiViewImageFromFiles
+    - coord_type: LIDAR
+      load_dim: 5
+      type: LoadPointsFromFile
+      use_dim: [0, 1, 2, 3, 4]
+    - load_dim: 5
+      pad_empty_sweeps: true
+      remove_close: true
+      sweeps_num: 0  # tyjt没有多帧sweeps
+      type: LoadPointsFromMultiSweeps
+      use_dim: [0, 1, 2, 3, 4]
+    # 移除radar相关pipeline
+    - type: LoadAnnotations3D
+      with_bbox_3d: true
+      with_label_3d: true
+    - bot_pct_lim: [0.0, 0.0]
+      final_dim: [256, 704]
+      is_train: false
+      rand_flip: false
+      resize_lim: [0.48, 0.48]
+      rot_lim: [0.0, 0.0]
+      type: ImageAug3D
+    - is_train: false
+      resize_lim: [1.0, 1.0]
+      rot_lim: [0.0, 0.0]
+      trans_lim: 0.0
+      type: GlobalRotScaleTrans
+    - point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+      type: PointsRangeFilter
+    - mean: [123.675, 116.28, 103.53]
+      std: [58.395, 57.12, 57.375]
+      type: ImageNormalize
+    - classes:
+      - car
+      - truck
+      - construction_vehicle
+      - bus
+      - trailer
+      - barrier
+      - motorcycle
+      - bicycle
+      - pedestrian
+      - traffic_cone
+      type: DefaultFormatBundle3D
+    - keys: ['points', 'img', 'gt_bboxes_3d', 'gt_labels_3d']  # 移除radar
+      meta_keys:
+      - camera_intrinsics
+      - camera2ego
+      - lidar2ego
+      - lidar2camera
+      - lidar2image
+      - camera2lidar
+      - img_aug_matrix
+      - lidar_aug_matrix
+      type: Collect3D
+    test_mode: false
+    type: NuScenesDataset
+
+# [其他配置保持不变，复制原始配置的剩余部分]
+# 模型配置、优化器配置等保持不变

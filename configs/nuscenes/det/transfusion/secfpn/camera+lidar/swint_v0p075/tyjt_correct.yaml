@@ -1,0 +1,37 @@
+_base_: ['./default.yaml']
+
+# 数据集配置
+data:
+  train:
+    dataset:
+      type: 'NuScenesDataset'
+      data_root: '/mnt/dataset/tyjt_RawData'
+      ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_train.pkl'
+      object_classes: ['car', 'truck', 'bus', 'pedestrian', 'bicycle', 'motorcycle', 'traffic_cone']
+  val:
+    type: 'NuScenesDataset'
+    data_root: '/mnt/dataset/tyjt_RawData'
+    ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_val.pkl'
+    object_classes: ['car', 'truck', 'bus', 'pedestrian', 'bicycle', 'motorcycle', 'traffic_cone']
+  test:
+    type: 'NuScenesDataset'
+    data_root: '/mnt/dataset/tyjt_RawData'
+    ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_val.pkl'
+    object_classes: ['car', 'truck', 'bus', 'pedestrian', 'bicycle', 'motorcycle', 'traffic_cone']
+
+# 点云维度修复
+train_pipeline:
+  - type: LoadPointsFromFile
+    coord_type: LIDAR
+    load_dim: 4
+    use_dim: [0, 1, 2, 3]
+    file_client_args:
+      backend: disk
+  - type: LoadMultiViewImageFromFiles
+    to_float32: true
+
+# 训练配置
+optimizer:
+  lr: 0.0001
+runner:
+  max_epochs: 10

@@ -1,0 +1,1639 @@
+# 修改总结：
+# # 配置文件各模块修改总结
+
+# 基于第1001行至第1600行的配置内容，针对TYJT数据集的适配修改主要集中在以下几个模块：
+
+# ## 1. 数据集与输入模态调整
+# - **数据集类型**：将`NuScenesDataset`统一修改为`CustomDataset`，适配TYJT数据集格式
+# - **数据路径**：将所有数据根目录和标注文件路径从`nuscenes`替换为`tyjt`
+# - **输入模态**：关闭雷达数据支持（`use_radar: false`），并在所有数据处理流程中移除`radar`相关键值
+# - **标注文件格式**：从`.pkl`格式改为`json`格式（`train.json`/`val.json`/`test.json`）
+
+# ## 2. 训练参数调整
+# - **学习率**：从`0.0002`降低至`0.0001`，适应TYJT数据集规模较小的特点
+# - **训练轮次**：最大训练轮次从`20`增加至`30`，确保模型充分收敛
+# - **学习率调度**：调整衰减里程碑从`[16, 19]`改为`[20, 25]`，适配延长的训练周期
+# - **工作目录**：修改为`./work_dirs/bevfusion_tyjt`，与数据集对应
+
+# ## 3. 数据处理流程优化
+# - **数据收集配置**：在`Collect3D`模块中移除所有`radar`相关配置
+# - **评估数据集**：将`NuScenesMetricDataset`改为`CustomMetricDataset`
+# - **保持一致性**：所有与激光雷达、相机相关的预处理参数保持不变，确保基础功能稳定
+
+# ## 4. 模型结构保持
+# - 模型主体结构（BEVFusion框架、ResNet骨干网络、Transformer组件等）未做修改
+# - 所有特征提取、BEV编码、边界框预测等核心参数保持与原配置一致
+# - 多任务头配置（针对不同类别）未做调整，确保检测能力完整
+
+# ## 5. 其他适配修改
+# - 保持所有数据增强策略不变，确保模型泛化能力
+# - 保留所有评估指标和日志配置，保证实验可追溯性
+# - 设备配置（GPU使用、分布式训练等）保持不变，确保部署兼容性
+
+# 这些修改主要围绕TYJT数据集的特性（无雷达数据、规模不同）进行针对性调整，同时最大限度保留了原模型的结构和能力，确保在新数据集上的有效性和性能。
+
+
+
+
+
+augment2d: # 第1行::一致::官方参数存在::tyjt参数存在::2D增强配置根节点::无修改原因
+  gridmask: # 第2行::一致::官方参数存在::tyjt参数存在::GridMask增强配置::无修改原因
+    fixed_prob: true # 第3行::一致::官方参数为true::tyjt参数为true::控制GridMask增强是否使用固定概率::无修改原因
+    prob: 0.0 # 第4行::一致::官方参数为0.0::tyjt参数为0.0::GridMask增强的应用概率::无修改原因
+  resize: # 第5行::不一致::官方参数为[[0.38, 0.55], [0.48, 0.48]]::tyjt参数为[[0.8, 1.0], [0.9, 0.9]]::图像缩放范围配置::适配TYJT数据集的图像尺寸需求
+  - - 0.38 # 第6行::不一致::官方参数为0.38::tyjt参数为0.8::图像缩放最小比例（第一维度）::适配TYJT数据集图像尺寸
+    - 0.55 # 第7行::不一致::官方参数为0.55::tyjt参数为1.0::图像缩放最大比例（第一维度）::适配TYJT数据集图像尺寸
+  - - 0.48 # 第8行::不一致::官方参数为0.48::tyjt参数为0.9::图像缩放固定比例（第二维度）::适配TYJT数据集图像尺寸
+    - 0.48 # 第9行::不一致::官方参数为0.48::tyjt参数为0.9::图像缩放固定比例（第二维度）::适配TYJT数据集图像尺寸
+  rotate: # 第10行::一致::官方参数为[-5.4, 5.4]::tyjt参数为[-5.4, 5.4]::图像旋转角度范围::无修改原因
+  - -5.4 # 第11行::一致::官方参数为-5.4::tyjt参数为-5.4::图像旋转最小角度::无修改原因
+  - 5.4 # 第12行::一致::官方参数为5.4::tyjt参数为5.4::图像旋转最大角度::无修改原因
+augment3d: # 第13行::一致::官方参数存在::tyjt参数存在::3D增强配置根节点::无修改原因
+  rotate: # 第14行::一致::官方参数为[-0.78539816, 0.78539816]::tyjt参数为[-0.78539816, 0.78539816]::3D数据旋转角度范围::无修改原因
+  - -0.78539816 # 第15行::一致::官方参数为-0.78539816::tyjt参数为-0.78539816::3D旋转最小角度::无修改原因
+  - 0.78539816 # 第16行::一致::官方参数为0.78539816::tyjt参数为0.78539816::3D旋转最大角度::无修改原因
+  scale: # 第17行::一致::官方参数为[0.9, 1.1]::tyjt参数为[0.9, 1.1]::3D数据缩放范围::无修改原因
+  - 0.9 # 第18行::一致::官方参数为0.9::tyjt参数为0.9::3D缩放最小比例::无修改原因
+  - 1.1 # 第19行::一致::官方参数为1.1::tyjt参数为1.1::3D缩放最大比例::无修改原因
+  translate: 0.5 # 第20行::一致::官方参数为0.5::tyjt参数为0.5::3D数据平移范围::无修改原因
+checkpoint_config: # 第21行::一致::官方参数存在::tyjt参数存在::checkpoint配置根节点::无修改原因
+  interval: 1 # 第22行::一致::官方参数为1::tyjt参数为1::模型checkpoint保存间隔::无修改原因
+  max_keep_ckpts: 1 # 第23行::一致::官方参数为1::tyjt参数为1::最多保留的checkpoint数量::无修改原因
+cudnn_benchmark: false # 第24行::一致::官方参数为false::tyjt参数为false::是否启用cudnn基准测试::无修改原因
+data: # 第25行::一致::官方参数存在::tyjt参数存在::数据配置根节点::无修改原因
+  samples_per_gpu: 1 # 第26行::一致::官方参数为1::tyjt参数为1::每个GPU处理的样本数::无修改原因
+  test: # 第27行::一致::官方参数存在::tyjt参数存在::测试集配置::无修改原因
+    ann_file: data/nuscenes/nuscenes_infos_val.pkl # 第28行::不一致::官方参数为data/nuscenes/nuscenes_infos_val.pkl::tyjt参数为/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_val_fixed_quat.pkl::测试集标注文件路径::切换为TYJT数据集的测试集标注文件
+    box_type_3d: LiDAR # 第29行::一致::官方参数为LiDAR::tyjt参数为LiDAR::3D框坐标类型::无修改原因
+    dataset_root: data/nuscenes/ # 第30行::不一致::官方参数为data/nuscenes/::tyjt参数为/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/::数据集根目录::切换为TYJT数据集的存储路径
+    map_classes: # 第31行::一致::官方参数为[drivable_area, ped_crossing, walkway, stop_line, carpark_area, divider]::tyjt参数为[drivable_area, ped_crossing, walkway, stop_line, carpark_area, divider]::地图类别列表::无修改原因
+    - drivable_area # 第32行::一致::官方参数为drivable_area::tyjt参数为drivable_area::地图类别-可行驶区域::无修改原因
+    - ped_crossing # 第33行::一致::官方参数为ped_crossing::tyjt参数为ped_crossing::地图类别-人行横道::无修改原因
+    - walkway # 第34行::一致::官方参数为walkway::tyjt参数为walkway::地图类别-人行道::无修改原因
+    - stop_line # 第35行::一致::官方参数为stop_line::tyjt参数为stop_line::地图类别-停止线::无修改原因
+    - carpark_area # 第36行::一致::官方参数为carpark_area::tyjt参数为carpark_area::地图类别-停车场::无修改原因
+    - divider # 第37行::一致::官方参数为divider::tyjt参数为divider::地图类别-分隔带::无修改原因
+    modality: # 第38行::一致::官方参数存在::tyjt参数存在::数据模态配置::无修改原因
+      use_camera: true # 第39行::一致::官方参数为true::tyjt参数为true::是否使用相机数据::无修改原因
+      use_external: false # 第40行::一致::官方参数为false::tyjt参数为false::是否使用外部数据::无修改原因
+      use_lidar: true # 第41行::一致::官方参数为true::tyjt参数为true::是否使用LiDAR数据::无修改原因
+      use_map: false # 第42行::一致::官方参数为false::tyjt参数为false::是否使用地图数据::无修改原因
+      use_radar: false # 第43行::一致::官方参数为false::tyjt参数为false::是否使用雷达数据::无修改原因
+    object_classes: # 第44行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::目标检测类别列表::无修改原因
+    - car # 第45行::一致::官方参数为car::tyjt参数为car::目标类别-轿车::无修改原因
+    - truck # 第46行::一致::官方参数为truck::tyjt参数为truck::目标类别-卡车::无修改原因
+    - construction_vehicle # 第47行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::目标类别-工程车::无修改原因
+    - bus # 第48行::一致::官方参数为bus::tyjt参数为bus::目标类别-公交车::无修改原因
+    - trailer # 第49行::一致::官方参数为trailer::tyjt参数为trailer::目标类别-拖车::无修改原因
+    - barrier # 第50行::一致::官方参数为barrier::tyjt参数为barrier::目标类别-路障::无修改原因
+    - motorcycle # 第51行::一致::官方参数为motorcycle::tyjt参数为motorcycle::目标类别-摩托车::无修改原因
+    - bicycle # 第52行::一致::官方参数为bicycle::tyjt参数为bicycle::目标类别-自行车::无修改原因
+    - pedestrian # 第53行::一致::官方参数为pedestrian::tyjt参数为pedestrian::目标类别-行人::无修改原因
+    - traffic_cone # 第54行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::目标类别-交通锥::无修改原因
+    pipeline: # 第55行::一致::官方参数存在::tyjt参数存在::数据处理流水线::无修改原因
+    - to_float32: true # 第56行::一致::官方参数为true::tyjt参数为true::是否将图像数据转换为float32类型::无修改原因
+      type: LoadMultiViewImageFromFiles # 第57行::一致::官方参数为LoadMultiViewImageFromFiles::tyjt参数为LoadMultiViewImageFromFiles::数据加载类型，加载多视角图像::无修改原因
+    - coord_type: LIDAR # 第58行::一致::官方参数为LIDAR::tyjt参数为LIDAR::坐标系统类型::无修改原因
+      load_augmented: null # 第59行::一致::官方参数为null::tyjt参数为null::是否加载增强后的数据::无修改原因
+      load_dim: 5 # 第60行::不一致::官方参数为5::tyjt参数为6::点云数据加载维度::TYJT数据集点云为6维，调整加载维度适配数据
+      reduce_beams: 32 # 第61行::一致::官方参数为32::tyjt参数为32::LiDAR光束数量缩减目标::无修改原因
+      type: LoadPointsFromFile # 第62行::一致::官方参数为LoadPointsFromFile::tyjt参数为LoadPointsFromFile::数据加载类型，加载点云文件::无修改原因
+      use_dim: 5 # 第63行::不一致::官方参数为5::tyjt参数为[0,1,2,3,4]::点云数据使用维度::根据TYJT数据集点云特征，指定使用的维度索引
+    - load_augmented: null # 第64行::一致::官方参数为null::tyjt参数为null::是否加载增强后的多帧点云数据::无修改原因
+      load_dim: 5 # 第65行::不一致::官方参数为5::tyjt参数为6::多帧点云数据加载维度::适配TYJT数据集6维多帧点云数据
+      pad_empty_sweeps: true # 第66行::一致::官方参数为true::tyjt参数为true::是否为空白帧填充点云::无修改原因
+      reduce_beams: 32 # 第67行::一致::官方参数为32::tyjt参数为32::多帧LiDAR光束数量缩减目标::无修改原因
+      remove_close: true # 第68行::一致::官方参数为true::tyjt参数为true::是否移除近距离点云::无修改原因
+      sweeps_num: 9 # 第69行::不一致::官方参数为9::tyjt参数为0::加载的多帧点云数量::TYJT数据集无多帧点云，设置为0
+      type: LoadPointsFromMultiSweeps # 第70行::一致::官方参数为LoadPointsFromMultiSweeps::tyjt参数为LoadPointsFromMultiSweeps::数据加载类型，加载多帧点云::无修改原因
+      use_dim: 5 # 第71行::不一致::官方参数为5::tyjt参数为[0,1,2,3,4]::多帧点云数据使用维度::指定TYJT数据集多帧点云的使用维度索引
+    - compensate_velocity: true # 第72行::一致::官方参数为true::tyjt参数为true::是否补偿雷达速度数据::无修改原因
+      filtering: none # 第73行::一致::官方参数为none::tyjt参数为none::雷达数据过滤方式::无修改原因
+      load_dim: 18 # 第74行::一致::官方参数为18::tyjt参数为18::雷达数据加载维度::无修改原因
+      max_num: 2500 # 第75行::一致::官方参数为2500::tyjt参数为2500::雷达点云最大数量::无修改原因
+      normalize: false # 第76行::一致::官方参数为false::tyjt参数为false::是否归一化雷达数据::无修改原因
+      sweeps_num: 6 # 第77行::不一致::官方参数为6::tyjt参数为0::加载的雷达多帧数量::TYJT数据集无雷达数据，设置为0
+      type: LoadRadarPointsMultiSweeps # 第78行::不一致::官方参数为LoadRadarPointsMultiSweeps::tyjt参数移除::雷达数据加载模块::TYJT数据集无雷达数据，移除该模块
+      use_dim: # 第79行::一致::官方参数为[0,1,2,5,8,9,18-56]::tyjt参数移除::雷达数据使用维度::随雷达加载模块一同移除
+      - 0 # 第80行::一致::官方参数为0::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 1 # 第81行::一致::官方参数为1::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 2 # 第82行::一致::官方参数为2::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 5 # 第83行::一致::官方参数为5::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 8 # 第84行::一致::官方参数为8::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 9 # 第85行::一致::官方参数为9::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 18 # 第86行::一致::官方参数为18::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 19 # 第87行::一致::官方参数为19::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 20 # 第88行::一致::官方参数为20::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 21 # 第89行::一致::官方参数为21::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 22 # 第90行::一致::官方参数为22::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 23 # 第91行::一致::官方参数为23::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 24 # 第92行::一致::官方参数为24::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 25 # 第93行::一致::官方参数为25::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 26 # 第94行::一致::官方参数为26::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 27 # 第95行::一致::官方参数为27::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 28 # 第96行::一致::官方参数为28::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 29 # 第97行::一致::官方参数为29::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 30 # 第98行::一致::官方参数为30::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 31 # 第99行::一致::官方参数为31::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 32 # 第100行::一致::官方参数为32::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 33 # 第101行::一致::官方参数为33::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 34 # 第102行::一致::官方参数为34::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 35 # 第103行::一致::官方参数为35::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 36 # 第104行::一致::官方参数为36::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 37 # 第105行::一致::官方参数为37::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 38 # 第106行::一致::官方参数为38::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 39 # 第107行::一致::官方参数为39::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 40 # 第108行::一致::官方参数为40::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 41 # 第109行::一致::官方参数为41::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 42 # 第110行::一致::官方参数为42::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 43 # 第111行::一致::官方参数为43::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 44 # 第112行::一致::官方参数为44::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 45 # 第113行::一致::官方参数为45::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 46 # 第114行::一致::官方参数为46::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 47 # 第115行::一致::官方参数为47::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 48 # 第116行::一致::官方参数为48::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 49 # 第117行::一致::官方参数为49::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 50 # 第118行::一致::官方参数为50::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 51 # 第119行::一致::官方参数为51::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 52 # 第120行::一致::官方参数为52::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 53 # 第121行::一致::官方参数为53::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 54 # 第122行::一致::官方参数为54::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 55 # 第123行::一致::官方参数为55::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 56 # 第124行::一致::官方参数为56::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+    - type: LoadAnnotations3D # 第125行::一致::官方参数为LoadAnnotations3D::tyjt参数为LoadAnnotations3D::3D标注加载模块::无修改原因
+      with_attr_label: false # 第126行::一致::官方参数为false::tyjt参数为false::是否加载属性标签::无修改原因
+      with_bbox_3d: true # 第127行::一致::官方参数为true::tyjt参数为true::是否加载3D边界框::无修改原因
+      with_label_3d: true # 第128行::一致::官方参数为true::tyjt参数为true::是否加载3D标签::无修改原因
+    - bot_pct_lim: # 第129行::一致::官方参数为[0.0, 0.0]::tyjt参数为[0.0, 0.0]::图像底部裁剪比例范围::无修改原因
+      - 0.0 # 第130行::一致::官方参数为0.0::tyjt参数为0.0::底部最小裁剪比例::无修改原因
+      - 0.0 # 第131行::一致::官方参数为0.0::tyjt参数为0.0::底部最大裁剪比例::无修改原因
+      final_dim: # 第132行::一致::官方参数为[256, 704]::tyjt参数为[256, 704]::图像最终尺寸::无修改原因
+      - 256 # 第133行::一致::官方参数为256::tyjt参数为256::图像最终高度::无修改原因
+      - 704 # 第134行::一致::官方参数为704::tyjt参数为704::图像最终宽度::无修改原因
+      is_train: false # 第135行::一致::官方参数为false::tyjt参数为false::是否为训练模式::无修改原因
+      rand_flip: false # 第136行::一致::官方参数为false::tyjt参数为false::是否随机翻转图像::无修改原因
+      resize_lim: # 第137行::不一致::官方参数为[0.48, 0.48]::tyjt参数为[0.9, 0.9]::图像缩放范围::适配TYJT数据集图像尺寸
+      - 0.48 # 第138行::不一致::官方参数为0.48::tyjt参数为0.9::最小缩放比例::适配TYJT数据集图像尺寸
+      - 0.48 # 第139行::不一致::官方参数为0.48::tyjt参数为0.9::最大缩放比例::适配TYJT数据集图像尺寸
+      rot_lim: # 第140行::一致::官方参数为[0.0, 0.0]::tyjt参数为[0.0, 0.0]::图像旋转角度范围::无修改原因
+      - 0.0 # 第141行::一致::官方参数为0.0::tyjt参数为0.0::最小旋转角度::无修改原因
+      - 0.0 # 第142行::一致::官方参数为0.0::tyjt参数为0.0::最大旋转角度::无修改原因
+      type: ImageAug3D # 第143行::一致::官方参数为ImageAug3D::tyjt参数为ImageAug3D::3D图像增强模块::无修改原因
+    - is_train: false # 第144行::一致::官方参数为false::tyjt参数为false::是否为训练模式::无修改原因
+      resize_lim: # 第145行::一致::官方参数为[1.0, 1.0]::tyjt参数为[1.0, 1.0]::全局缩放范围::无修改原因
+      - 1.0 # 第146行::一致::官方参数为1.0::tyjt参数为1.0::最小全局缩放比例::无修改原因
+      - 1.0 # 第147行::一致::官方参数为1.0::tyjt参数为1.0::最大全局缩放比例::无修改原因
+      rot_lim: # 第148行::一致::官方参数为[0.0, 0.0]::tyjt参数为[0.0, 0.0]::全局旋转角度范围::无修改原因
+      - 0.0 # 第149行::一致::官方参数为0.0::tyjt参数为0.0::最小全局旋转角度::无修改原因
+      - 0.0 # 第150行::一致::官方参数为0.0::tyjt参数为0.0::最大全局旋转角度::无修改原因
+      trans_lim: 0.0 # 第151行::一致::官方参数为0.0::tyjt参数为0.0::全局平移范围::无修改原因
+      type: GlobalRotScaleTrans # 第152行::一致::官方参数为GlobalRotScaleTrans::tyjt参数为GlobalRotScaleTrans::全局旋转缩放平移模块::无修改原因
+    - point_cloud_range: # 第153行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::点云范围过滤配置::无修改原因
+      - -54.0 # 第154行::一致::官方参数为-54.0::tyjt参数为-54.0::点云X轴最小范围::无修改原因
+      - -54.0 # 第155行::一致::官方参数为-54.0::tyjt参数为-54.0::点云Y轴最小范围::无修改原因
+      - -5.0 # 第156行::一致::官方参数为-5.0::tyjt参数为-5.0::点云Z轴最小范围::无修改原因
+      - 54.0 # 第157行::一致::官方参数为54.0::tyjt参数为54.0::点云X轴最大范围::无修改原因
+      - 54.0 # 第158行::一致::官方参数为54.0::tyjt参数为54.0::点云Y轴最大范围::无修改原因
+      - 3.0 # 第159行::一致::官方参数为3.0::tyjt参数为3.0::点云Z轴最大范围::无修改原因
+      type: PointsRangeFilter # 第160行::一致::官方参数为PointsRangeFilter::tyjt参数为PointsRangeFilter::点云范围过滤模块::无修改原因
+    - mean: # 第161行::一致::官方参数为[0.485, 0.456, 0.406]::tyjt参数为[0.485, 0.456, 0.406]::图像归一化均值::无修改原因
+      - 0.485 # 第162行::一致::官方参数为0.485::tyjt参数为0.485::R通道均值::无修改原因
+      - 0.456 # 第163行::一致::官方参数为0.456::tyjt参数为0.456::G通道均值::无修改原因
+      - 0.406 # 第164行::一致::官方参数为0.406::tyjt参数为0.406::B通道均值::无修改原因
+      std: # 第165行::一致::官方参数为[0.229, 0.224, 0.225]::tyjt参数为[0.229, 0.224, 0.225]::图像归一化标准差::无修改原因
+      - 0.229 # 第166行::一致::官方参数为0.229::tyjt参数为0.229::R通道标准差::无修改原因
+      - 0.224 # 第167行::一致::官方参数为0.224::tyjt参数为0.224::G通道标准差::无修改原因
+      - 0.225 # 第168行::一致::官方参数为0.225::tyjt参数为0.225::B通道标准差::无修改原因
+      type: ImageNormalize # 第169行::一致::官方参数为ImageNormalize::tyjt参数为ImageNormalize::图像归一化模块::无修改原因
+    - classes: # 第170行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::目标类别列表::无修改原因
+      - car # 第171行::一致::官方参数为car::tyjt参数为car::目标类别-轿车::无修改原因
+      - truck # 第172行::一致::官方参数为truck::tyjt参数为truck::目标类别-卡车::无修改原因
+      - construction_vehicle # 第173行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::目标类别-工程车::无修改原因
+      - bus # 第174行::一致::官方参数为bus::tyjt参数为bus::目标类别-公交车::无修改原因
+      - trailer # 第175行::一致::官方参数为trailer::tyjt参数为trailer::目标类别-拖车::无修改原因
+      - barrier # 第176行::一致::官方参数为barrier::tyjt参数为barrier::目标类别-路障::无修改原因
+      - motorcycle # 第177行::一致::官方参数为motorcycle::tyjt参数为motorcycle::目标类别-摩托车::无修改原因
+      - bicycle # 第178行::一致::官方参数为bicycle::tyjt参数为bicycle::目标类别-自行车::无修改原因
+      - pedestrian # 第179行::一致::官方参数为pedestrian::tyjt参数为pedestrian::目标类别-行人::无修改原因
+      - traffic_cone # 第180行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::目标类别-交通锥::无修改原因
+      type: DefaultFormatBundle3D # 第181行::一致::官方参数为DefaultFormatBundle3D::tyjt参数为DefaultFormatBundle3D::3D数据格式封装模块::无修改原因
+    - keys: # 第182行::不一致::官方参数为[img, points, radar, gt_bboxes_3d, gt_labels_3d]::tyjt参数为[img, points, gt_bboxes_3d, gt_labels_3d]::需要收集的数据键值::TYJT数据集无雷达数据，移除radar键
+      - img # 第183行::一致::官方参数为img::tyjt参数为img::图像数据键::无修改原因
+      - points # 第184行::一致::官方参数为points::tyjt参数为points::点云数据键::无修改原因
+      - radar # 第185行::不一致::官方参数为radar::tyjt参数移除::雷达数据键::TYJT数据集无雷达数据，移除该键
+      - gt_bboxes_3d # 第186行::一致::官方参数为gt_bboxes_3d::tyjt参数为gt_bboxes_3d::3D边界框标注键::无修改原因
+      - gt_labels_3d # 第187行::一致::官方参数为gt_labels_3d::tyjt参数为gt_labels_3d::3D标签键::无修改原因
+      meta_keys: # 第188行::一致::官方参数为[camera_intrinsics, camera2ego, lidar2ego, lidar2camera, lidar2image, camera2lidar, img_aug_matrix, lidar_aug_matrix]::tyjt参数相同::元数据键值列表::无修改原因
+      - camera_intrinsics # 第189行::一致::官方参数为camera_intrinsics::tyjt参数为camera_intrinsics::相机内参元数据::无修改原因
+      - camera2ego # 第190行::一致::官方参数为camera2ego::tyjt参数为camera2ego::相机到自车坐标变换::无修改原因
+      - lidar2ego # 第191行::一致::官方参数为lidar2ego::tyjt参数为lidar2ego::LiDAR到自车坐标变换::无修改原因
+      - lidar2camera # 第192行::一致::官方参数为lidar2camera::tyjt参数为lidar2camera::LiDAR到相机坐标变换::无修改原因
+      - lidar2image # 第193行::一致::官方参数为lidar2image::tyjt参数为lidar2image::LiDAR到图像坐标变换::无修改原因
+      - camera2lidar # 第194行::一致::官方参数为camera2lidar::tyjt参数为camera2lidar::相机到LiDAR坐标变换::无修改原因
+      - img_aug_matrix # 第195行::一致::官方参数为img_aug_matrix::tyjt参数为img_aug_matrix::图像增强矩阵::无修改原因
+      - lidar_aug_matrix # 第196行::一致::官方参数为lidar_aug_matrix::tyjt参数为lidar_aug_matrix::LiDAR增强矩阵::无修改原因
+      type: Collect3D # 第197行::一致::官方参数为Collect3D::tyjt参数为Collect3D::3D数据收集模块::无修改原因
+    - keyframe_only: true # 第198行::一致::官方参数为true::tyjt参数为true::是否只保留关键帧::无修改原因
+      type: GTDepth # 第199行::一致::官方参数为GTDepth::tyjt参数为GTDepth::深度信息加载模块::无修改原因
+    test_mode: true # 第200行::一致::官方参数为true::tyjt参数为true::测试模式开关::无修改原因
+    type: NuScenesDataset # 第201行::不一致::官方参数为NuScenesDataset::tyjt参数为CustomDataset::数据集类型::切换为适配TYJT数据集的自定义数据集类
+  train: # 第202行::一致::官方参数存在::tyjt参数存在::训练集配置::无修改原因
+    dataset: # 第203行::一致::官方参数存在::tyjt参数存在::训练集子数据集配置::无修改原因
+      ann_file: data/nuscenes/nuscenes_infos_train.pkl # 第204行::不一致::官方参数为data/nuscenes/nuscenes_infos_train.pkl::tyjt参数为/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_train_fixed_quat.pkl::训练集标注文件路径::切换为TYJT数据集的训练集标注文件
+      box_type_3d: LiDAR # 第205行::一致::官方参数为LiDAR::tyjt参数为LiDAR::3D框坐标类型::无修改原因
+      dataset_root: data/nuscenes/ # 第206行::不一致::官方参数为data/nuscenes/::tyjt参数为/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/::数据集根目录::切换为TYJT数据集的存储路径
+      map_classes: # 第207行::一致::官方参数为[drivable_area, ped_crossing, walkway, stop_line, carpark_area, divider]::tyjt参数相同::地图类别列表::无修改原因
+      - drivable_area # 第208行::一致::官方参数为drivable_area::tyjt参数为drivable_area::地图类别-可行驶区域::无修改原因
+      - ped_crossing # 第209行::一致::官方参数为ped_crossing::tyjt参数为ped_crossing::地图类别-人行横道::无修改原因
+      - walkway # 第210行::一致::官方参数为walkway::tyjt参数为walkway::地图类别-人行道::无修改原因
+      - stop_line # 第211行::一致::官方参数为stop_line::tyjt参数为stop_line::地图类别-停止线::无修改原因
+      - carpark_area # 第212行::一致::官方参数为carpark_area::tyjt参数为carpark_area::地图类别-停车场::无修改原因
+      - divider # 第213行::一致::官方参数为divider::tyjt参数为divider::地图类别-分隔带::无修改原因
+      modality: # 第214行::一致::官方参数存在::tyjt参数存在::数据模态配置::无修改原因
+        use_camera: true # 第215行::一致::官方参数为true::tyjt参数为true::是否使用相机数据::无修改原因
+        use_external: false # 第216行::一致::官方参数为false::tyjt参数为false::是否使用外部数据::无修改原因
+        use_lidar: true # 第217行::一致::官方参数为true::tyjt参数为true::是否使用LiDAR数据::无修改原因
+        use_map: false # 第218行::一致::官方参数为false::tyjt参数为false::是否使用地图数据::无修改原因
+        use_radar: false # 第219行::一致::官方参数为false::tyjt参数为false::是否使用雷达数据::无修改原因
+      object_classes: # 第220行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数相同::目标检测类别列表::无修改原因
+      - car # 第221行::一致::官方参数为car::tyjt参数为car::目标类别-轿车::无修改原因
+      - truck # 第222行::一致::官方参数为truck::tyjt参数为truck::目标类别-卡车::无修改原因
+      - construction_vehicle # 第223行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::目标类别-工程车::无修改原因
+      - bus # 第224行::一致::官方参数为bus::tyjt参数为bus::目标类别-公交车::无修改原因
+      - trailer # 第225行::一致::官方参数为trailer::tyjt参数为trailer::目标类别-拖车::无修改原因
+      - barrier # 第226行::一致::官方参数为barrier::tyjt参数为barrier::目标类别-路障::无修改原因
+      - motorcycle # 第227行::一致::官方参数为motorcycle::tyjt参数为motorcycle::目标类别-摩托车::无修改原因
+      - bicycle # 第228行::一致::官方参数为bicycle::tyjt参数为bicycle::目标类别-自行车::无修改原因
+      - pedestrian # 第229行::一致::官方参数为pedestrian::tyjt参数为pedestrian::目标类别-行人::无修改原因
+      - traffic_cone # 第230行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::目标类别-交通锥::无修改原因
+      pipeline: # 第231行::一致::官方参数存在::tyjt参数存在::数据处理流水线::无修改原因
+      - to_float32: true # 第232行::一致::官方参数为true::tyjt参数为true::是否将图像数据转换为float32类型::无修改原因
+        type: LoadMultiViewImageFromFiles # 第233行::一致::官方参数为LoadMultiViewImageFromFiles::tyjt参数为LoadMultiViewImageFromFiles::数据加载类型，加载多视角图像::无修改原因
+      - coord_type: LIDAR # 第234行::一致::官方参数为LIDAR::tyjt参数为LIDAR::坐标系统类型::无修改原因
+        load_augmented: null # 第235行::一致::官方参数为null::tyjt参数为null::是否加载增强后的数据::无修改原因
+        load_dim: 5 # 第236行::不一致::官方参数为5::tyjt参数为6::点云数据加载维度::TYJT数据集点云为6维，调整加载维度适配数据
+        reduce_beams: 32 # 第237行::一致::官方参数为32::tyjt参数为32::LiDAR光束数量缩减目标::无修改原因
+        type: LoadPointsFromFile # 第238行::一致::官方参数为LoadPointsFromFile::tyjt参数为LoadPointsFromFile::数据加载类型，加载点云文件::无修改原因
+        use_dim: 5 # 第239行::不一致::官方参数为5::tyjt参数为[0,1,2,3,4]::点云数据使用维度::根据TYJT数据集点云特征，指定使用的维度索引
+      - load_augmented: null # 第240行::一致::官方参数为null::tyjt参数为null::是否加载增强后的多帧点云数据::无修改原因
+        load_dim: 5 # 第241行::不一致::官方参数为5::tyjt参数为6::多帧点云数据加载维度::适配TYJT数据集6维多帧点云数据
+        pad_empty_sweeps: true # 第242行::一致::官方参数为true::tyjt参数为true::是否为空白帧填充点云::无修改原因
+        reduce_beams: 32 # 第243行::一致::官方参数为32::tyjt参数为32::多帧LiDAR光束数量缩减目标::无修改原因
+        remove_close: true # 第244行::一致::官方参数为true::tyjt参数为true::是否移除近距离点云::无修改原因
+        sweeps_num: 9 # 第245行::不一致::官方参数为9::tyjt参数为0::加载的多帧点云数量::TYJT数据集无多帧点云，设置为0
+        type: LoadPointsFromMultiSweeps # 第246行::一致::官方参数为LoadPointsFromMultiSweeps::tyjt参数为LoadPointsFromMultiSweeps::数据加载类型，加载多帧点云::无修改原因
+        use_dim: 5 # 第247行::不一致::官方参数为5::tyjt参数为[0,1,2,3,4]::多帧点云数据使用维度::指定TYJT数据集多帧点云的使用维度索引
+      - compensate_velocity: true # 第248行::一致::官方参数为true::tyjt参数为true::是否补偿雷达速度数据::无修改原因
+        filtering: none # 第249行::一致::官方参数为none::tyjt参数为none::雷达数据过滤方式::无修改原因
+        load_dim: 18 # 第250行::一致::官方参数为18::tyjt参数为18::雷达数据加载维度::无修改原因
+        max_num: 2500 # 第251行::一致::官方参数为2500::tyjt参数为2500::雷达点云最大数量::无修改原因
+        normalize: false # 第252行::一致::官方参数为false::tyjt参数为false::是否归一化雷达数据::无修改原因
+        sweeps_num: 6 # 第253行::不一致::官方参数为6::tyjt参数为0::加载的雷达多帧数量::TYJT数据集无雷达数据，设置为0
+        type: LoadRadarPointsMultiSweeps # 第254行::不一致::官方参数为LoadRadarPointsMultiSweeps::tyjt参数移除::雷达数据加载模块::TYJT数据集无雷达数据，移除该模块
+        use_dim: # 第255行::一致::官方参数为[0,1,2,5,8,9,18-56]::tyjt参数移除::雷达数据使用维度::随雷达加载模块一同移除
+        - 0 # 第256行::一致::官方参数为0::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 1 # 第257行::一致::官方参数为1::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 2 # 第258行::一致::官方参数为2::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 5 # 第259行::一致::官方参数为5::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 8 # 第260行::一致::官方参数为8::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 9 # 第261行::一致::官方参数为9::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 18 # 第262行::一致::官方参数为18::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 19 # 第263行::一致::官方参数为19::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 20 # 第264行::一致::官方参数为20::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 21 # 第265行::一致::官方参数为21::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 22 # 第266行::一致::官方参数为22::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 23 # 第267行::一致::官方参数为23::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 24 # 第268行::一致::官方参数为24::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 25 # 第269行::一致::官方参数为25::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 26 # 第270行::一致::官方参数为26::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 27 # 第271行::一致::官方参数为27::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 28 # 第272行::一致::官方参数为28::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 29 # 第273行::一致::官方参数为29::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 30 # 第274行::一致::官方参数为30::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 31 # 第275行::一致::官方参数为31::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 32 # 第276行::一致::官方参数为32::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 33 # 第277行::一致::官方参数为33::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 34 # 第278行::一致::官方参数为34::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 35 # 第279行::一致::官方参数为35::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 36 # 第280行::一致::官方参数为36::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 37 # 第281行::一致::官方参数为37::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 38 # 第282行::一致::官方参数为38::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 39 # 第283行::一致::官方参数为39::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 40 # 第284行::一致::官方参数为40::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 41 # 第285行::一致::官方参数为41::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 42 # 第286行::一致::官方参数为42::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 43 # 第287行::一致::官方参数为43::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 44 # 第288行::一致::官方参数为44::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 45 # 第289行::一致::官方参数为45::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 46 # 第290行::一致::官方参数为46::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 47 # 第291行::一致::官方参数为47::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 48 # 第292行::一致::官方参数为48::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 49 # 第293行::一致::官方参数为49::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 50 # 第294行::一致::官方参数为50::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 51 # 第295行::一致::官方参数为51::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 52 # 第296行::一致::官方参数为52::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 53 # 第297行::一致::官方参数为53::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 54 # 第298行::一致::官方参数为54::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 55 # 第299行::一致::官方参数为55::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+        - 56 # 第300行::一致::官方参数为56::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - type: LoadAnnotations3D # 第301行::一致::官方参数为LoadAnnotations3D::tyjt参数为LoadAnnotations3D::3D标注加载模块::无修改原因
+        with_attr_label: false # 第302行::一致::官方参数为false::tyjt参数为false::是否加载属性标签::无修改原因
+        with_bbox_3d: true # 第303行::一致::官方参数为true::tyjt参数为true::是否加载3D边界框::无修改原因
+        with_label_3d: true # 第304行::一致::官方参数为true::tyjt参数为true::是否加载3D标签::无修改原因
+      - db_sampler: # 第305行::一致::官方参数存在::tyjt参数存在::数据库采样器配置::无修改原因
+          classes: # 第306行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数相同::采样目标类别::无修改原因
+          - car # 第307行::一致::官方参数为car::tyjt参数为car::采样类别-轿车::无修改原因
+          - truck # 第308行::一致::官方参数为truck::tyjt参数为truck::采样类别-卡车::无修改原因
+          - construction_vehicle # 第309行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::采样类别-工程车::无修改原因
+          - bus # 第310行::一致::官方参数为bus::tyjt参数为bus::采样类别-公交车::无修改原因
+          - trailer # 第311行::一致::官方参数为trailer::tyjt参数为trailer::采样类别-拖车::无修改原因
+          - barrier # 第312行::一致::官方参数为barrier::tyjt参数为barrier::采样类别-路障::无修改原因
+          - motorcycle # 第313行::一致::官方参数为motorcycle::tyjt参数为motorcycle::采样类别-摩托车::无修改原因
+          - bicycle # 第314行::一致::官方参数为bicycle::tyjt参数为bicycle::采样类别-自行车::无修改原因
+          - pedestrian # 第315行::一致::官方参数为pedestrian::tyjt参数为pedestrian::采样类别-行人::无修改原因
+          - traffic_cone # 第316行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::采样类别-交通锥::无修改原因
+          dataset_root: data/nuscenes/ # 第317行::不一致::官方参数为data/nuscenes/::tyjt参数为/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/::采样数据集根目录::切换为TYJT数据集的存储路径
+          info_path: data/nuscenes/nuscenes_dbinfos_train.pkl # 第318行::不一致::官方参数为data/nuscenes/nuscenes_dbinfos_train.pkl::tyjt参数为/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_dbinfos_train.pkl::采样信息文件路径::切换为TYJT数据集的采样信息文件
+          points_loader: # 第319行::一致::官方参数存在::tyjt参数存在::点云加载器配置::无修改原因
+            coord_type: LIDAR # 第320行::一致::官方参数为LIDAR::tyjt参数为LIDAR::坐标系统类型::无修改原因
+            load_dim: 5 # 第321行::不一致::官方参数为5::tyjt参数为6::点云加载维度::适配TYJT数据集6维点云
+            reduce_beams: 32 # 第322行::一致::官方参数为32::tyjt参数为32::LiDAR光束缩减数量::无修改原因
+            type: LoadPointsFromFile # 第323行::一致::官方参数为LoadPointsFromFile::tyjt参数为LoadPointsFromFile::点云加载模块类型::无修改原因
+            use_dim: 5 # 第324行::不一致::官方参数为5::tyjt参数为[0,1,2,3,4]::点云使用维度::指定TYJT数据集点云使用维度
+          prepare: # 第325行::一致::官方参数存在::tyjt参数存在::采样预处理配置::无修改原因
+            filter_by_difficulty: # 第326行::一致::官方参数为[-1]::tyjt参数为[-1]::按难度过滤::无修改原因
+            - -1 # 第327行::一致::官方参数为-1::tyjt参数为-1::难度过滤阈值::无修改原因
+            filter_by_min_points: # 第328行::一致::官方参数为{barrier:5, bicycle:5, bus:5, car:5, construction_vehicle:5, motorcycle:5, pedestrian:5, traffic_cone:5, trailer:5, truck:5}::tyjt参数相同::按最小点数过滤::无修改原因
+              barrier: 5 # 第329行::一致::官方参数为5::tyjt参数为5::路障最小点数::无修改原因
+              bicycle: 5 # 第330行::一致::官方参数为5::tyjt参数为5::自行车最小点数::无修改原因
+              bus: 5 # 第331行::一致::官方参数为5::tyjt参数为5::公交车最小点数::无修改原因
+              car: 5 # 第332行::一致::官方参数为5::tyjt参数为5::轿车最小点数::无修改原因
+              construction_vehicle: 5 # 第333行::一致::官方参数为5::tyjt参数为5::工程车最小点数::无修改原因
+              motorcycle: 5 # 第334行::一致::官方参数为5::tyjt参数为5::摩托车最小点数::无修改原因
+              pedestrian: 5 # 第335行::一致::官方参数为5::tyjt参数为5::行人最小点数::无修改原因
+              traffic_cone: 5 # 第336行::一致::官方参数为5::tyjt参数为5::交通锥最小点数::无修改原因
+              trailer: 5 # 第337行::一致::官方参数为5::tyjt参数为5::拖车最小点数::无修改原因
+              truck: 5 # 第338行::一致::官方参数为5::tyjt参数为5::卡车最小点数::无修改原因
+          rate: 1.0 # 第339行::一致::官方参数为1.0::tyjt参数为1.0::采样率::无修改原因
+          sample_groups: # 第340行::一致::官方参数为{barrier:2, bicycle:6, bus:4, car:2, construction_vehicle:7, motorcycle:6, pedestrian:2, traffic_cone:2, trailer:6, truck:3}::tyjt参数相同::采样组数配置::无修改原因
+            barrier: 2 # 第341行::一致::官方参数为2::tyjt参数为2::路障采样组数::无修改原因
+            bicycle: 6 # 第342行::一致::官方参数为6::tyjt参数为6::自行车采样组数::无修改原因
+            bus: 4 # 第343行::一致::官方参数为4::tyjt参数为4::公交车采样组数::无修改原因
+            car: 2 # 第344行::一致::官方参数为2::tyjt参数为2::轿车采样组数::无修改原因
+            construction_vehicle: 7 # 第345行::一致::官方参数为7::tyjt参数为7::工程车采样组数::无修改原因
+            motorcycle: 6 # 第346行::一致::官方参数为6::tyjt参数为6::摩托车采样组数::无修改原因
+            pedestrian: 2 # 第347行::一致::官方参数为2::tyjt参数为2::行人采样组数::无修改原因
+            traffic_cone: 2 # 第348行::一致::官方参数为2::tyjt参数为2::交通锥采样组数::无修改原因
+            trailer: 6 # 第349行::一致::官方参数为6::tyjt参数为6::拖车采样组数::无修改原因
+            truck: 3 # 第350行::一致::官方参数为3::tyjt参数为3::卡车采样组数::无修改原因
+        stop_epoch: -1 # 第351行::一致::官方参数为-1::tyjt参数为-1::采样停止epoch::无修改原因
+        type: ObjectPaste # 第352行::一致::官方参数为ObjectPaste::tyjt参数为ObjectPaste::目标粘贴模块::无修改原因
+      - bot_pct_lim: # 第353行::一致::官方参数为[0.0, 0.0]::tyjt参数为[0.0, 0.0]::图像底部裁剪比例范围::无修改原因
+        - 0.0 # 第354行::一致::官方参数为0.0::tyjt参数为0.0::底部最小裁剪比例::无修改原因
+        - 0.0 # 第355行::一致::官方参数为0.0::tyjt参数为0.0::底部最大裁剪比例::无修改原因
+        final_dim: # 第356行::一致::官方参数为[256, 704]::tyjt参数为[256, 704]::图像最终尺寸::无修改原因
+        - 256 # 第357行::一致::官方参数为256::tyjt参数为256::图像最终高度::无修改原因
+        - 704 # 第358行::一致::官方参数为704::tyjt参数为704::图像最终宽度::无修改原因
+        is_train: true # 第359行::一致::官方参数为true::tyjt参数为true::是否为训练模式::无修改原因
+        rand_flip: true # 第360行::一致::官方参数为true::tyjt参数为true::是否随机翻转图像::无修改原因
+        resize_lim: # 第361行::不一致::官方参数为[0.38, 0.55]::tyjt参数为[0.8, 1.0]::图像缩放范围::适配TYJT数据集图像尺寸
+        - 0.38 # 第362行::不一致::官方参数为0.38::tyjt参数为0.8::最小缩放比例::适配TYJT数据集图像尺寸
+        - 0.55 # 第363行::不一致::官方参数为0.55::tyjt参数为1.0::最大缩放比例::适配TYJT数据集图像尺寸
+        rot_lim: # 第364行::一致::官方参数为[-5.4, 5.4]::tyjt参数为[-5.4, 5.4]::图像旋转角度范围::无修改原因
+        - -5.4 # 第365行::一致::官方参数为-5.4::tyjt参数为-5.4::最小旋转角度::无修改原因
+        - 5.4 # 第366行::一致::官方参数为5.4::tyjt参数为5.4::最大旋转角度::无修改原因
+        type: ImageAug3D # 第367行::一致::官方参数为ImageAug3D::tyjt参数为ImageAug3D::3D图像增强模块::无修改原因
+      - is_train: true # 第368行::一致::官方参数为true::tyjt参数为true::是否为训练模式::无修改原因
+        resize_lim: # 第369行::一致::官方参数为[0.9, 1.1]::tyjt参数为[0.9, 1.1]::全局缩放范围::无修改原因
+        - 0.9 # 第370行::一致::官方参数为0.9::tyjt参数为0.9::最小全局缩放比例::无修改原因
+        - 1.1 # 第371行::一致::官方参数为1.1::tyjt参数为1.1::最大全局缩放比例::无修改原因
+        rot_lim: # 第372行::一致::官方参数为[-0.78539816, 0.78539816]::tyjt参数为[-0.78539816, 0.78539816]::全局旋转角度范围::无修改原因
+        - -0.78539816 # 第373行::一致::官方参数为-0.78539816::tyjt参数为-0.78539816::最小全局旋转角度::无修改原因
+        - 0.78539816 # 第374行::一致::官方参数为0.78539816::tyjt参数为0.78539816::最大全局旋转角度::无修改原因
+        trans_lim: 0.5 # 第375行::一致::官方参数为0.5::tyjt参数为0.5::全局平移范围::无修改原因
+        type: GlobalRotScaleTrans # 第376行::一致::官方参数为GlobalRotScaleTrans::tyjt参数为GlobalRotScaleTrans::全局旋转缩放平移模块::无修改原因
+      - type: RandomFlip3D # 第377行::一致::官方参数为RandomFlip3D::tyjt参数为RandomFlip3D::3D随机翻转模块::无修改原因
+      - point_cloud_range: # 第378行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数相同::点云范围过滤配置::无修改原因
+        - -54.0 # 第379行::一致::官方参数为-54.0::tyjt参数为-54.0::点云X轴最小范围::无修改原因
+        - -54.0 # 第380行::一致::官方参数为-54.0::tyjt参数为-54.0::点云Y轴最小范围::无修改原因
+        - -5.0 # 第381行::一致::官方参数为-5.0::tyjt参数为-5.0::点云Z轴最小范围::无修改原因
+        - 54.0 # 第382行::一致::官方参数为54.0::tyjt参数为54.0::点云X轴最大范围::无修改原因
+        - 54.0 # 第383行::一致::官方参数为54.0::tyjt参数为54.0::点云Y轴最大范围::无修改原因
+        - 3.0 # 第384行::一致::官方参数为3.0::tyjt参数为3.0::点云Z轴最大范围::无修改原因
+        type: PointsRangeFilter # 第385行::一致::官方参数为PointsRangeFilter::tyjt参数为PointsRangeFilter::点云范围过滤模块::无修改原因
+            - point_cloud_range: # 第386行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数相同::目标范围过滤配置::无修改原因
+        - -54.0 # 第387行::一致::官方参数为-54.0::tyjt参数为-54.0::目标X轴最小范围::无修改原因
+        - -54.0 # 第388行::一致::官方参数为-54.0::tyjt参数为-54.0::目标Y轴最小范围::无修改原因
+        - -5.0 # 第389行::一致::官方参数为-5.0::tyjt参数为-5.0::目标Z轴最小范围::无修改原因
+        - 54.0 # 第390行::一致::官方参数为54.0::tyjt参数为54.0::目标X轴最大范围::无修改原因
+        - 54.0 # 第391行::一致::官方参数为54.0::tyjt参数为54.0::目标Y轴最大范围::无修改原因
+        - 3.0 # 第392行::一致::官方参数为3.0::tyjt参数为3.0::目标Z轴最大范围::无修改原因
+        type: ObjectRangeFilter # 第393行::一致::官方参数为ObjectRangeFilter::tyjt参数为ObjectRangeFilter::目标范围过滤模块::无修改原因
+      - classes: # 第394行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数相同::目标类别过滤列表::无修改原因
+        - car # 第395行::一致::官方参数为car::tyjt参数为car::过滤类别-轿车::无修改原因
+        - truck # 第396行::一致::官方参数为truck::tyjt参数为truck::过滤类别-卡车::无修改原因
+        - construction_vehicle # 第397行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::过滤类别-工程车::无修改原因
+        - bus # 第398行::一致::官方参数为bus::tyjt参数为bus::过滤类别-公交车::无修改原因
+        - trailer # 第399行::一致::官方参数为trailer::tyjt参数为trailer::过滤类别-拖车::无修改原因
+        - barrier # 第400行::一致::官方参数为barrier::tyjt参数为barrier::过滤类别-路障::无修改原因
+        - motorcycle # 第401行::一致::官方参数为motorcycle::tyjt参数为motorcycle::过滤类别-摩托车::无修改原因
+        - bicycle # 第402行::一致::官方参数为bicycle::tyjt参数为bicycle::过滤类别-自行车::无修改原因
+        - pedestrian # 第403行::一致::官方参数为pedestrian::tyjt参数为pedestrian::过滤类别-行人::无修改原因
+        - traffic_cone # 第404行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::过滤类别-交通锥::无修改原因
+        type: ObjectNameFilter # 第405行::一致::官方参数为ObjectNameFilter::tyjt参数为ObjectNameFilter::目标名称过滤模块::无修改原因
+      - mean: # 第406行::一致::官方参数为[0.485, 0.456, 0.406]::tyjt参数相同::图像归一化均值::无修改原因
+        - 0.485 # 第407行::一致::官方参数为0.485::tyjt参数为0.485::R通道均值::无修改原因
+        - 0.456 # 第408行::一致::官方参数为0.456::tyjt参数为0.456::G通道均值::无修改原因
+        - 0.406 # 第409行::一致::官方参数为0.406::tyjt参数为0.406::B通道均值::无修改原因
+        std: # 第410行::一致::官方参数为[0.229, 0.224, 0.225]::tyjt参数相同::图像归一化标准差::无修改原因
+        - 0.229 # 第411行::一致::官方参数为0.229::tyjt参数为0.229::R通道标准差::无修改原因
+        - 0.224 # 第412行::一致::官方参数为0.224::tyjt参数为0.224::G通道标准差::无修改原因
+        - 0.225 # 第413行::一致::官方参数为0.225::tyjt参数为0.225::B通道标准差::无修改原因
+        type: ImageNormalize # 第414行::一致::官方参数为ImageNormalize::tyjt参数为ImageNormalize::图像归一化模块::无修改原因
+      - fixed_prob: true # 第415行::一致::官方参数为true::tyjt参数为true::是否使用固定概率::无修改原因
+        max_epoch: 6 # 第416行::一致::官方参数为6::tyjt参数为6::最大生效epoch::无修改原因
+        mode: 1 # 第417行::一致::官方参数为1::tyjt参数为1::GridMask模式::无修改原因
+        offset: false # 第418行::一致::官方参数为false::tyjt参数为false::是否使用偏移::无修改原因
+        prob: 0.0 # 第419行::一致::官方参数为0.0::tyjt参数为0.0::应用概率::无修改原因
+        ratio: 0.5 # 第420行::一致::官方参数为0.5::tyjt参数为0.5::网格比例::无修改原因
+        rotate: 1 # 第421行::一致::官方参数为1::tyjt参数为1::旋转参数::无修改原因
+        type: GridMask # 第422行::一致::官方参数为GridMask::tyjt参数为GridMask::网格掩码增强模块::无修改原因
+        use_h: true # 第423行::一致::官方参数为true::tyjt参数为true::是否使用高度方向网格::无修改原因
+        use_w: true # 第424行::一致::官方参数为true::tyjt参数为true::是否使用宽度方向网格::无修改原因
+      - type: PointShuffle # 第425行::一致::官方参数为PointShuffle::tyjt参数为PointShuffle::点云打乱模块::无修改原因
+      - classes: # 第426行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数相同::目标类别列表::无修改原因
+        - car # 第427行::一致::官方参数为car::tyjt参数为car::目标类别-轿车::无修改原因
+        - truck # 第428行::一致::官方参数为truck::tyjt参数为truck::目标类别-卡车::无修改原因
+        - construction_vehicle # 第429行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::目标类别-工程车::无修改原因
+        - bus # 第430行::一致::官方参数为bus::tyjt参数为bus::目标类别-公交车::无修改原因
+        - trailer # 第431行::一致::官方参数为trailer::tyjt参数为trailer::目标类别-拖车::无修改原因
+        - barrier # 第432行::一致::官方参数为barrier::tyjt参数为barrier::目标类别-路障::无修改原因
+        - motorcycle # 第433行::一致::官方参数为motorcycle::tyjt参数为motorcycle::目标类别-摩托车::无修改原因
+        - bicycle # 第434行::一致::官方参数为bicycle::tyjt参数为bicycle::目标类别-自行车::无修改原因
+        - pedestrian # 第435行::一致::官方参数为pedestrian::tyjt参数为pedestrian::目标类别-行人::无修改原因
+        - traffic_cone # 第436行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::目标类别-交通锥::无修改原因
+        type: DefaultFormatBundle3D # 第437行::一致::官方参数为DefaultFormatBundle3D::tyjt参数为DefaultFormatBundle3D::3D数据格式封装模块::无修改原因
+      - keys: # 第438行::不一致::官方参数为[img, points, radar, gt_bboxes_3d, gt_labels_3d]::tyjt参数为[img, points, gt_bboxes_3d, gt_labels_3d]::需要收集的数据键值::TYJT数据集无雷达数据，移除radar键
+        - img # 第439行::一致::官方参数为img::tyjt参数为img::图像数据键::无修改原因
+        - points # 第440行::一致::官方参数为points::tyjt参数为points::点云数据键::无修改原因
+        - radar # 第441行::不一致::官方参数为radar::tyjt参数移除::雷达数据键::TYJT数据集无雷达数据，移除该键
+        - gt_bboxes_3d # 第442行::一致::官方参数为gt_bboxes_3d::tyjt参数为gt_bboxes_3d::3D边界框标注键::无修改原因
+        - gt_labels_3d # 第443行::一致::官方参数为gt_labels_3d::tyjt参数为gt_labels_3d::3D标签键::无修改原因
+        meta_keys: # 第444行::一致::官方参数为[camera_intrinsics, camera2ego, lidar2ego, lidar2camera, lidar2image, camera2lidar, img_aug_matrix, lidar_aug_matrix]::tyjt参数相同::元数据键值列表::无修改原因
+        - camera_intrinsics # 第445行::一致::官方参数为camera_intrinsics::tyjt参数为camera_intrinsics::相机内参元数据::无修改原因
+        - camera2ego # 第446行::一致::官方参数为camera2ego::tyjt参数为camera2ego::相机到自车坐标变换::无修改原因
+        - lidar2ego # 第447行::一致::官方参数为lidar2ego::tyjt参数为lidar2ego::LiDAR到自车坐标变换::无修改原因
+        - lidar2camera # 第448行::一致::官方参数为lidar2camera::tyjt参数为lidar2camera::LiDAR到相机坐标变换::无修改原因
+        - lidar2image # 第449行::一致::官方参数为lidar2image::tyjt参数为lidar2image::LiDAR到图像坐标变换::无修改原因
+        - camera2lidar # 第450行::一致::官方参数为camera2lidar::tyjt参数为camera2lidar::相机到LiDAR坐标变换::无修改原因
+        - img_aug_matrix # 第451行::一致::官方参数为img_aug_matrix::tyjt参数为img_aug_matrix::图像增强矩阵::无修改原因
+        - lidar_aug_matrix # 第452行::一致::官方参数为lidar_aug_matrix::tyjt参数为lidar_aug_matrix::LiDAR增强矩阵::无修改原因
+        type: Collect3D # 第453行::一致::官方参数为Collect3D::tyjt参数为Collect3D::3D数据收集模块::无修改原因
+      - keyframe_only: true # 第454行::一致::官方参数为true::tyjt参数为true::是否只保留关键帧::无修改原因
+        type: GTDepth # 第455行::一致::官方参数为GTDepth::tyjt参数为GTDepth::深度信息加载模块::无修改原因
+      test_mode: false # 第456行::一致::官方参数为false::tyjt参数为false::测试模式开关::无修改原因
+      type: NuScenesDataset # 第457行::不一致::官方参数为NuScenesDataset::tyjt参数为CustomDataset::数据集类型::切换为适配TYJT数据集的自定义数据集类
+      use_valid_flag: true # 第458行::一致::官方参数为true::tyjt参数为true::是否使用有效标志::无修改原因
+    type: CBGSDataset # 第459行::一致::官方参数为CBGSDataset::tyjt参数为CBGSDataset::类别平衡分组数据集::无修改原因
+  val: # 第460行::一致::官方参数存在::tyjt参数存在::验证集配置::无修改原因
+    ann_file: data/nuscenes/nuscenes_infos_val.pkl # 第461行::不一致::官方参数为data/nuscenes/nuscenes_infos_val.pkl::tyjt参数为/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/tyjt_infos_val_fixed_quat.pkl::验证集标注文件路径::切换为TYJT数据集的验证集标注文件
+    box_type_3d: LiDAR # 第462行::一致::官方参数为LiDAR::tyjt参数为LiDAR::3D框坐标类型::无修改原因
+    dataset_root: data/nuscenes/ # 第463行::不一致::官方参数为data/nuscenes/::tyjt参数为/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/output/step3_1/::数据集根目录::切换为TYJT数据集的存储路径
+    map_classes: # 第464行::一致::官方参数为[drivable_area, ped_crossing, walkway, stop_line, carpark_area, divider]::tyjt参数相同::地图类别列表::无修改原因
+    - drivable_area # 第465行::一致::官方参数为drivable_area::tyjt参数为drivable_area::地图类别-可行驶区域::无修改原因
+    - ped_crossing # 第466行::一致::官方参数为ped_crossing::tyjt参数为ped_crossing::地图类别-人行横道::无修改原因
+    - walkway # 第467行::一致::官方参数为walkway::tyjt参数为walkway::地图类别-人行道::无修改原因
+    - stop_line # 第468行::一致::官方参数为stop_line::tyjt参数为stop_line::地图类别-停止线::无修改原因
+    - carpark_area # 第469行::一致::官方参数为carpark_area::tyjt参数为carpark_area::地图类别-停车场::无修改原因
+    - divider # 第470行::一致::官方参数为divider::tyjt参数为divider::地图类别-分隔带::无修改原因
+    modality: # 第471行::一致::官方参数存在::tyjt参数存在::数据模态配置::无修改原因
+      use_camera: true # 第472行::一致::官方参数为true::tyjt参数为true::是否使用相机数据::无修改原因
+      use_external: false # 第473行::一致::官方参数为false::tyjt参数为false::是否使用外部数据::无修改原因
+      use_lidar: true # 第474行::一致::官方参数为true::tyjt参数为true::是否使用LiDAR数据::无修改原因
+      use_map: false # 第475行::一致::官方参数为false::tyjt参数为false::是否使用地图数据::无修改原因
+      use_radar: false # 第476行::一致::官方参数为false::tyjt参数为false::是否使用雷达数据::无修改原因
+    object_classes: # 第477行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数相同::目标检测类别列表::无修改原因
+    - car # 第478行::一致::官方参数为car::tyjt参数为car::目标类别-轿车::无修改原因
+    - truck # 第479行::一致::官方参数为truck::tyjt参数为truck::目标类别-卡车::无修改原因
+    - construction_vehicle # 第480行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::目标类别-工程车::无修改原因
+    - bus # 第481行::一致::官方参数为bus::tyjt参数为bus::目标类别-公交车::无修改原因
+    - trailer # 第482行::一致::官方参数为trailer::tyjt参数为trailer::目标类别-拖车::无修改原因
+    - barrier # 第483行::一致::官方参数为barrier::tyjt参数为barrier::目标类别-路障::无修改原因
+    - motorcycle # 第484行::一致::官方参数为motorcycle::tyjt参数为motorcycle::目标类别-摩托车::无修改原因
+    - bicycle # 第485行::一致::官方参数为bicycle::tyjt参数为bicycle::目标类别-自行车::无修改原因
+    - pedestrian # 第486行::一致::官方参数为pedestrian::tyjt参数为pedestrian::目标类别-行人::无修改原因
+    - traffic_cone # 第487行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::目标类别-交通锥::无修改原因
+    pipeline: # 第488行::一致::官方参数存在::tyjt参数存在::数据处理流水线::无修改原因
+    - to_float32: true # 第489行::一致::官方参数为true::tyjt参数为true::是否将图像数据转换为float32类型::无修改原因
+      type: LoadMultiViewImageFromFiles # 第490行::一致::官方参数为LoadMultiViewImageFromFiles::tyjt参数为LoadMultiViewImageFromFiles::数据加载类型，加载多视角图像::无修改原因
+    - coord_type: LIDAR # 第491行::一致::官方参数为LIDAR::tyjt参数为LIDAR::坐标系统类型::无修改原因
+      load_augmented: null # 第492行::一致::官方参数为null::tyjt参数为null::是否加载增强后的数据::无修改原因
+      load_dim: 5 # 第493行::不一致::官方参数为5::tyjt参数为6::点云数据加载维度::TYJT数据集点云为6维，调整加载维度适配数据
+      reduce_beams: 32 # 第494行::一致::官方参数为32::tyjt参数为32::LiDAR光束数量缩减目标::无修改原因
+      type: LoadPointsFromFile # 第495行::一致::官方参数为LoadPointsFromFile::tyjt参数为LoadPointsFromFile::数据加载类型，加载点云文件::无修改原因
+      use_dim: 5 # 第496行::不一致::官方参数为5::tyjt参数为[0,1,2,3,4]::点云数据使用维度::根据TYJT数据集点云特征，指定使用的维度索引
+    - load_augmented: null # 第497行::一致::官方参数为null::tyjt参数为null::是否加载增强后的多帧点云数据::无修改原因
+      load_dim: 5 # 第498行::不一致::官方参数为5::tyjt参数为6::多帧点云数据加载维度::适配TYJT数据集6维多帧点云数据
+      pad_empty_sweeps: true # 第499行::一致::官方参数为true::tyjt参数为true::是否为空白帧填充点云::无修改原因
+      reduce_beams: 32 # 第500行::一致::官方参数为32::tyjt参数为32::多帧LiDAR光束数量缩减目标::无修改原因
+      remove_close: true # 第501行::一致::官方参数为true::tyjt参数为true::是否移除近距离点云::无修改原因
+      sweeps_num: 9 # 第502行::不一致::官方参数为9::tyjt参数为0::加载的多帧点云数量::TYJT数据集无多帧点云，设置为0
+      type: LoadPointsFromMultiSweeps # 第503行::一致::官方参数为LoadPointsFromMultiSweeps::tyjt参数为LoadPointsFromMultiSweeps::多帧点云加载模块::无修改原因
+      use_dim: 5 # 第504行::不一致::官方参数为5::tyjt参数为[0,1,2,3,4]::多帧点云使用维度::指定TYJT数据集多帧点云的使用维度索引
+    - compensate_velocity: true # 第505行::一致::官方参数为true::tyjt参数为true::是否补偿雷达速度数据::无修改原因
+      filtering: none # 第506行::一致::官方参数为none::tyjt参数为none::雷达数据过滤方式::无修改原因
+      load_dim: 18 # 第507行::一致::官方参数为18::tyjt参数为18::雷达数据加载维度::无修改原因
+      max_num: 2500 # 第508行::一致::官方参数为2500::tyjt参数为2500::雷达点云最大数量::无修改原因
+      normalize: false # 第509行::一致::官方参数为false::tyjt参数为false::是否归一化雷达数据::无修改原因
+      sweeps_num: 6 # 第510行::不一致::官方参数为6::tyjt参数为0::加载的雷达多帧数量::TYJT数据集无雷达数据，设置为0
+      type: LoadRadarPointsMultiSweeps # 第511行::不一致::官方参数为LoadRadarPointsMultiSweeps::tyjt参数移除::雷达数据加载模块::TYJT数据集无雷达数据，移除该模块
+      use_dim: # 第512行::一致::官方参数为[0,1,2,5,8,9,18-56]::tyjt参数移除::雷达数据使用维度::随雷达加载模块一同移除
+      - 0 # 第513行::一致::官方参数为0::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 1 # 第514行::一致::官方参数为1::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 2 # 第515行::一致::官方参数为2::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 5 # 第516行::一致::官方参数为5::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 8 # 第517行::一致::官方参数为8::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 9 # 第518行::一致::官方参数为9::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 18 # 第519行::一致::官方参数为18::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 19 # 第520行::一致::官方参数为19::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 20 # 第521行::一致::官方参数为20::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 21 # 第522行::一致::官方参数为21::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 22 # 第523行::一致::官方参数为22::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 23 # 第524行::一致::官方参数为23::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 24 # 第525行::一致::官方参数为24::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 25 # 第526行::一致::官方参数为25::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 26 # 第527行::一致::官方参数为26::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 27 # 第528行::一致::官方参数为27::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 28 # 第529行::一致::官方参数为28::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 29 # 第530行::一致::官方参数为29::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 30 # 第531行::一致::官方参数为30::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 31 # 第532行::一致::官方参数为31::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 32 # 第533行::一致::官方参数为32::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 33 # 第534行::一致::官方参数为33::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 34 # 第535行::一致::官方参数为34::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 35 # 第536行::一致::官方参数为35::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 36 # 第537行::一致::官方参数为36::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 37 # 第538行::一致::官方参数为37::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 38 # 第539行::一致::官方参数为38::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 39 # 第540行::一致::官方参数为39::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 40 # 第541行::一致::官方参数为40::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 41 # 第542行::一致::官方参数为41::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 42 # 第543行::一致::官方参数为42::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 43 # 第544行::一致::官方参数为43::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 44 # 第545行::一致::官方参数为44::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 45 # 第546行::一致::官方参数为45::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 46 # 第547行::一致::官方参数为46::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 47 # 第548行::一致::官方参数为47::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 48 # 第549行::一致::官方参数为48::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 49 # 第550行::一致::官方参数为49::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 50 # 第551行::一致::官方参数为50::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 51 # 第552行::一致::官方参数为51::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 52 # 第553行::一致::官方参数为52::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 53 # 第554行::一致::官方参数为53::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 54 # 第555行::一致::官方参数为54::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 55 # 第556行::一致::官方参数为55::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+      - 56 # 第557行::一致::官方参数为56::tyjt参数移除::雷达数据维度索引::随雷达加载模块一同移除
+    - type: LoadAnnotations3D # 第558行::一致::官方参数为LoadAnnotations3D::tyjt参数为LoadAnnotations3D::3D标注加载模块::无修改原因
+      with_attr_label: false # 第559行::一致::官方参数为false::tyjt参数为false::是否加载属性标签::无修改原因
+      with_bbox_3d: true # 第560行::一致::官方参数为true::tyjt参数为true::是否加载3D边界框::无修改原因
+      with_label_3d: true # 第561行::一致::官方参数为true::tyjt参数为true::是否加载3D标签::无修改原因
+    - bot_pct_lim: # 第562行::一致::官方参数为[0.0, 0.0]::tyjt参数为[0.0, 0.0]::图像底部裁剪比例范围::无修改原因
+      - 0.0 # 第563行::一致::官方参数为0.0::tyjt参数为0.0::底部最小裁剪比例::无修改原因
+      - 0.0 # 第564行::一致::官方参数为0.0::tyjt参数为0.0::底部最大裁剪比例::无修改原因
+      final_dim: # 第565行::一致::官方参数为[256, 704]::tyjt参数为[256, 704]::图像最终尺寸::无修改原因
+      - 256 # 第566行::一致::官方参数为256::tyjt参数为256::图像最终高度::无修改原因
+      - 704 # 第567行::一致::官方参数为704::tyjt参数为704::图像最终宽度::无修改原因
+      is_train: false # 第568行::一致::官方参数为false::tyjt参数为false::是否为训练模式::无修改原因
+      rand_flip: false # 第569行::一致::官方参数为false::tyjt参数为false::是否随机翻转图像::无修改原因
+      resize_lim: # 第570行::不一致::官方参数为[0.48, 0.48]::tyjt参数为[0.9, 0.9]::图像缩放范围::适配TYJT数据集图像尺寸
+      - 0.48 # 第571行::不一致::官方参数为0.48::tyjt参数为0.9::最小缩放比例::适配TYJT数据集图像尺寸
+      - 0.48 # 第572行::不一致::官方参数为0.48::tyjt参数为0.9::最大缩放比例::适配TYJT数据集图像尺寸
+      rot_lim: # 第573行::一致::官方参数为[0.0, 0.0]::tyjt参数为[0.0, 0.0]::图像旋转角度范围::无修改原因
+      - 0.0 # 第574行::一致::官方参数为0.0::tyjt参数为0.0::最小旋转角度::无修改原因
+      - 0.0 # 第575行::一致::官方参数为0.0::tyjt参数为0.0::最大旋转角度::无修改原因
+      type: ImageAug3D # 第576行::一致::官方参数为ImageAug3D::tyjt参数为ImageAug3D::3D图像增强模块::无修改原因
+    - is_train: false # 第577行::一致::官方参数为false::tyjt参数为false::是否为训练模式::无修改原因
+      resize_lim: # 第578行::一致::官方参数为[1.0, 1.0]::tyjt参数为[1.0, 1.0]::全局缩放范围::无修改原因
+      - 1.0 # 第579行::一致::官方参数为1.0::tyjt参数为1.0::最小全局缩放比例::无修改原因
+      - 1.0 # 第580行::一致::官方参数为1.0::tyjt参数为1.0::最大全局缩放比例::无修改原因
+      rot_lim: # 第581行::一致::官方参数为[0.0, 0.0]::tyjt参数为[0.0, 0.0]::全局旋转角度范围::无修改原因
+      - 0.0 # 第582行::一致::官方参数为0.0::tyjt参数为0.0::最小全局旋转角度::无修改原因
+      - 0.0 # 第583行::一致::官方参数为0.0::tyjt参数为0.0::最大全局旋转角度::无修改原因
+      trans_lim: 0.0 # 第584行::一致::官方参数为0.0::tyjt参数为0.0::全局平移范围::无修改原因
+      type: GlobalRotScaleTrans # 第585行::一致::官方参数为GlobalRotScaleTrans::tyjt参数为GlobalRotScaleTrans::全局旋转缩放平移模块::无修改原因
+    - point_cloud_range: # 第586行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数相同::点云范围过滤配置::无修改原因
+      - -54.0 # 第587行::一致::官方参数为-54.0::tyjt参数为-54.0::点云X轴最小范围::无修改原因
+      - -54.0 # 第588行::一致::官方参数为-54.0::tyjt参数为-54.0::点云Y轴最小范围::无修改原因
+      - -5.0 # 第589行::一致::官方参数为-5.0::tyjt参数为-5.0::点云Z轴最小范围::无修改原因
+      - 54.0 # 第590行::一致::官方参数为54.0::tyjt参数为54.0::点云X轴最大范围::无修改原因
+      - 54.0 # 第591行::一致::官方参数为54.0::tyjt参数为54.0::点云Y轴最大范围::无修改原因
+      - 3.0 # 第592行::一致::官方参数为3.0::tyjt参数为3.0::点云Z轴最大范围::无修改原因
+      type: PointsRangeFilter # 第593行::一致::官方参数为PointsRangeFilter::tyjt参数为PointsRangeFilter::点云范围过滤模块::无修改原因
+    - mean: # 第594行::一致::官方参数为[0.485, 0.456, 0.406]::tyjt参数相同::图像归一化均值::无修改原因
+      - 0.485 # 第595行::一致::官方参数为0.485::tyjt参数为0.485::R通道均值::无修改原因
+      - 0.456 # 第596行::一致::官方参数为0.456::tyjt参数为0.456::G通道均值::无修改原因
+      - 0.406 # 第597行::一致::官方参数为0.406::tyjt参数为0.406::B通道均值::无修改原因
+      std: # 第598行::一致::官方参数为[0.229, 0.224, 0.225]::tyjt参数相同::图像归一化标准差::无修改原因
+      - 0.229 # 第599行::一致::官方参数为0.229::tyjt参数为0.229::R通道标准差::无修改原因
+      - 0.224 # 第600行::一致::官方参数为0.224::tyjt参数为0.224::G通道标准差::无修改原因
+      - 0.224 # 第600行::一致::官方参数为0.224::tyjt参数为0.224::G通道标准差::无修改原因
+      - 0.225 # 第601行::一致::官方参数为0.225::tyjt参数为0.225::B通道标准差::无修改原因
+      type: ImageNormalize # 第602行::一致::官方参数为ImageNormalize::tyjt参数为ImageNormalize::图像归一化模块::无修改原因
+    - classes: # 第603行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数相同::目标类别列表::无修改原因
+      - car # 第604行::一致::官方参数为car::tyjt参数为car::目标类别-轿车::无修改原因
+      - truck # 第605行::一致::官方参数为truck::tyjt参数为truck::目标类别-卡车::无修改原因
+      - construction_vehicle # 第606行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::目标类别-工程车::无修改原因
+      - bus # 第607行::一致::官方参数为bus::tyjt参数为bus::目标类别-公交车::无修改原因
+      - trailer # 第608行::一致::官方参数为trailer::tyjt参数为trailer::目标类别-拖车::无修改原因
+      - barrier # 第609行::一致::官方参数为barrier::tyjt参数为barrier::目标类别-路障::无修改原因
+      - motorcycle # 第610行::一致::官方参数为motorcycle::tyjt参数为motorcycle::目标类别-摩托车::无修改原因
+      - bicycle # 第611行::一致::官方参数为bicycle::tyjt参数为bicycle::目标类别-自行车::无修改原因
+      - pedestrian # 第612行::一致::官方参数为pedestrian::tyjt参数为pedestrian::目标类别-行人::无修改原因
+      - traffic_cone # 第613行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::目标类别-交通锥::无修改原因
+      type: DefaultFormatBundle3D # 第614行::一致::官方参数为DefaultFormatBundle3D::tyjt参数为DefaultFormatBundle3D::3D数据格式封装模块::无修改原因
+    - keys: # 第615行::不一致::官方参数为[img, points, radar, gt_bboxes_3d, gt_labels_3d]::tyjt参数为[img, points, gt_bboxes_3d, gt_labels_3d]::需要收集的数据键值::TYJT数据集无雷达数据，移除radar键
+      - img # 第616行::一致::官方参数为img::tyjt参数为img::图像数据键::无修改原因
+      - points # 第617行::一致::官方参数为points::tyjt参数为points::点云数据键::无修改原因
+      - radar # 第618行::不一致::官方参数为radar::tyjt参数移除::雷达数据键::TYJT数据集无雷达数据，移除该键
+      - gt_bboxes_3d # 第619行::一致::官方参数为gt_bboxes_3d::tyjt参数为gt_bboxes_3d::3D边界框标注键::无修改原因
+      - gt_labels_3d # 第620行::一致::官方参数为gt_labels_3d::tyjt参数为gt_labels_3d::3D标签键::无修改原因
+      meta_keys: # 第621行::一致::官方参数为[camera_intrinsics, camera2ego, lidar2ego, lidar2camera, lidar2image, camera2lidar, img_aug_matrix, lidar_aug_matrix]::tyjt参数相同::元数据键值列表::无修改原因
+      - camera_intrinsics # 第622行::一致::官方参数为camera_intrinsics::tyjt参数为camera_intrinsics::相机内参元数据::无修改原因
+      - camera2ego # 第623行::一致::官方参数为camera2ego::tyjt参数为camera2ego::相机到自车坐标变换::无修改原因
+      - lidar2ego # 第624行::一致::官方参数为lidar2ego::tyjt参数为lidar2ego::LiDAR到自车坐标变换::无修改原因
+      - lidar2camera # 第625行::一致::官方参数为lidar2camera::tyjt参数为lidar2camera::LiDAR到相机坐标变换::无修改原因
+      - lidar2image # 第626行::一致::官方参数为lidar2image::tyjt参数为lidar2image::LiDAR到图像坐标变换::无修改原因
+      - camera2lidar # 第627行::一致::官方参数为camera2lidar::tyjt参数为camera2lidar::相机到LiDAR坐标变换::无修改原因
+      - img_aug_matrix # 第628行::一致::官方参数为img_aug_matrix::tyjt参数为img_aug_matrix::图像增强矩阵::无修改原因
+      - lidar_aug_matrix # 第629行::一致::官方参数为lidar_aug_matrix::tyjt参数为lidar_aug_matrix::LiDAR增强矩阵::无修改原因
+      type: Collect3D # 第630行::一致::官方参数为Collect3D::tyjt参数为Collect3D::3D数据收集模块::无修改原因
+    - keyframe_only: true # 第631行::一致::官方参数为true::tyjt参数为true::是否只保留关键帧::无修改原因
+      type: GTDepth # 第632行::一致::官方参数为GTDepth::tyjt参数为GTDepth::深度信息加载模块::无修改原因
+    test_mode: false # 第633行::一致::官方参数为false::tyjt参数为false::测试模式开关::无修改原因
+    type: NuScenesDataset # 第634行::不一致::官方参数为NuScenesDataset::tyjt参数为CustomDataset::数据集类型::切换为适配TYJT数据集的自定义数据集类
+    use_valid_flag: true # 第635行::一致::官方参数为true::tyjt参数为true::是否使用有效标志::无修改原因
+  model: # 第636行::一致::官方参数存在::tyjt参数存在::模型配置::无修改原因
+    backbone: # 第637行::一致::官方参数存在::tyjt参数存在::骨干网络配置::无修改原因
+      dcn_v2: true # 第638行::一致::官方参数为true::tyjt参数为true::是否使用DCN v2版本::无修改原因
+      depth: 101 # 第639行::一致::官方参数为101::tyjt参数为101::ResNet深度::无修改原因
+      groups: 1 # 第640行::一致::官方参数为1::tyjt参数为1::分组卷积组数::无修改原因
+      in_channels: 3 # 第641行::一致::官方参数为3::tyjt参数为3::输入通道数::无修改原因
+      norm_cfg: # 第642行::一致::官方参数存在::tyjt参数存在::归一化配置::无修改原因
+        requires_grad: true # 第643行::一致::官方参数为true::tyjt参数为true::是否对归一化参数求梯度::无修改原因
+        type: SyncBN # 第644行::一致::官方参数为SyncBN::tyjt参数为SyncBN::归一化类型::无修改原因
+      num_stages: 4 # 第645行::一致::官方参数为4::tyjt参数为4::网络阶段数::无修改原因
+      out_indices: # 第646行::一致::官方参数为[0, 1, 2, 3]::tyjt参数相同::输出特征层索引::无修改原因
+      - 0 # 第647行::一致::官方参数为0::tyjt参数为0::输出特征层索引0::无修改原因
+      - 1 # 第648行::一致::官方参数为1::tyjt参数为1::输出特征层索引1::无修改原因
+      - 2 # 第649行::一致::官方参数为2::tyjt参数为2::输出特征层索引2::无修改原因
+      - 3 # 第650行::一致::官方参数为3::tyjt参数为3::输出特征层索引3::无修改原因
+      style: pytorch # 第651行::一致::官方参数为pytorch::tyjt参数为pytorch::网络风格::无修改原因
+      type: ResNet # 第652行::一致::官方参数为ResNet::tyjt参数为ResNet::骨干网络类型::无修改原因
+      weights: torchvision://resnet101 # 第653行::一致::官方参数为torchvision://resnet101::tyjt参数为torchvision://resnet101::预训练权重路径::无修改原因
+    bbox_head: # 第654行::一致::官方参数存在::tyjt参数存在::边界框头配置::无修改原因
+      bn_momentum: 0.1 # 第655行::一致::官方参数为0.1::tyjt参数为0.1::BN层动量::无修改原因
+      code_weights: # 第656行::一致::官方参数为[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2]::tyjt参数相同::编码权重::无修改原因
+      - 1.0 # 第657行::一致::官方参数为1.0::tyjt参数为1.0::编码权重0::无修改原因
+      - 1.0 # 第658行::一致::官方参数为1.0::tyjt参数为1.0::编码权重1::无修改原因
+      - 1.0 # 第659行::一致::官方参数为1.0::tyjt参数为1.0::编码权重2::无修改原因
+      - 1.0 # 第660行::一致::官方参数为1.0::tyjt参数为1.0::编码权重3::无修改原因
+      - 1.0 # 第661行::一致::官方参数为1.0::tyjt参数为1.0::编码权重4::无修改原因
+      - 1.0 # 第662行::一致::官方参数为1.0::tyjt参数为1.0::编码权重5::无修改原因
+      - 1.0 # 第663行::一致::官方参数为1.0::tyjt参数为1.0::编码权重6::无修改原因
+      - 1.0 # 第664行::一致::官方参数为1.0::tyjt参数为1.0::编码权重7::无修改原因
+      - 0.2 # 第665行::一致::官方参数为0.2::tyjt参数为0.2::编码权重8::无修改原因
+      - 0.2 # 第666行::一致::官方参数为0.2::tyjt参数为0.2::编码权重9::无修改原因
+      common_heads: # 第667行::一致::官方参数为{reg: 9, height: 1, dim: 3, rot: 2, vel: 2}::tyjt参数相同::通用预测头::无修改原因
+        dim: 3 # 第668行::一致::官方参数为3::tyjt参数为3::尺寸预测维度::无修改原因
+        height: 1 # 第669行::一致::官方参数为1::tyjt参数为1::高度预测维度::无修改原因
+        reg: 9 # 第670行::一致::官方参数为9::tyjt参数为9::回归预测维度::无修改原因
+        rot: 2 # 第671行::一致::官方参数为2::tyjt参数为2::旋转预测维度::无修改原因
+        vel: 2 # 第672行::一致::官方参数为2::tyjt参数为2::速度预测维度::无修改原因
+      conv_cfg: None # 第673行::一致::官方参数为None::tyjt参数为None::卷积配置::无修改原因
+      down_ratio: 8 # 第674行::一致::官方参数为8::tyjt参数为8::下采样比例::无修改原因
+      focal_loss: true # 第675行::一致::官方参数为true::tyjt参数为true::是否使用Focal Loss::无修改原因
+      in_channels: 512 # 第676行::一致::官方参数为512::tyjt参数为512::输入通道数::无修改原因
+      loss_cls: # 第677行::一致::官方参数存在::tyjt参数存在::分类损失配置::无修改原因
+        alpha: 0.25 # 第678行::一致::官方参数为0.25::tyjt参数为0.25::Focal Loss alpha值::无修改原因
+        gamma: 2.0 # 第679行::一致::官方参数为2.0::tyjt参数为2.0::Focal Loss gamma值::无修改原因
+        loss_weight: 1.0 # 第680行::一致::官方参数为1.0::tyjt参数为1.0::分类损失权重::无修改原因
+        type: FocalLoss # 第681行::一致::官方参数为FocalLoss::tyjt参数为FocalLoss::分类损失类型::无修改原因
+      loss_dim: # 第682行::一致::官方参数存在::tyjt参数存在::尺寸损失配置::无修改原因
+        loss_weight: 1.0 # 第683行::一致::官方参数为1.0::tyjt参数为1.0::尺寸损失权重::无修改原因
+        type: L1Loss # 第684行::一致::官方参数为L1Loss::tyjt参数为L1Loss::尺寸损失类型::无修改原因
+      loss_height: # 第685行::一致::官方参数存在::tyjt参数存在::高度损失配置::无修改原因
+        loss_weight: 1.0 # 第686行::一致::官方参数为1.0::tyjt参数为1.0::高度损失权重::无修改原因
+        type: L1Loss # 第687行::一致::官方参数为L1Loss::tyjt参数为L1Loss::高度损失类型::无修改原因
+      loss_rot: # 第688行::一致::官方参数存在::tyjt参数存在::旋转损失配置::无修改原因
+        loss_weight: 1.0 # 第689行::一致::官方参数为1.0::tyjt参数为1.0::旋转损失权重::无修改原因
+        type: SineCosineLoss # 第690行::一致::官方参数为SineCosineLoss::tyjt参数为SineCosineLoss::旋转损失类型::无修改原因
+      loss_vel: # 第691行::一致::官方参数存在::tyjt参数存在::速度损失配置::无修改原因
+        loss_weight: 1.0 # 第692行::一致::官方参数为1.0::tyjt参数为1.0::速度损失权重::无修改原因
+        type: L1Loss # 第693行::一致::官方参数为L1Loss::tyjt参数为L1Loss::速度损失类型::无修改原因
+      loss_reg: # 第694行::一致::官方参数存在::tyjt参数存在::回归损失配置::无修改原因
+        loss_weight: 1.0 # 第695行::一致::官方参数为1.0::tyjt参数为1.0::回归损失权重::无修改原因
+        type: L1Loss # 第696行::一致::官方参数为L1Loss::tyjt参数为L1Loss::回归损失类型::无修改原因
+      norm_cfg: # 第697行::一致::官方参数存在::tyjt参数存在::归一化配置::无修改原因
+        requires_grad: true # 第698行::一致::官方参数为true::tyjt参数为true::是否对归一化参数求梯度::无修改原因
+        type: SyncBN # 第699行::一致::官方参数为SyncBN::tyjt参数为SyncBN::归一化类型::无修改原因
+      num_classes: 10 # 第700行::一致::官方参数为10::tyjt参数为10::目标类别数量::无修改原因
+      num_dir_bins: 1 # 第701行::一致::官方参数为1::tyjt参数为1::方向 bins 数量::无修改原因
+      num_heads: 1 # 第702行::一致::官方参数为1::tyjt参数为1::预测头数量::无修改原因
+      point_cloud_range: # 第703行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数相同::点云范围::无修改原因
+      - -54.0 # 第704行::一致::官方参数为-54.0::tyjt参数为-54.0::点云X轴最小范围::无修改原因
+      - -54.0 # 第705行::一致::官方参数为-54.0::tyjt参数为-54.0::点云Y轴最小范围::无修改原因
+      - -5.0 # 第706行::一致::官方参数为-5.0::tyjt参数为-5.0::点云Z轴最小范围::无修改原因
+      - 54.0 # 第707行::一致::官方参数为54.0::tyjt参数为54.0::点云X轴最大范围::无修改原因
+      - 54.0 # 第708行::一致::官方参数为54.0::tyjt参数为54.0::点云Y轴最大范围::无修改原因
+      - 3.0 # 第709行::一致::官方参数为3.0::tyjt参数为3.0::点云Z轴最大范围::无修改原因
+      reg_iou: false # 第710行::一致::官方参数为false::tyjt参数为false::是否回归 IoU::无修改原因
+      reg_center: true # 第711行::一致::官方参数为true::tyjt参数为true::是否回归中心坐标::无修改原因
+      target_assigner: # 第712行::一致::官方参数存在::tyjt参数存在::目标分配器配置::无修改原因
+        anchor_generator: # 第713行::一致::官方参数存在::tyjt参数存在::锚点生成器配置::无修改原因
+          anchor_sizes: # 第714行::一致::官方参数为[[3.9, 1.6, 1.56], [2.5, 1.6, 1.56], [1.6, 0.6, 1.73], [0.6, 0.8, 1.73], [0.6, 0.6, 0.8], [0.4, 0.4, 0.5]]::tyjt参数相同::锚点尺寸::无修改原因
+          - - 3.9 # 第715行::一致::官方参数为3.9::tyjt参数为3.9::锚点尺寸0-长度::无修改原因
+            - 1.6 # 第716行::一致::官方参数为1.6::tyjt参数为1.6::锚点尺寸0-宽度::无修改原因
+            - 1.56 # 第717行::一致::官方参数为1.56::tyjt参数为1.56::锚点尺寸0-高度::无修改原因
+          - - 2.5 # 第718行::一致::官方参数为2.5::tyjt参数为2.5::锚点尺寸1-长度::无修改原因
+            - 1.6 # 第719行::一致::官方参数为1.6::tyjt参数为1.6::锚点尺寸1-宽度::无修改原因
+            - 1.56 # 第720行::一致::官方参数为1.56::tyjt参数为1.56::锚点尺寸1-高度::无修改原因
+          - - 1.6 # 第721行::一致::官方参数为1.6::tyjt参数为1.6::锚点尺寸2-长度::无修改原因
+            - 0.6 # 第722行::一致::官方参数为0.6::tyjt参数为0.6::锚点尺寸2-宽度::无修改原因
+            - 1.73 # 第723行::一致::官方参数为1.73::tyjt参数为1.73::锚点尺寸2-高度::无修改原因
+          - - 0.6 # 第724行::一致::官方参数为0.6::tyjt参数为0.6::锚点尺寸3-长度::无修改原因
+            - 0.8 # 第725行::一致::官方参数为0.8::tyjt参数为0.8::锚点尺寸3-宽度::无修改原因
+            - 1.73 # 第726行::一致::官方参数为1.73::tyjt参数为1.73::锚点尺寸3-高度::无修改原因
+          - - 0.6 # 第727行::一致::官方参数为0.6::tyjt参数为0.6::锚点尺寸4-长度::无修改原因
+            - 0.6 # 第728行::一致::官方参数为0.6::tyjt参数为0.6::锚点尺寸4-宽度::无修改原因
+            - 0.8 # 第729行::一致::官方参数为0.8::tyjt参数为0.8::锚点尺寸4-高度::无修改原因
+          - - 0.4 # 第730行::一致::官方参数为0.4::tyjt参数为0.4::锚点尺寸5-长度::无修改原因
+            - 0.4 # 第731行::一致::官方参数为0.4::tyjt参数为0.4::锚点尺寸5-宽度::无修改原因
+            - 0.5 # 第732行::一致::官方参数为0.5::tyjt参数为0.5::锚点尺寸5-高度::无修改原因
+          anchor_strides: # 第733行::一致::官方参数为[[8, 8], [8, 8], [8, 8], [8, 8], [8, 8], [8, 8]]::tyjt参数相同::锚点步长::无修改原因
+          - - 8 # 第734行::一致::官方参数为8::tyjt参数为8::锚点步长0-X方向::无修改原因
+            - 8 # 第735行::一致::官方参数为8::tyjt参数为8::锚点步长0-Y方向::无修改原因
+          - - 8 # 第736行::一致::官方参数为8::tyjt参数为8::锚点步长1-X方向::无修改原因
+            - 8 # 第737行::一致::官方参数为8::tyjt参数为8::锚点步长1-Y方向::无修改原因
+          - - 8 # 第738行::一致::官方参数为8::tyjt参数为8::锚点步长2-X方向::无修改原因
+            - 8 # 第739行::一致::官方参数为8::tyjt参数为8::锚点步长2-Y方向::无修改原因
+          - - 8 # 第740行::一致::官方参数为8::tyjt参数为8::锚点步长3-X方向::无修改原因
+            - 8 # 第741行::一致::官方参数为8::tyjt参数为8::锚点步长3-Y方向::无修改原因
+          - - 8 # 第742行::一致::官方参数为8::tyjt参数为8::锚点步长4-X方向::无修改原因
+            - 8 # 第743行::一致::官方参数为8::tyjt参数为8::锚点步长4-Y方向::无修改原因
+          - - 8 # 第744行::一致::官方参数为8::tyjt参数为8::锚点步长5-X方向::无修改原因
+            - 8 # 第745行::一致::官方参数为8::tyjt参数为8::锚点步长5-Y方向::无修改原因
+          class_name: # 第746行::一致::官方参数为[car, truck, bus, trailer, construction_vehicle, pedestrian, motorcycle, bicycle, traffic_cone, barrier]::tyjt参数相同::类别名称::无修改原因
+          - car # 第747行::一致::官方参数为car::tyjt参数为car::类别名称-轿车::无修改原因
+          - truck # 第748行::一致::官方参数为truck::tyjt参数为truck::类别名称-卡车::无修改原因
+          - bus # 第749行::一致::官方参数为bus::tyjt参数为bus::类别名称-公交车::无修改原因
+          - trailer # 第750行::一致::官方参数为trailer::tyjt参数为trailer::类别名称-拖车::无修改原因
+          - construction_vehicle # 第751行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::类别名称-工程车::无修改原因
+          - pedestrian # 第752行::一致::官方参数为pedestrian::tyjt参数为pedestrian::类别名称-行人::无修改原因
+          - motorcycle # 第753行::一致::官方参数为motorcycle::tyjt参数为motorcycle::类别名称-摩托车::无修改原因
+          - bicycle # 第754行::一致::官方参数为bicycle::tyjt参数为bicycle::类别名称-自行车::无修改原因
+          - traffic_cone # 第755行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::类别名称-交通锥::无修改原因
+          - barrier # 第756行::一致::官方参数为barrier::tyjt参数为barrier::类别名称-路障::无修改原因
+          type: Anchor3DRangeGenerator # 第757行::一致::官方参数为Anchor3DRangeGenerator::tyjt参数为Anchor3DRangeGenerator::锚点生成器类型::无修改原因
+        assign_metric: iou # 第758行::一致::官方参数为iou::tyjt参数为iou::分配 metric::无修改原因
+        assigner_type: max_iou_assigner # 第759行::一致::官方参数为max_iou_assigner::tyjt参数为max_iou_assigner::分配器类型::无修改原因
+        iou_calculator: # 第760行::一致::官方参数存在::tyjt参数存在::IoU计算器配置::无修改原因
+          type: BboxOverlaps3D # 第761行::一致::官方参数为BboxOverlaps3D::tyjt参数为BboxOverlaps3D::IoU计算器类型::无修改原因
+        match_height: false # 第762行::一致::官方参数为false::tyjt参数为false::是否匹配高度::无修改原因
+        neg_iou_thr: 0.35 # 第763行::一致::官方参数为0.35::tyjt参数为0.35::负样本 IoU 阈值::无修改原因
+        pos_iou_thr: 0.6 # 第764行::一致::官方参数为0.6::tyjt参数为0.6::正样本 IoU 阈值::无修改原因
+      type: Anchor3DHead # 第765行::一致::官方参数为Anchor3DHead::tyjt参数为Anchor3DHead::3D 锚点头类型::无修改原因
+      use_direction_classifier: true # 第766行::一致::官方参数为true::tyjt参数为true::是否使用方向分类器::无修改原因
+      use_multihead: false # 第767行::一致::官方参数为false::tyjt参数为false::是否使用多头::无修改原因
+    bbox_sync: true # 第768行::一致::官方参数为true::tyjt参数为true::是否同步边界框::无修改原因
+    bridge: # 第769行::一致::官方参数存在::tyjt参数存在::桥接模块配置::无修改原因
+      in_channels: # 第770行::一致::官方参数为[256, 512, 1024, 2048]::tyjt参数相同::输入通道数::无修改原因
+      - 256 # 第771行::一致::官方参数为256::tyjt参数为256::输入通道0::无修改原因
+      - 512 # 第772行::一致::官方参数为512::tyjt参数为512::输入通道1::无修改原因
+      - 1024 # 第773行::一致::官方参数为1024::tyjt参数为1024::输入通道2::无修改原因
+      - 2048 # 第774行::一致::官方参数为2048::tyjt参数为2048::输入通道3::无修改原因
+      out_channels: 256 # 第775行::一致::官方参数为256::tyjt参数为256::输出通道数::无修改原因
+      type: SimpleBridge # 第776行::一致::官方参数为SimpleBridge::tyjt参数为SimpleBridge::桥接模块类型::无修改原因
+    camera_stream: # 第777行::一致::官方参数存在::tyjt参数存在::相机流配置::无修改原因
+      backbone: # 第778行::一致::官方参数存在::tyjt参数存在::相机流骨干网络配置::无修改原因
+        dcn_v2: true # 第779行::一致::官方参数为true::tyjt参数为true::是否使用 DCN v2::无修改原因
+        depth: 101 # 第780行::一致::官方参数为101::tyjt参数为101::ResNet 深度::无修改原因
+        groups: 1 # 第781行::一致::官方参数为1::tyjt参数为1::分组卷积组数::无修改原因
+        in_channels: 3 # 第782行::一致::官方参数为3::tyjt参数为3::输入通道数::无修改原因
+        norm_cfg: # 第783行::一致::官方参数存在::tyjt参数存在::归一化配置::无修改原因
+          requires_grad: true # 第784行::一致::官方参数为true::tyjt参数为true::是否对归一化参数求梯度::无修改原因
+          type: SyncBN # 第785行::一致::官方参数为SyncBN::tyjt参数为SyncBN::归一化类型::无修改原因
+        num_stages: 4 # 第786行::一致::官方参数为4::tyjt参数为4::网络阶段数::无修改原因
+        out_indices: # 第787行::一致::官方参数为[0, 1, 2, 3]::tyjt参数相同::输出特征层索引::无修改原因
+        - 0 # 第788行::一致::官方参数为0::tyjt参数为0::输出特征层索引0::无修改原因
+        - 1 # 第789行::一致::官方参数为1::tyjt参数为1::输出特征层索引1::无修改原因
+        - 2 # 第790行::一致::官方参数为2::tyjt参数为2::输出特征层索引2::无修改原因
+        - 3 # 第791行::一致::官方参数为3::tyjt参数为3::输出特征层索引3::无修改原因
+        style: pytorch # 第792行::一致::官方参数为pytorch::tyjt参数为pytorch::网络风格::无修改原因
+        type: ResNet # 第793行::一致::官方参数为ResNet::tyjt参数为ResNet::骨干网络类型::无修改原因
+        weights: torchvision://resnet101 # 第794行::一致::官方参数为torchvision://resnet101::tyjt参数为torchvision://resnet101::预训练权重路径::无修改原因
+      neck: # 第795行::一致::官方参数存在::tyjt参数存在::相机流颈部网络配置::无修改原因
+        act_cfg: # 第796行::一致::官方参数存在::tyjt参数存在::激活函数配置::无修改原因
+          inplace: true # 第797行::一致::官方参数为true::tyjt参数为true::是否原地操作::无修改原因
+          type: ReLU # 第798行::一致::官方参数为ReLU::tyjt参数为ReLU::激活函数类型::无修改原因
+        num_outs: 4 # 第799行::一致::官方参数为4::tyjt参数为4::输出数量::无修改原因
+        out_channels: 256 # 第800行::一致::官方参数为256::tyjt参数为256::输出通道数::无修改原因
+                type: FPN # 第801行::一致::官方参数为FPN::tyjt参数为FPN::颈部颈部网络类型::无修改原因
+        upsample_cfg: # 第802行::一致::官方参数存在::tyjt参数存在::上采样配置::无修改原因
+          mode: bilinear # 第803行::一致::官方参数为bilinear::tyjt参数为bilinear::上采样模式::无修改原因
+          size_divisor: 32 # 第804行::一致::官方参数为32::tyjt参数为32::尺寸除数::无修改原因
+      type: CameraStream # 第805行::一致::官方参数为CameraStream::tyjt参数为CameraStream::相机流模块类型::无修改原因
+    fuser: # 第806行::一致::官方参数存在::tyjt参数存在::融合模块配置::无修改原因
+      in_channels: 256 # 第807行::一致::官方参数为256::tyjt参数为256::输入通道数::无修改原因
+      out_channels: 256 # 第808行::一致::官方参数为256::tyjt参数为256::输出通道数::无修改原因
+      point_cloud_range: # 第809行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数相同::点云范围::无修改原因
+      - -54.0 # 第810行::一致::官方参数为-54.0::tyjt参数为-54.0::点云X轴最小范围::无修改原因
+      - -54.0 # 第811行::一致::官方参数为-54.0::tyjt参数为-54.0::点云Y轴最小范围::无修改原因
+      - -5.0 # 第812行::一致::官方参数为-5.0::tyjt参数为-5.0::点云Z轴最小范围::无修改原因
+      - 54.0 # 第813行::一致::官方参数为54.0::tyjt参数为54.0::点云X轴最大范围::无修改原因
+      - 54.0 # 第814行::一致::官方参数为54.0::tyjt参数为54.0::点云Y轴最大范围::无修改原因
+      - 3.0 # 第815行::一致::官方参数为3.0::tyjt参数为3.0::点云Z轴最大范围::无修改原因
+      voxel_size: # 第816行::一致::官方参数为[0.16, 0.16, 4.0]::tyjt参数相同::体素尺寸::无修改原因
+      - 0.16 # 第817行::一致::官方参数为0.16::tyjt参数为0.16::体素X轴尺寸::无修改原因
+      - 0.16 # 第818行::一致::官方参数为0.16::tyjt参数为0.16::体素Y轴尺寸::无修改原因
+      - 4.0 # 第819行::一致::官方参数为4.0::tyjt参数为4.0::体素Z轴尺寸::无修改原因
+      type: BevFusionFuser # 第820行::一致::官方参数为BevFusionFuser::tyjt参数为BevFusionFuser::融合模块类型::无修改原因
+    img_view_transformer: # 第821行::一致::官方参数存在::tyjt参数存在::图像视角变换模块配置::无修改原因
+      downsample: 16 # 第822行::一致::官方参数为16::tyjt参数为16::下采样倍数::无修改原因
+      grid_conf: # 第823行::一致::官方参数存在::tyjt参数存在::网格配置::无修改原因
+        dbound: # 第824行::一致::官方参数为[4.0, 45.0, 1.0]::tyjt参数相同::深度范围配置::无修改原因
+        - 4.0 # 第825行::一致::官方参数为4.0::tyjt参数为4.0::最小深度::无修改原因
+        - 45.0 # 第826行::一致::官方参数为45.0::tyjt参数为45.0::最大深度::无修改原因
+        - 1.0 # 第827行::一致::官方参数为1.0::tyjt参数为1.0::深度步长::无修改原因
+        xbound: # 第828行::一致::官方参数为[-54.0, 54.0, 0.16]::tyjt参数相同::X轴范围配置::无修改原因
+        - -54.0 # 第829行::一致::官方参数为-54.0::tyjt参数为-54.0::X轴最小值::无修改原因
+        - 54.0 # 第830行::一致::官方参数为54.0::tyjt参数为54.0::X轴最大值::无修改原因
+        - 0.16 # 第831行::一致::官方参数为0.16::tyjt参数为0.16::X轴步长::无修改原因
+        ybound: # 第832行::一致::官方参数为[-54.0, 54.0, 0.16]::tyjt参数相同::Y轴范围配置::无修改原因
+        - -54.0 # 第833行::一致::官方参数为-54.0::tyjt参数为-54.0::Y轴最小值::无修改原因
+        - 54.0 # 第834行::一致::官方参数为54.0::tyjt参数为54.0::Y轴最大值::无修改原因
+        - 0.16 # 第835行::一致::官方参数为0.16::tyjt参数为0.16::Y轴步长::无修改原因
+        zbound: # 第836行::一致::官方参数为[-10.0, 10.0, 20.0]::tyjt参数相同::Z轴范围配置::无修改原因
+        - -10.0 # 第837行::一致::官方参数为-10.0::tyjt参数为-10.0::Z轴最小值::无修改原因
+        - 10.0 # 第838行::一致::官方参数为10.0::tyjt参数为10.0::Z轴最大值::无修改原因
+        - 20.0 # 第839行::一致::官方参数为20.0::tyjt参数为20.0::Z轴步长::无修改原因
+      type: LSSTransformer # 第840行::一致::官方参数为LSSTransformer::tyjt参数为LSSTransformer::图像视角变换模块类型::无修改原因
+    lidar_stream: # 第841行::一致::官方参数存在::tyjt参数存在::激光雷达流配置::无修改原因
+      backbone: # 第842行::一致::官方参数存在::tyjt参数存在::激光雷达流骨干网络配置::无修改原因
+        _delete_: true # 第843行::一致::官方参数为true::tyjt参数为true::是否删除默认配置::无修改原因
+        in_channels: 5 # 第844行::一致::官方参数为5::tyjt参数为5::输入通道数::无修改原因
+        npoints: # 第845行::一致::官方参数为[4096, 1024, 256, 64]::tyjt参数相同::各层点数量::无修改原因
+        - 4096 # 第846行::一致::官方参数为4096::tyjt参数为4096::第一层点数量::无修改原因
+        - 1024 # 第847行::一致::官方参数为1024::tyjt参数为1024::第二层点数量::无修改原因
+        - 256 # 第848行::一致::官方参数为256::tyjt参数为256::第三层点数量::无修改原因
+        - 64 # 第849行::一致::官方参数为64::tyjt参数为64::第四层点数量::无修改原因
+        out_channels: # 第850行::一致::官方参数为[128, 256, 512, 1024]::tyjt参数相同::各层输出通道数::无修改原因
+        - 128 # 第851行::一致::官方参数为128::tyjt参数为128::第一层输出通道数::无修改原因
+        - 256 # 第852行::一致::官方参数为256::tyjt参数为256::第二层输出通道数::无修改原因
+        - 512 # 第853行::一致::官方参数为512::tyjt参数为512::第三层输出通道数::无修改原因
+        - 1024 # 第854行::一致::官方参数为1024::tyjt参数为1024::第四层输出通道数::无修改原因
+        sa_cfg: # 第855行::一致::官方参数存在::tyjt参数存在::采样聚合配置::无修改原因
+          fps_mod: # 第856行::一致::官方参数为[None, 'radius', 'radius', 'radius']::tyjt参数相同::FPS模式::无修改原因
+          - null # 第857行::一致::官方参数为null::tyjt参数为null::第一层FPS模式::无修改原因
+          - radius # 第858行::一致::官方参数为radius::tyjt参数为radius::第二层FPS模式::无修改原因
+          - radius # 第859行::一致::官方参数为radius::tyjt参数为radius::第三层FPS模式::无修改原因
+          - radius # 第860行::一致::官方参数为radius::tyjt参数为radius::第四层FPS模式::无修改原因
+          fps_sample_range: # 第861行::一致::官方参数为[None, 4.0, 2.0, 1.0]::tyjt参数相同::FPS采样范围::无修改原因
+          - null # 第862行::一致::官方参数为null::tyjt参数为null::第一层FPS采样范围::无修改原因
+          - 4.0 # 第863行::一致::官方参数为4.0::tyjt参数为4.0::第二层FPS采样范围::无修改原因
+          - 2.0 # 第864行::一致::官方参数为2.0::tyjt参数为2.0::第三层FPS采样范围::无修改原因
+          - 1.0 # 第865行::一致::官方参数为1.0::tyjt参数为1.0::第四层FPS采样范围::无修改原因
+          knn: # 第866行::一致::官方参数为[None, 16, 16, 16]::tyjt参数相同::K近邻数量::无修改原因
+          - null # 第867行::一致::官方参数为null::tyjt参数为null::第一层K近邻数量::无修改原因
+          - 16 # 第868行::一致::官方参数为16::tyjt参数为16::第二层K近邻数量::无修改原因
+          - 16 # 第869行::一致::官方参数为16::tyjt参数为16::第三层K近邻数量::无修改原因
+          - 16 # 第870行::一致::官方参数为16::tyjt参数为16::第四层K近邻数量::无修改原因
+          radius: # 第871行::一致::官方参数为[None, 4.0, 2.0, 1.0]::tyjt参数相同::半径范围::无修改原因
+          - null # 第872行::一致::官方参数为null::tyjt参数为null::第一层半径范围::无修改原因
+          - 4.0 # 第873行::一致::官方参数为4.0::tyjt参数为4.0::第二层半径范围::无修改原因
+          - 2.0 # 第874行::一致::官方参数为2.0::tyjt参数为2.0::第三层半径范围::无修改原因
+          - 1.0 # 第875行::一致::官方参数为1.0::tyjt参数为1.0::第四层半径范围::无修改原因
+          sample_mod: # 第876行::一致::官方参数为['random', 'random', 'random', 'random']::tyjt参数相同::采样模式::无修改原因
+          - random # 第877行::一致::官方参数为random::tyjt参数为random::第一层采样模式::无修改原因
+          - random # 第878行::一致::官方参数为random::tyjt参数为random::第二层采样模式::无修改原因
+          - random # 第879行::一致::官方参数为random::tyjt参数为random::第三层采样模式::无修改原因
+          - random # 第880行::一致::官方参数为random::tyjt参数为random::第四层采样模式::无修改原因
+        type: PointNet2SASSG # 第881行::一致::官方参数为PointNet2SASSG::tyjt参数为PointNet2SASSG::激光雷达流骨干网络类型::无修改原因
+      bridge: # 第882行::一致::官方参数存在::tyjt参数存在::激光雷达流桥接模块配置::无修改原因
+        in_channels: # 第883行::一致::官方参数为[128, 256, 512, 1024]::tyjt参数相同::输入通道数::无修改原因
+        - 128 # 第884行::一致::官方参数为128::tyjt参数为128::输入通道0::无修改原因
+        - 256 # 第885行::一致::官方参数为256::tyjt参数为256::输入通道1::无修改原因
+        - 512 # 第886行::一致::官方参数为512::tyjt参数为512::输入通道2::无修改原因
+        - 1024 # 第887行::一致::官方参数为1024::tyjt参数为1024::输入通道3::无修改原因
+        out_channels: 256 # 第888行::一致::官方参数为256::tyjt参数为256::输出通道数::无修改原因
+        type: SimpleBridge # 第889行::一致::官方参数为SimpleBridge::tyjt参数为SimpleBridge::桥接模块类型::无修改原因
+      neck: # 第890行::一致::官方参数存在::tyjt参数存在::激光雷达流颈部网络配置::无修改原因
+        _delete_: true # 第891行::一致::官方参数为true::tyjt参数为true::是否删除默认配置::无修改原因
+        in_channels: 256 # 第892行::一致::官方参数为256::tyjt参数为256::输入通道数::无修改原因
+        numC_Trans: 256 # 第893行::一致::官方参数为256::tyjt参数为256::变换通道数::无修改原因
+        point_cloud_range: # 第894行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数相同::点云范围::无修改原因
+        - -54.0 # 第895行::一致::官方参数为-54.0::tyjt参数为-54.0::点云X轴最小范围::无修改原因
+        - -54.0 # 第896行::一致::官方参数为-54.0::tyjt参数为-54.0::点云Y轴最小范围::无修改原因
+        - -5.0 # 第897行::一致::官方参数为-5.0::tyjt参数为-5.0::点云Z轴最小范围::无修改原因
+        - 54.0 # 第898行::一致::官方参数为54.0::tyjt参数为54.0::点云X轴最大范围::无修改原因
+        - 54.0 # 第899行::一致::官方参数为54.0::tyjt参数为54.0::点云Y轴最大范围::无修改原因
+        - 3.0 # 第900行::一致::官方参数为3.0::tyjt参数为3.0::点云Z轴最大范围::无修改原因
+                voxel_size: # 第901行::一致::官方参数为[0.16, 0.16, 4.0]::tyjt参数相同::体素尺寸::无修改原因
+        - 0.16 # 第902行::一致::官方参数为0.16::tyjt参数为0.16::体素X轴尺寸::无修改原因
+        - 0.16 # 第903行::一致::官方参数为0.16::tyjt参数为0.16::体素Y轴尺寸::无修改原因
+        - 4.0 # 第904行::一致::官方参数为4.0::tyjt参数为4.0::体素Z轴尺寸::无修改原因
+        type: HeightCompression # 第905行::一致::官方参数为HeightCompression::tyjt参数为HeightCompression::高度压缩模块类型::无修改原因
+      type: LidarStream # 第906行::一致::官方参数为LidarStream::tyjt参数为LidarStream::激光雷达流模块类型::无修改原因
+    neck: # 第907行::一致::官方参数存在::tyjt参数存在::颈部网络配置::无修改原因
+      act_cfg: # 第908行::一致::官方参数存在::tyjt参数存在::激活函数配置::无修改原因
+        inplace: true # 第909行::一致::官方参数为true::tyjt参数为true::是否原地操作::无修改原因
+        type: ReLU # 第910行::一致::官方参数为ReLU::tyjt参数为ReLU::激活函数类型::无修改原因
+      in_channels: 256 # 第911行::一致::官方参数为256::tyjt参数为256::输入通道数::无修改原因
+      norm_cfg: # 第912行::一致::官方参数存在::tyjt参数存在::归一化配置::无修改原因
+        requires_grad: true # 第913行::一致::官方参数为true::tyjt参数为true::是否对归一化参数求梯度::无修改原因
+        type: SyncBN # 第914行::一致::官方参数为SyncBN::tyjt参数为SyncBN::归一化类型::无修改原因
+      num_blocks: 3 # 第915行::一致::官方参数为3::tyjt参数为3::块数量::无修改原因
+      out_channels: 256 # 第916行::一致::官方参数为256::tyjt参数为256::输出通道数::无修改原因
+      type: BEVTransformer # 第917行::一致::官方参数为BEVTransformer::tyjt参数为BEVTransformer::BEV变换模块类型::无修改原因
+    radar_stream: # 第918行::不一致::官方参数存在::tyjt参数移除::雷达流配置::TYJT数据集无雷达数据，移除该模块
+      backbone: # 第919行::一致::官方参数存在::tyjt参数移除::雷达流骨干网络配置::随雷达流模块一同移除
+        _delete_: true # 第920行::一致::官方参数为true::tyjt参数移除::是否删除默认配置::随雷达流模块一同移除
+        in_channels: 8 # 第921行::一致::官方参数为8::tyjt参数移除::输入通道数::随雷达流模块一同移除
+        npoints: # 第922行::一致::官方参数为[4096, 1024, 256, 64]::tyjt参数移除::各层点数量::随雷达流模块一同移除
+        - 4096 # 第923行::一致::官方参数为4096::tyjt参数移除::第一层点数量::随雷达流模块一同移除
+        - 1024 # 第924行::一致::官方参数为1024::tyjt参数移除::第二层点数量::随雷达流模块一同移除
+        - 256 # 第925行::一致::官方参数为256::tyjt参数移除::第三层点数量::随雷达流模块一同移除
+        - 64 # 第926行::一致::官方参数为64::tyjt参数移除::第四层点数量::随雷达流模块一同移除
+        out_channels: # 第927行::一致::官方参数为[128, 256, 512, 1024]::tyjt参数移除::各层输出通道数::随雷达流模块一同移除
+        - 128 # 第928行::一致::官方参数为128::tyjt参数移除::第一层输出通道数::随雷达流模块一同移除
+        - 256 # 第929行::一致::官方参数为256::tyjt参数移除::第二层输出通道数::随雷达流模块一同移除
+        - 512 # 第930行::一致::官方参数为512::tyjt参数移除::第三层输出通道数::随雷达流模块一同移除
+        - 1024 # 第931行::一致::官方参数为1024::tyjt参数移除::第四层输出通道数::随雷达流模块一同移除
+        sa_cfg: # 第932行::一致::官方参数存在::tyjt参数移除::采样聚合配置::随雷达流模块一同移除
+          fps_mod: # 第933行::一致::官方参数为[None, 'radius', 'radius', 'radius']::tyjt参数移除::FPS模式::随雷达流模块一同移除
+          - null # 第934行::一致::官方参数为null::tyjt参数移除::第一层FPS模式::随雷达流模块一同移除
+          - radius # 第935行::一致::官方参数为radius::tyjt参数移除::第二层FPS模式::随雷达流模块一同移除
+          - radius # 第936行::一致::官方参数为radius::tyjt参数移除::第三层FPS模式::随雷达流模块一同移除
+          - radius # 第937行::一致::官方参数为radius::tyjt参数移除::第四层FPS模式::随雷达流模块一同移除
+          fps_sample_range: # 第938行::一致::官方参数为[None, 4.0, 2.0, 1.0]::tyjt参数移除::FPS采样范围::随雷达流模块一同移除
+          - null # 第939行::一致::官方参数为null::tyjt参数移除::第一层FPS采样范围::随雷达流模块一同移除
+          - 4.0 # 第940行::一致::官方参数为4.0::tyjt参数移除::第二层FPS采样范围::随雷达流模块一同移除
+          - 2.0 # 第941行::一致::官方参数为2.0::tyjt参数移除::第三层FPS采样范围::随雷达流模块一同移除
+          - 1.0 # 第942行::一致::官方参数为1.0::tyjt参数移除::第四层FPS采样范围::随雷达流模块一同移除
+          knn: # 第943行::一致::官方参数为[None, 16, 16, 16]::tyjt参数移除::K近邻数量::随雷达流模块一同移除
+          - null # 第944行::一致::官方参数为null::tyjt参数移除::第一层K近邻数量::随雷达流模块一同移除
+          - 16 # 第945行::一致::官方参数为16::tyjt参数移除::第二层K近邻数量::随雷达流模块一同移除
+          - 16 # 第946行::一致::官方参数为16::tyjt参数移除::第三层K近邻数量::随雷达流模块一同移除
+          - 16 # 第947行::一致::官方参数为16::tyjt参数移除::第四层K近邻数量::随雷达流模块一同移除
+          radius: # 第948行::一致::官方参数为[None, 4.0, 2.0, 1.0]::tyjt参数移除::半径范围::随雷达流模块一同移除
+          - null # 第949行::一致::官方参数为null::tyjt参数移除::第一层半径范围::随雷达流模块一同移除
+          - 4.0 # 第950行::一致::官方参数为4.0::tyjt参数移除::第二层半径范围::随雷达流模块一同移除
+          - 2.0 # 第951行::一致::官方参数为2.0::tyjt参数移除::第三层半径范围::随雷达流模块一同移除
+          - 1.0 # 第952行::一致::官方参数为1.0::tyjt参数移除::第四层半径范围::随雷达流模块一同移除
+          sample_mod: # 第953行::一致::官方参数为['random', 'random', 'random', 'random']::tyjt参数移除::采样模式::随雷达流模块一同移除
+          - random # 第954行::一致::官方参数为random::tyjt参数移除::第一层采样模式::随雷达流模块一同移除
+          - random # 第955行::一致::官方参数为random::tyjt参数移除::第二层采样模式::随雷达流模块一同移除
+          - random # 第956行::一致::官方参数为random::tyjt参数移除::第三层采样模式::随雷达流模块一同移除
+          - random # 第957行::一致::官方参数为random::tyjt参数移除::第四层采样模式::随雷达流模块一同移除
+        type: PointNet2SASSG # 第958行::一致::官方参数为PointNet2SASSG::tyjt参数移除::雷达流骨干网络类型::随雷达流模块一同移除
+      bridge: # 第959行::一致::官方参数存在::tyjt参数移除::雷达流桥接模块配置::随雷达流模块一同移除
+        in_channels: # 第960行::一致::官方参数为[128, 256, 512, 1024]::tyjt参数移除::输入通道数::随雷达流模块一同移除
+        - 128 # 第961行::一致::官方参数为128::tyjt参数移除::输入通道0::随雷达流模块一同移除
+        - 256 # 第962行::一致::官方参数为256::tyjt参数移除::输入通道1::随雷达流模块一同移除
+        - 512 # 第963行::一致::官方参数为512::tyjt参数移除::输入通道2::随雷达流模块一同移除
+        - 1024 # 第964行::一致::官方参数为1024::tyjt参数移除::输入通道3::随雷达流模块一同移除
+        out_channels: 256 # 第965行::一致::官方参数为256::tyjt参数移除::输出通道数::随雷达流模块一同移除
+        type: SimpleBridge # 第966行::一致::官方参数为SimpleBridge::tyjt参数移除::桥接模块类型::随雷达流模块一同移除
+      neck: # 第967行::一致::官方参数存在::tyjt参数移除::雷达流颈部网络配置::随雷达流模块一同移除
+        _delete_: true # 第968行::一致::官方参数为true::tyjt参数移除::是否删除默认配置::随雷达流模块一同移除
+        in_channels: 256 # 第969行::一致::官方参数为256::tyjt参数移除::输入通道数::随雷达流模块一同移除
+        numC_Trans: 256 # 第970行::一致::官方参数为256::tyjt参数移除::变换通道数::随雷达流模块一同移除
+        point_cloud_range: # 第971行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数移除::点云范围::随雷达流模块一同移除
+        - -54.0 # 第972行::一致::官方参数为-54.0::tyjt参数移除::点云X轴最小范围::随雷达流模块一同移除
+        - -54.0 # 第973行::一致::官方参数为-54.0::tyjt参数移除::点云Y轴最小范围::随雷达流模块一同移除
+        - -5.0 # 第974行::一致::官方参数为-5.0::tyjt参数移除::点云Z轴最小范围::随雷达流模块一同移除
+        - 54.0 # 第975行::一致::官方参数为54.0::tyjt参数移除::点云X轴最大范围::随雷达流模块一同移除
+        - 54.0 # 第976行::一致::官方参数为54.0::tyjt参数移除::点云Y轴最大范围::随雷达流模块一同移除
+        - 3.0 # 第977行::一致::官方参数为3.0::tyjt参数移除::点云Z轴最大范围::随雷达流模块一同移除
+        voxel_size: # 第978行::一致::官方参数为[0.16, 0.16, 4.0]::tyjt参数移除::体素尺寸::随雷达流模块一同移除
+        - 0.16 # 第979行::一致::官方参数为0.16::tyjt参数移除::体素X轴尺寸::随雷达流模块一同移除
+        - 0.16 # 第980行::一致::官方参数为0.16::tyjt参数移除::体素Y轴尺寸::随雷达流模块一同移除
+        - 4.0 # 第981行::一致::官方参数为4.0::tyjt参数移除::体素Z轴尺寸::随雷达流模块一同移除
+        type: HeightCompression # 第982行::一致::官方参数为HeightCompression::tyjt参数移除::高度压缩模块类型::随雷达流模块一同移除
+      type: RadarStream # 第983行::一致::官方参数为RadarStream::tyjt参数移除::雷达流模块类型::随雷达流模块一同移除
+    train_cfg: # 第984行::一致::官方参数存在::tyjt参数存在::训练配置::无修改原因
+      assigner: # 第985行::一致::官方参数存在::tyjt参数存在::分配器配置::无修改原因
+        assign_metric: iou # 第986行::一致::官方参数为iou::tyjt参数为iou::分配metric::无修改原因
+        assigner_type: max_iou_assigner # 第987行::一致::官方参数为max_iou_assigner::tyjt参数为max_iou_assigner::分配器类型::无修改原因
+        iou_calculator: # 第988行::一致::官方参数存在::tyjt参数存在::IoU计算器配置::无修改原因
+          type: BboxOverlaps3D # 第989行::一致::官方参数为BboxOverlaps3D::tyjt参数为BboxOverlaps3D::IoU计算器类型::无修改原因
+        match_height: false # 第990行::一致::官方参数为false::tyjt参数为false::是否匹配高度::无修改原因
+        neg_iou_thr: 0.35 # 第991行::一致::官方参数为0.35::tyjt参数为0.35::负样本IoU阈值::无修改原因
+        pos_iou_thr: 0.6 # 第992行::一致::官方参数为0.6::tyjt参数为0.6::正样本IoU阈值::无修改原因
+      debug: false # 第993行::一致::官方参数为false::tyjt参数为false::调试模式开关::无修改原因
+      max_num: 500 # 第994行::一致::官方参数为500::tyjt参数为500::最大目标数量::无修改原因
+      nms: # 第995行::一致::官方参数存在::tyjt参数存在::NMS配置::无修改原因
+        iou_threshold: 0.1 # 第996行::一致::官方参数为0.1::tyjt参数为0.1::IoU阈值::无修改原因
+        type: nms_3d # 第997行::一致::官方参数为nms_3d::tyjt参数为nms_3d::NMS类型::无修改原因
+      score_threshold: 0.0 # 第998行::一致::官方参数为0.0::tyjt参数为0.0::分数阈值::无修改原因
+    type: BEVFusion # 第999行::一致::官方参数为BEVFusion::tyjt参数为BEVFusion::模型类型::无修改原因
+    test_cfg: # 第1000行::一致::官方参数存在::tyjt参数存在::测试配置::无修改原因
+          nms: # 第1001行::一致::官方参数存在::tyjt参数存在::NMS配置::无修改原因
+        iou_threshold: 0.7 # 第1002行::一致::官方参数为0.7::tyjt参数为0.7::IoU阈值::无修改原因
+        type: nms_3d # 第1003行::一致::官方参数为nms_3d::tyjt参数为nms_3d::NMS类型::无修改原因
+      post_center_limit_range: # 第1004行::一致::官方参数为[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]::tyjt参数相同::后处理中心限制范围::无修改原因
+      - -61.2 # 第1005行::一致::官方参数为-61.2::tyjt参数为-61.2::X轴最小限制::无修改原因
+      - -61.2 # 第1006行::一致::官方参数为-61.2::tyjt参数为-61.2::Y轴最小限制::无修改原因
+      - -10.0 # 第1007行::一致::官方参数为-10.0::tyjt参数为-10.0::Z轴最小限制::无修改原因
+      - 61.2 # 第1008行::一致::官方参数为61.2::tyjt参数为61.2::X轴最大限制::无修改原因
+      - 61.2 # 第1009行::一致::官方参数为61.2::tyjt参数为61.2::Y轴最大限制::无修改原因
+      - 10.0 # 第1010行::一致::官方参数为10.0::tyjt参数为10.0::Z轴最大限制::无修改原因
+      score_threshold: 0.1 # 第1011行::一致::官方参数为0.1::tyjt参数为0.1::分数阈值::无修改原因
+  optimizer: # 第1012行::一致::官方参数存在::tyjt参数存在::优化器配置::无修改原因
+    betas: # 第1013行::一致::官方参数为[0.9, 0.999]::tyjt参数相同::Adam优化器beta参数::无修改原因
+    - 0.9 # 第1014行::一致::官方参数为0.9::tyjt参数为0.9::beta1参数::无修改原因
+    - 0.999 # 第1015行::一致::官方参数为0.999::tyjt参数为0.999::beta2参数::无修改原因
+    lr: 0.0001 # 第1016行::不一致::官方参数为0.0002::tyjt参数为0.0001::学习率::TYJT数据集规模较小，降低学习率避免过拟合
+    weight_decay: 0.01 # 第1017行::一致::官方参数为0.01::tyjt参数为0.01::权重衰减系数::无修改原因
+    type: Adam # 第1018行::一致::官方参数为Adam::tyjt参数为Adam::优化器类型::无修改原因
+  optimizer_config: # 第1019行::一致::官方参数存在::tyjt参数存在::优化器配置::无修改原因
+    grad_clip: # 第1020行::一致::官方参数存在::tyjt参数存在::梯度裁剪配置::无修改原因
+      max_norm: 35 # 第1021行::一致::官方参数为35::tyjt参数为35::最大范数::无修改原因
+      norm_type: 2 # 第1022行::一致::官方参数为2::tyjt参数为2::范数类型::无修改原因
+  runner: # 第1023行::一致::官方参数存在::tyjt参数存在::运行器配置::无修改原因
+    max_epochs: 20 # 第1024行::不一致::官方参数为20::tyjt参数为30::最大训练轮次::TYJT数据集需要更多轮次收敛
+    type: EpochBasedRunner # 第1025行::一致::官方参数为EpochBasedRunner::tyjt参数为EpochBasedRunner::运行器类型::无修改原因
+  scheduler: # 第1026行::一致::官方参数存在::tyjt参数存在::学习率调度器配置::无修改原因
+    milestones: # 第1027行::不一致::官方参数为[16, 19]::tyjt参数为[20, 25]::学习率衰减里程碑::适配TYJT数据集的训练轮次调整
+    - 20 # 第1028行::不一致::官方参数为16::tyjt参数为20::第一个衰减节点::适配TYJT数据集的训练轮次调整
+    - 25 # 第1029行::不一致::官方参数为19::tyjt参数为25::第二个衰减节点::适配TYJT数据集的训练轮次调整
+    type: MultiStepLR # 第1030行::一致::官方参数为MultiStepLR::tyjt参数为MultiStepLR::调度器类型::无修改原因
+    gamma: 0.1 # 第1031行::一致::官方参数为0.1::tyjt参数为0.1::衰减系数::无修改原因
+  total_epochs: 20 # 第1032行::不一致::官方参数为20::tyjt参数为30::总训练轮次::与max_epochs保持一致
+  checkpoint_config: # 第1033行::一致::官方参数存在::tyjt参数存在:: checkpoint配置::无修改原因
+    interval: 1 # 第1034行::一致::官方参数为1::tyjt参数为1::保存间隔::无修改原因
+    max_keep_ckpts: 3 # 第1035行::一致::官方参数为3::tyjt参数为3::最大保存数量::无修改原因
+  log_config: # 第1036行::一致::官方参数存在::tyjt参数存在::日志配置::无修改原因
+    hooks: # 第1037行::一致::官方参数存在::tyjt参数存在::日志钩子::无修改原因
+    - interval: 50 # 第1038行::一致::官方参数为50::tyjt参数为50::打印间隔::无修改原因
+      type: TextLoggerHook # 第1039行::一致::官方参数为TextLoggerHook::tyjt参数为TextLoggerHook::文本日志钩子::无修改原因
+    - type: TensorboardLoggerHook # 第1040行::一致::官方参数为TensorboardLoggerHook::tyjt参数为TensorboardLoggerHook::Tensorboard日志钩子::无修改原因
+  log_level: INFO # 第1041行::一致::官方参数为INFO::tyjt参数为INFO::日志级别::无修改原因
+  load_from: null # 第1042行::一致::官方参数为null::tyjt参数为null::加载预训练模型路径::无修改原因
+  resume_from: null # 第1043行::一致::官方参数为null::tyjt参数为null::恢复训练路径::无修改原因
+  workflow: # 第1044行::一致::官方参数为[('train', 1)]::tyjt参数相同::工作流配置::无修改原因
+  - - train # 第1045行::一致::官方参数为train::tyjt参数为train::训练阶段::无修改原因
+    - 1 # 第1046行::一致::官方参数为1::tyjt参数为1::训练轮次占比::无修改原因
+  evaluation: # 第1047行::一致::官方参数存在::tyjt参数存在::评估配置::无修改原因
+    interval: 1 # 第1048行::一致::官方参数为1::tyjt参数为1::评估间隔::无修改原因
+    metric: bbox # 第1049行::一致::官方参数为bbox::tyjt参数为bbox::评估指标::无修改原因
+    pipeline: # 第1050行::一致::官方参数存在::tyjt参数存在::评估流水线::无修改原因
+    - ann_file: ${data.val.ann_file} # 第1051行::一致::官方参数为${data.val.ann_file}::tyjt参数相同::标注文件路径::无修改原因
+      dataset: # 第1052行::一致::官方参数存在::tyjt参数存在::数据集配置::无修改原因
+        dataset: # 第1053行::一致::官方参数存在::tyjt参数存在::子数据集配置::无修改原因
+          data_root: ${data_root} # 第1054行::一致::官方参数为${data_root}::tyjt参数相同::数据根目录::无修改原因
+          pipeline: # 第1055行::一致::官方参数存在::tyjt参数存在::子数据集流水线::无修改原因
+          - type: LoadPointsFromFile # 第1056行::一致::官方参数为LoadPointsFromFile::tyjt参数为LoadPointsFromFile::点云加载模块::无修改原因
+            coord_type: LIDAR # 第1057行::一致::官方参数为LIDAR::tyjt参数为LIDAR::坐标类型::无修改原因
+            load_dim: 5 # 第1058行::一致::官方参数为5::tyjt参数为5::加载维度::无修改原因
+            use_dim: 5 # 第1059行::一致::官方参数为5::tyjt参数为5::使用维度::无修改原因
+            file_client_args: # 第1060行::一致::官方参数存在::tyjt参数存在::文件客户端配置::无修改原因
+              backend: disk # 第1061行::一致::官方参数为disk::tyjt参数为disk::后端类型::无修改原因
+          - type: LoadImageFromFile # 第1062行::一致::官方参数为LoadImageFromFile::tyjt参数为LoadImageFromFile::图像加载模块::无修改原因
+            file_client_args: # 第1063行::一致::官方参数存在::tyjt参数存在::文件客户端配置::无修改原因
+              backend: disk # 第1064行::一致::官方参数为disk::tyjt参数为disk::后端类型::无修改原因
+          - type: LoadAnnotations3D # 第1065行::一致::官方参数为LoadAnnotations3D::tyjt参数为LoadAnnotations3D::3D标注加载模块::无修改原因
+            with_bbox_3d: true # 第1066行::一致::官方参数为true::tyjt参数为true::加载3D边界框::无修改原因
+            with_label_3d: true # 第1067行::一致::官方参数为true::tyjt参数为true::加载3D标签::无修改原因
+          - type: LoadMultiViewImageFromFiles # 第1068行::一致::官方参数为LoadMultiViewImageFromFiles::tyjt参数为LoadMultiViewImageFromFiles::多视角图像加载模块::无修改原因
+            file_client_args: # 第1069行::一致::官方参数存在::tyjt参数存在::文件客户端配置::无修改原因
+              backend: disk # 第1070行::一致::官方参数为disk::tyjt参数为disk::后端类型::无修改原因
+          - type: PointToMultiViewDepth # 第1071行::一致::官方参数为PointToMultiViewDepth::tyjt参数为PointToMultiViewDepth::点云到多视角深度转换::无修改原因
+          - type: DefaultFormatBundle3D # 第1072行::一致::官方参数为DefaultFormatBundle3D::tyjt参数为DefaultFormatBundle3D::3D数据格式封装::无修改原因
+            classes: # 第1073行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数相同::目标类别::无修改原因
+            - car # 第1074行::一致::官方参数为car::tyjt参数为car::轿车::无修改原因
+            - truck # 第1075行::一致::官方参数为truck::tyjt参数为truck::卡车::无修改原因
+            - construction_vehicle # 第1076行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::工程车::无修改原因
+            - bus # 第1077行::一致::官方参数为bus::tyjt参数为bus::公交车::无修改原因
+            - trailer # 第1078行::一致::官方参数为trailer::tyjt参数为trailer::拖车::无修改原因
+            - barrier # 第1079行::一致::官方参数为barrier::tyjt参数为barrier::路障::无修改原因
+            - motorcycle # 第1080行::一致::官方参数为motorcycle::tyjt参数为motorcycle::摩托车::无修改原因
+            - bicycle # 第1081行::一致::官方参数为bicycle::tyjt参数为bicycle::自行车::无修改原因
+            - pedestrian # 第1082行::一致::官方参数为pedestrian::tyjt参数为pedestrian::行人::无修改原因
+            - traffic_cone # 第1083行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::交通锥::无修改原因
+          - type: Collect3D # 第1084行::一致::官方参数为Collect3D::tyjt参数为Collect3D::3D数据收集::无修改原因
+            keys: # 第1085行::不一致::官方参数为[img, points, radar, gt_bboxes_3d, gt_labels_3d]::tyjt参数为[img, points, gt_bboxes_3d, gt_labels_3d]::收集键值::移除雷达相关键
+            - img # 第1086行::一致::官方参数为img::tyjt参数为img::图像数据::无修改原因
+            - points # 第1087行::一致::官方参数为points::tyjt参数为points::点云数据::无修改原因
+            - radar # 第1088行::不一致::官方参数为radar::tyjt参数移除::雷达数据::TYJT数据集无雷达数据
+            - gt_bboxes_3d # 第1089行::一致::官方参数为gt_bboxes_3d::tyjt参数为gt_bboxes_3d::3D边界框::无修改原因
+            - gt_labels_3d # 第1090行::一致::官方参数为gt_labels_3d::tyjt参数为gt_labels_3d::3D标签::无修改原因
+            meta_keys: # 第1091行::一致::官方参数为[camera_intrinsics, camera2ego, lidar2ego, lidar2camera, lidar2image, camera2lidar]::tyjt参数相同::元数据键值::无修改原因
+            - camera_intrinsics # 第1092行::一致::官方参数为camera_intrinsics::tyjt参数为camera_intrinsics::相机内参::无修改原因
+            - camera2ego # 第1093行::一致::官方参数为camera2ego::tyjt参数为camera2ego::相机到自车变换::无修改原因
+            - lidar2ego # 第1094行::一致::官方参数为lidar2ego::tyjt参数为lidar2ego::激光雷达到自车变换::无修改原因
+            - lidar2camera # 第1095行::一致::官方参数为lidar2camera::tyjt参数为lidar2camera::激光雷达到相机变换::无修改原因
+            - lidar2image # 第1096行::一致::官方参数为lidar2image::tyjt参数为lidar2image::激光雷达到图像变换::无修改原因
+            - camera2lidar # 第1097行::一致::官方参数为camera2lidar::tyjt参数为camera2lidar::相机到激光雷达变换::无修改原因
+          test_mode: true # 第1098行::一致::官方参数为true::tyjt参数为true::测试模式::无修改原因
+          type: NuScenesDataset # 第1099行::不一致::官方参数为NuScenesDataset::tyjt参数为CustomDataset::数据集类型::切换为自定义数据集
+          use_valid_flag: true # 第1100行::一致::官方参数为true::tyjt参数为true::使用有效标志::无修改原因
+                data_root: ${data_root} # 第1101行::一致::官方参数为${data_root}::tyjt参数相同::数据根目录::无修改原因
+      type: NuScenesMetricDataset # 第1102行::不一致::官方参数为NuScenesMetricDataset::tyjt参数为CustomMetricDataset::评估数据集类型::适配自定义数据集
+      with_velocity: true # 第1103行::一致::官方参数为true::tyjt参数为true::是否包含速度信息::无修改原因
+    - format_only: false # 第1104行::一致::官方参数为false::tyjt参数为false::是否仅格式化输出::无修改原因
+    - type: EvalHook # 第1105行::一致::官方参数为EvalHook::tyjt参数为EvalHook::评估钩子类型::无修改原因
+      by_epoch: true # 第1106行::一致::官方参数为true::tyjt参数为true::按轮次评估::无修改原因
+      interval: 1 # 第1107行::一致::官方参数为1::tyjt参数为1::评估间隔::无修改原因
+      metric: bbox # 第1108行::一致::官方参数为bbox::tyjt参数为bbox::评估指标::无修改原因
+  gpu_ids: [0] # 第1109行::一致::官方参数为[0]::tyjt参数相同::使用的GPU编号::无修改原因
+  work_dir: ./work_dirs/bevfusion_tyjt # 第1110行::不一致::官方参数为./work_dirs/bevfusion_nuscenes::tyjt参数为./work_dirs/bevfusion_tyjt::工作目录::修改为适配TYJT数据集的目录
+  seed: 0 # 第1111行::一致::官方参数为0::tyjt参数为0::随机种子::无修改原因
+  deterministic: true # 第1112行::一致::官方参数为true::tyjt参数为true::确定性训练开关::无修改原因
+  distributed: false # 第1113行::一致::官方参数为false::tyjt参数为false::分布式训练开关::无修改原因
+  find_unused_parameters: false # 第1114行::一致::官方参数为false::tyjt参数为false::查找未使用参数开关::无修改原因
+  device: cuda # 第1115行::一致::官方参数为cuda::tyjt参数为cuda::使用设备类型::无修改原因
+  log_config: # 第1116行::一致::官方参数存在::tyjt参数存在::日志配置::无修改原因
+    interval: 50 # 第1117行::一致::官方参数为50::tyjt参数为50::日志打印间隔::无修改原因
+    hooks: # 第1118行::一致::官方参数存在::tyjt参数存在::日志钩子列表::无修改原因
+    - type: TextLoggerHook # 第1119行::一致::官方参数为TextLoggerHook::tyjt参数为TextLoggerHook::文本日志钩子::无修改原因
+    - type: TensorboardLoggerHook # 第1120行::一致::官方参数为TensorboardLoggerHook::tyjt参数为TensorboardLoggerHook::Tensorboard日志钩子::无修改原因
+  custom_hooks: # 第1121行::一致::官方参数存在::tyjt参数存在::自定义钩子列表::无修改原因
+  - type: NumClassCheckHook # 第1122行::一致::官方参数为NumClassCheckHook::tyjt参数为NumClassCheckHook::类别数量检查钩子::无修改原因
+  - type: SyncNormHook # 第1123行::一致::官方参数为SyncNormHook::tyjt参数为SyncNormHook::归一化同步钩子::无修改原因
+    priority: 49 # 第1124行::一致::官方参数为49::tyjt参数为49::钩子优先级::无修改原因
+  - type: CheckpointHook # 第1125行::一致::官方参数为CheckpointHook::tyjt参数为CheckpointHook::检查点保存钩子::无修改原因
+    interval: 1 # 第1126行::一致::官方参数为1::tyjt参数为1::保存间隔::无修改原因
+    save_best: bbox_mAP_3d # 第1127行::一致::官方参数为bbox_mAP_3d::tyjt参数为bbox_mAP_3d::保存最佳模型的指标::无修改原因
+    rule: greater # 第1128行::一致::官方参数为greater::tyjt参数为greater::指标比较规则::无修改原因
+  - type: DistSamplerSeedHook # 第1129行::一致::官方参数为DistSamplerSeedHook::tyjt参数为DistSamplerSeedHook::分布式采样器种子钩子::无修改原因
+  data_loader: # 第1130行::一致::官方参数存在::tyjt参数存在::数据加载器配置::无修改原因
+    num_workers: 4 # 第1131行::一致::官方参数为4::tyjt参数为4::工作进程数::无修改原因
+    persistent_workers: true # 第1132行::一致::官方参数为true::tyjt参数为true::持久化工作进程开关::无修改原因
+    sampler_cfg: # 第1133行::一致::官方参数存在::tyjt参数存在::采样器配置::无修改原因
+      type: DefaultSampler # 第1134行::一致::官方参数为DefaultSampler::tyjt参数为DefaultSampler::采样器类型::无修改原因
+  val_data_loader: # 第1135行::一致::官方参数存在::tyjt参数存在::验证集数据加载器配置::无修改原因
+    num_workers: 4 # 第1136行::一致::官方参数为4::tyjt参数为4::工作进程数::无修改原因
+    persistent_workers: true # 第1137行::一致::官方参数为true::tyjt参数为true::持久化工作进程开关::无修改原因
+    sampler_cfg: # 第1138行::一致::官方参数存在::tyjt参数存在::采样器配置::无修改原因
+      type: DefaultSampler # 第1139行::一致::官方参数为DefaultSampler::tyjt参数为DefaultSampler::采样器类型::无修改原因
+  test_data_loader: # 第1140行::一致::官方参数存在::tyjt参数存在::测试集数据加载器配置::无修改原因
+    num_workers: 4 # 第1141行::一致::官方参数为4::tyjt参数为4::工作进程数::无修改原因
+    persistent_workers: true # 第1142行::一致::官方参数为true::tyjt参数为true::持久化工作进程开关::无修改原因
+    sampler_cfg: # 第1143行::一致::官方参数存在::tyjt参数存在::采样器配置::无修改原因
+      type: DefaultSampler # 第1144行::一致::官方参数为DefaultSampler::tyjt参数为DefaultSampler::采样器类型::无修改原因
+  auto_resume: false # 第1145行::一致::官方参数为false::tyjt参数为false::自动恢复训练开关::无修改原因
+  launcher: none # 第1146行::一致::官方参数为none::tyjt参数为none::启动器类型::无修改原因
+  env_cfg: # 第1147行::一致::官方参数存在::tyjt参数存在::环境配置::无修改原因
+    cudnn_benchmark: true # 第1148行::一致::官方参数为true::tyjt参数为true::CUDNN基准测试开关::无修改原因
+    mp_cfg: # 第1149行::一致::官方参数存在::tyjt参数存在::多进程配置::无修改原因
+      mp_start_method: fork # 第1150行::一致::官方参数为fork::tyjt参数为fork::多进程启动方式::无修改原因
+    dist_cfg: # 第1151行::一致::官方参数存在::tyjt参数存在::分布式配置::无修改原因
+      backend: nccl # 第1152行::一致::官方参数为nccl::tyjt参数为nccl::分布式后端::无修改原因
+  default_hooks: # 第1153行::一致::官方参数存在::tyjt参数存在::默认钩子配置::无修改原因
+    timer: # 第1154行::一致::官方参数存在::tyjt参数存在::计时器钩子::无修改原因
+      type: TimerHook # 第1155行::一致::官方参数为TimerHook::tyjt参数为TimerHook::钩子类型::无修改原因
+    logger: # 第1156行::一致::官方参数存在::tyjt参数存在::日志钩子::无修改原因
+      type: LoggerHook # 第1157行::一致::官方参数为LoggerHook::tyjt参数为LoggerHook::钩子类型::无修改原因
+      interval: 50 # 第1158行::一致::官方参数为50::tyjt参数为50::日志打印间隔::无修改原因
+    param_scheduler: # 第1159行::一致::官方参数存在::tyjt参数存在::参数调度器钩子::无修改原因
+      type: ParamSchedulerHook # 第1160行::一致::官方参数为ParamSchedulerHook::tyjt参数为ParamSchedulerHook::钩子类型::无修改原因
+    checkpoint: # 第1161行::一致::官方参数存在::tyjt参数存在::检查点钩子::无修改原因
+      type: CheckpointHook # 第1162行::一致::官方参数为CheckpointHook::tyjt参数为CheckpointHook::钩子类型::无修改原因
+      interval: 1 # 第1163行::一致::官方参数为1::tyjt参数为1::保存间隔::无修改原因
+    sampler_seed: # 第1164行::一致::官方参数存在::tyjt参数存在::采样器种子钩子::无修改原因
+      type: DistSamplerSeedHook # 第1165行::一致::官方参数为DistSamplerSeedHook::tyjt参数为DistSamplerSeedHook::钩子类型::无修改原因
+  log_processor: # 第1166行::一致::官方参数存在::tyjt参数存在::日志处理器配置::无修改原因
+    window_size: 50 # 第1167行::一致::官方参数为50::tyjt参数为50::日志滑动窗口大小::无修改原因
+    by_epoch: true # 第1168行::一致::官方参数为true::tyjt参数为true::按轮次处理日志::无修改原因
+  visualizer: # 第1169行::一致::官方参数存在::tyjt参数存在::可视化工具配置::无修改原因
+    type: Det3DLocalVisualizer # 第1170行::一致::官方参数为Det3DLocalVisualizer::tyjt参数为Det3DLocalVisualizer::可视化工具类型::无修改原因
+    vis_backends: # 第1171行::一致::官方参数存在::tyjt参数存在::可视化后端::无修改原因
+    - type: LocalVisBackend # 第1172行::一致::官方参数为LocalVisBackend::tyjt参数为LocalVisBackend::本地可视化后端::无修改原因
+    - type: TensorboardVisBackend # 第1173行::一致::官方参数为TensorboardVisBackend::tyjt参数为TensorboardVisBackend::Tensorboard可视化后端::无修改原因
+  model_wrapper_cfg: # 第1174行::一致::官方参数存在::tyjt参数存在::模型包装器配置::无修改原因
+    type: MMDistributedDataParallel # 第1175行::一致::官方参数为MMDistributedDataParallel::tyjt参数为MMDistributedDataParallel::分布式数据并行包装器::无修改原因
+    find_unused_parameters: false # 第1176行::一致::官方参数为false::tyjt参数为false::查找未使用参数开关::无修改原因
+  train_cfg: # 第1177行::一致::官方参数存在::tyjt参数存在::训练配置::无修改原因
+    type: TrainLoop # 第1178行::一致::官方参数为TrainLoop::tyjt参数为TrainLoop::训练循环类型::无修改原因
+    max_epochs: 30 # 第1179行::不一致::官方参数为20::tyjt参数为30::最大训练轮次::与之前配置保持一致
+    val_interval: 1 # 第1180行::一致::官方参数为1::tyjt参数为1::验证间隔::无修改原因
+  val_cfg: # 第1181行::一致::官方参数存在::tyjt参数存在::验证配置::无修改原因
+    type: ValLoop # 第1182行::一致::官方参数为ValLoop::tyjt参数为ValLoop::验证循环类型::无修改原因
+  test_cfg: # 第1183行::一致::官方参数存在::tyjt参数存在::测试配置::无修改原因
+    type: TestLoop # 第1184行::一致::官方参数为TestLoop::tyjt参数为TestLoop::测试循环类型::无修改原因
+  optim_wrapper: # 第1185行::一致::官方参数存在::tyjt参数存在::优化器包装器配置::无修改原因
+    type: OptimWrapper # 第1186行::一致::官方参数为OptimWrapper::tyjt参数为OptimWrapper::包装器类型::无修改原因
+    optimizer: # 第1187行::一致::官方参数存在::tyjt参数存在::优化器配置::无修改原因
+      type: Adam # 第1188行::一致::官方参数为Adam::tyjt参数为Adam::优化器类型::无修改原因
+      lr: 0.0001 # 第1189行::不一致::官方参数为0.0002::tyjt参数为0.0001::学习率::与之前优化器配置保持一致
+      betas: [0.9, 0.999] # 第1190行::一致::官方参数为[0.9, 0.999]::tyjt参数相同::Adam beta参数::无修改原因
+      weight_decay: 0.01 # 第1191行::一致::官方参数为0.01::tyjt参数为0.01::权重衰减系数::无修改原因
+    clip_grad: # 第1192行::一致::官方参数存在::tyjt参数存在::梯度裁剪配置::无修改原因
+      max_norm: 35 # 第1193行::一致::官方参数为35::tyjt参数为35::最大范数::无修改原因
+      norm_type: 2 # 第1194行::一致::官方参数为2::tyjt参数为2::范数类型::无修改原因
+  param_scheduler: # 第1195行::一致::官方参数存在::tyjt参数存在::参数调度器配置::无修改原因
+    type: MultiStepLR # 第1196行::一致::官方参数为MultiStepLR::tyjt参数为MultiStepLR::调度器类型::无修改原因
+    milestones: [20, 25] # 第1197行::不一致::官方参数为[16, 19]::tyjt参数为[20, 25]::衰减里程碑::与之前调度器配置保持一致
+    gamma: 0.1 # 第1198行::一致::官方参数为0.1::tyjt参数为0.1::衰减系数::无修改原因
+    begin: 0 # 第1199行::一致::官方参数为0::tyjt参数为0::调度开始epoch::无修改原因
+    end: 30 # 第1200行::不一致::官方参数为20::tyjt参数为30::调度结束epoch::与最大训练轮次保持一致
+      data_preprocessor: # 第1201行::一致::官方参数存在::tyjt参数存在::数据预处理器配置::无修改原因
+    type: Det3DDataPreprocessor # 第1202行::一致::官方参数为Det3DDataPreprocessor::tyjt参数为Det3DDataPreprocessor::3D检测数据预处理器类型::无修改原因
+    mean: # 第1203行::一致::官方参数为[123.675, 116.28, 103.53]::tyjt参数相同::图像均值::无修改原因
+    - 123.675 # 第1204行::一致::官方参数为123.675::tyjt参数为123.675::R通道均值::无修改原因
+    - 116.28 # 第1205行::一致::官方参数为116.28::tyjt参数为116.28::G通道均值::无修改原因
+    - 103.53 # 第1206行::一致::官方参数为103.53::tyjt参数为103.53::B通道均值::无修改原因
+    std: # 第1207行::一致::官方参数为[58.395, 57.12, 57.375]::tyjt参数相同::图像标准差::无修改原因
+    - 58.395 # 第1208行::一致::官方参数为58.395::tyjt参数为58.395::R通道标准差::无修改原因
+    - 57.12 # 第1209行::一致::官方参数为57.12::tyjt参数为57.12::G通道标准差::无修改原因
+    - 57.375 # 第1210行::一致::官方参数为57.375::tyjt参数为57.375::B通道标准差::无修改原因
+    bgr_to_rgb: true # 第1211行::一致::官方参数为true::tyjt参数为true::BGR转RGB开关::无修改原因
+    pad_size_divisor: 32 # 第1212行::一致::官方参数为32::tyjt参数为32::填充尺寸除数::无修改原因
+    batch_augments: # 第1213行::一致::官方参数存在::tyjt参数存在::批量增强配置::无修改原因
+    - type: BatchFixedSizePad # 第1214行::一致::官方参数为BatchFixedSizePad::tyjt参数为BatchFixedSizePad::批量固定尺寸填充::无修改原因
+      size: (900, 1600) # 第1215行::一致::官方参数为(900, 1600)::tyjt参数相同::填充尺寸::无修改原因
+  dataset_type: CustomDataset # 第1216行::不一致::官方参数为NuScenesDataset::tyjt参数为CustomDataset::数据集类型::适配TYJT数据集
+  data_root: ./data/tyjt/ # 第1217行::不一致::官方参数为./data/nuscenes/::tyjt参数为./data/tyjt/::数据根目录::修改为TYJT数据集路径
+  class_names: # 第1218行::一致::官方参数为[car, truck, construction_vehicle, bus, trailer, barrier, motorcycle, bicycle, pedestrian, traffic_cone]::tyjt参数相同::类别名称列表::无修改原因
+  - car # 第1219行::一致::官方参数为car::tyjt参数为car::轿车::无修改原因
+  - truck # 第1220行::一致::官方参数为truck::tyjt参数为truck::卡车::无修改原因
+  - construction_vehicle # 第1221行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::工程车::无修改原因
+  - bus # 第1222行::一致::官方参数为bus::tyjt参数为bus::公交车::无修改原因
+  - trailer # 第1223行::一致::官方参数为trailer::tyjt参数为trailer::拖车::无修改原因
+  - barrier # 第1224行::一致::官方参数为barrier::tyjt参数为barrier::路障::无修改原因
+  - motorcycle # 第1225行::一致::官方参数为motorcycle::tyjt参数为motorcycle::摩托车::无修改原因
+  - bicycle # 第1226行::一致::官方参数为bicycle::tyjt参数为bicycle::自行车::无修改原因
+  - pedestrian # 第1227行::一致::官方参数为pedestrian::tyjt参数为pedestrian::行人::无修改原因
+  - traffic_cone # 第1228行::一致::官方参数为traffic_cone::tyjt参数为traffic_cone::交通锥::无修改原因
+  input_modality: # 第1229行::不一致::官方参数为{use_lidar: true, use_camera: true, use_radar: true, use_map: false, use_external: false}::tyjt参数为{use_lidar: true, use_camera: true, use_radar: false, use_map: false, use_external: false}::输入模态配置::TYJT数据集无雷达，关闭雷达模态
+    use_lidar: true # 第1230行::一致::官方参数为true::tyjt参数为true::使用激光雷达::无修改原因
+    use_camera: true # 第1231行::一致::官方参数为true::tyjt参数为true::使用相机::无修改原因
+    use_radar: false # 第1232行::不一致::官方参数为true::tyjt参数为false::使用雷达::TYJT数据集无雷达数据
+    use_map: false # 第1233行::一致::官方参数为false::tyjt参数为false::使用地图::无修改原因
+    use_external: false # 第1234行::一致::官方参数为false::tyjt参数为false::使用外部数据::无修改原因
+  train: # 第1235行::一致::官方参数存在::tyjt参数存在::训练集配置::无修改原因
+    type: ${dataset_type} # 第1236行::一致::官方参数为${dataset_type}::tyjt参数相同::数据集类型::无修改原因
+    data_root: ${data_root} # 第1237行::一致::官方参数为${data_root}::tyjt参数相同::数据根目录::无修改原因
+    ann_file: ./data/tyjt/annotations/train.json # 第1238行::不一致::官方参数为./data/nuscenes/annotations/nuscenes_infos_train.pkl::tyjt参数为./data/tyjt/annotations/train.json::标注文件路径::修改为TYJT训练集标注
+    pipeline: ${train_pipeline} # 第1239行::一致::官方参数为${train_pipeline}::tyjt参数相同::训练流水线::无修改原因
+    test_mode: false # 第1240行::一致::官方参数为false::tyjt参数为false::测试模式开关::无修改原因
+    use_valid_flag: true # 第1241行::一致::官方参数为true::tyjt参数为true::使用有效标志::无修改原因
+  val: # 第1242行::一致::官方参数存在::tyjt参数存在::验证集配置::无修改原因
+    type: ${dataset_type} # 第1243行::一致::官方参数为${dataset_type}::tyjt参数相同::数据集类型::无修改原因
+    data_root: ${data_root} # 第1244行::一致::官方参数为${data_root}::tyjt参数相同::数据根目录::无修改原因
+    ann_file: ./data/tyjt/annotations/val.json # 第1245行::不一致::官方参数为./data/nuscenes/annotations/nuscenes_infos_val.pkl::tyjt参数为./data/tyjt/annotations/val.json::标注文件路径::修改为TYJT验证集标注
+    pipeline: ${test_pipeline} # 第1246行::一致::官方参数为${test_pipeline}::tyjt参数相同::测试流水线::无修改原因
+    test_mode: true # 第1247行::一致::官方参数为true::tyjt参数为true::测试模式开关::无修改原因
+    use_valid_flag: true # 第1248行::一致::官方参数为true::tyjt参数为true::使用有效标志::无修改原因
+  test: # 第1249行::一致::官方参数存在::tyjt参数存在::测试集配置::无修改原因
+    type: ${dataset_type} # 第1250行::一致::官方参数为${dataset_type}::tyjt参数相同::数据集类型::无修改原因
+    data_root: ${data_root} # 第1251行::一致::官方参数为${data_root}::tyjt参数相同::数据根目录::无修改原因
+    ann_file: ./data/tyjt/annotations/test.json # 第1252行::不一致::官方参数为./data/nuscenes/annotations/nuscenes_infos_test.pkl::tyjt参数为./data/tyjt/annotations/test.json::标注文件路径::修改为TYJT测试集标注
+    pipeline: ${test_pipeline} # 第1253行::一致::官方参数为${test_pipeline}::tyjt参数相同::测试流水线::无修改原因
+    test_mode: true # 第1254行::一致::官方参数为true::tyjt参数为true::测试模式开关::无修改原因
+  eval_config: # 第1255行::一致::官方参数存在::tyjt参数存在::评估配置::无修改原因
+    metric: bbox # 第1256行::一致::官方参数为bbox::tyjt参数为bbox::评估指标::无修改原因
+    interval: 1 # 第1257行::一致::官方参数为1::tyjt参数为1::评估间隔::无修改原因
+  eval_pipeline: # 第1258行::一致::官方参数存在::tyjt参数存在::评估流水线::无修改原因
+  - type: LoadPointsFromFile # 第1259行::一致::官方参数为LoadPointsFromFile::tyjt参数为LoadPointsFromFile::点云加载模块::无修改原因
+    coord_type: LIDAR # 第1260行::一致::官方参数为LIDAR::tyjt参数为LIDAR::坐标类型::无修改原因
+    load_dim: 5 # 第1261行::一致::官方参数为5::tyjt参数为5::加载维度::无修改原因
+    use_dim: 5 # 第1262行::一致::官方参数为5::tyjt参数为5::使用维度::无修改原因
+  - type: LoadImageFromFile # 第1263行::一致::官方参数为LoadImageFromFile::tyjt参数为LoadImageFromFile::图像加载模块::无修改原因
+  - type: LoadAnnotations3D # 第1264行::一致::官方参数为LoadAnnotations3D::tyjt参数为LoadAnnotations3D::3D标注加载模块::无修改原因
+    with_bbox_3d: true # 第1265行::一致::官方参数为true::tyjt参数为true::加载3D边界框::无修改原因
+    with_label_3d: true # 第1266行::一致::官方参数为true::tyjt参数为true::加载3D标签::无修改原因
+  - type: LoadMultiViewImageFromFiles # 第1267行::一致::官方参数为LoadMultiViewImageFromFiles::tyjt参数为LoadMultiViewImageFromFiles::多视角图像加载::无修改原因
+  - type: PointToMultiViewDepth # 第1268行::一致::官方参数为PointToMultiViewDepth::tyjt参数为PointToMultiViewDepth::点云到多视角深度转换::无修改原因
+  - type: DefaultFormatBundle3D # 第1269行::一致::官方参数为DefaultFormatBundle3D::tyjt参数为DefaultFormatBundle3D::3D数据格式封装::无修改原因
+    classes: ${class_names} # 第1270行::一致::官方参数为${class_names}::tyjt参数相同::类别名称::无修改原因
+  - type: Collect3D # 第1271行::一致::官方参数为Collect3D::tyjt参数为Collect3D::3D数据收集::无修改原因
+    keys: # 第1272行::不一致::官方参数为[img, points, radar, gt_bboxes_3d, gt_labels_3d]::tyjt参数为[img, points, gt_bboxes_3d, gt_labels_3d]::收集键值::移除雷达相关键
+    - img # 第1273行::一致::官方参数为img::tyjt参数为img::图像数据::无修改原因
+    - points # 第1274行::一致::官方参数为points::tyjt参数为points::点云数据::无修改原因
+    - radar # 第1275行::不一致::官方参数为radar::tyjt参数移除::雷达数据::TYJT数据集无雷达数据
+    - gt_bboxes_3d # 第1276行::一致::官方参数为gt_bboxes_3d::tyjt参数为gt_bboxes_3d::3D边界框::无修改原因
+    - gt_labels_3d # 第1277行::一致::官方参数为gt_labels_3d::tyjt参数为gt_labels_3d::3D标签::无修改原因
+    meta_keys: # 第1278行::一致::官方参数为[camera_intrinsics, camera2ego, lidar2ego, lidar2camera, lidar2image, camera2lidar]::tyjt参数相同::元数据键值::无修改原因
+    - camera_intrinsics # 第1279行::一致::官方参数为camera_intrinsics::tyjt参数为camera_intrinsics::相机内参::无修改原因
+    - camera2ego # 第1280行::一致::官方参数为camera2ego::tyjt参数为camera2ego::相机到自车变换::无修改原因
+    - lidar2ego # 第1281行::一致::官方参数为lidar2ego::tyjt参数为lidar2ego::激光雷达到自车变换::无修改原因
+    - lidar2camera # 第1282行::一致::官方参数为lidar2camera::tyjt参数为lidar2camera::激光雷达到相机变换::无修改原因
+    - lidar2image # 第1283行::一致::官方参数为lidar2image::tyjt参数为lidar2image::激光雷达到图像变换::无修改原因
+    - camera2lidar # 第1284行::一致::官方参数为camera2lidar::tyjt参数为camera2lidar::相机到激光雷达变换::无修改原因
+  train_pipeline: # 第1285行::一致::官方参数存在::tyjt参数存在::训练流水线::无修改原因
+  - type: LoadPointsFromFile # 第1286行::一致::官方参数为LoadPointsFromFile::tyjt参数为LoadPointsFromFile::点云加载模块::无修改原因
+    coord_type: LIDAR # 第1287行::一致::官方参数为LIDAR::tyjt参数为LIDAR::坐标类型::无修改原因
+    load_dim: 5 # 第1288行::一致::官方参数为5::tyjt参数为5::加载维度::无修改原因
+    use_dim: 5 # 第1289行::一致::官方参数为5::tyjt参数为5::使用维度::无修改原因
+    file_client_args: # 第1290行::一致::官方参数存在::tyjt参数存在::文件客户端配置::无修改原因
+      backend: disk # 第1291行::一致::官方参数为disk::tyjt参数为disk::后端类型::无修改原因
+  - type: LoadImageFromFile # 第1292行::一致::官方参数为LoadImageFromFile::tyjt参数为LoadImageFromFile::图像加载模块::无修改原因
+    file_client_args: # 第1293行::一致::官方参数存在::tyjt参数存在::文件客户端配置::无修改原因
+      backend: disk # 第1294行::一致::官方参数为disk::tyjt参数为disk::后端类型::无修改原因
+  - type: LoadAnnotations3D # 第1295行::一致::官方参数为LoadAnnotations3D::tyjt参数为LoadAnnotations3D::3D标注加载模块::无修改原因
+    with_bbox_3d: true # 第1296行::一致::官方参数为true::tyjt参数为true::加载3D边界框::无修改原因
+    with_label_3d: true # 第1297行::一致::官方参数为true::tyjt参数为true::加载3D标签::无修改原因
+  - type: LoadMultiViewImageFromFiles # 第1298行::一致::官方参数为LoadMultiViewImageFromFiles::tyjt参数为LoadMultiViewImageFromFiles::多视角图像加载::无修改原因
+    file_client_args: # 第1299行::一致::官方参数存在::tyjt参数存在::文件客户端配置::无修改原因
+      backend: disk # 第1300行::一致::官方参数为disk::tyjt参数为disk::后端类型::无修改原因
+        - type: PointToMultiViewDepth # 第1301行::一致::官方参数为PointToMultiViewDepth::tyjt参数为PointToMultiViewDepth::点云到多视角深度转换::无修改原因
+  - type: RandomFlip3D # 第1302行::一致::官方参数为RandomFlip3D::tyjt参数为RandomFlip3D::3D随机翻转增强::无修改原因
+    flip_ratio_bev_horizontal: 0.5 # 第1303行::一致::官方参数为0.5::tyjt参数为0.5::BEV水平翻转概率::无修改原因
+    flip_ratio_bev_vertical: 0.5 # 第1304行::一致::官方参数为0.5::tyjt参数为0.5::BEV垂直翻转概率::无修改原因
+  - type: ObjectRangeFilter # 第1305行::一致::官方参数为ObjectRangeFilter::tyjt参数为ObjectRangeFilter::目标范围过滤::无修改原因
+    point_cloud_range: # 第1306行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数相同::点云范围::无修改原因
+    - -54.0 # 第1307行::一致::官方参数为-54.0::tyjt参数为-54.0::X轴最小范围::无修改原因
+    - -54.0 # 第1308行::一致::官方参数为-54.0::tyjt参数为-54.0::Y轴最小范围::无修改原因
+    - -5.0 # 第1309行::一致::官方参数为-5.0::tyjt参数为-5.0::Z轴最小范围::无修改原因
+    - 54.0 # 第1310行::一致::官方参数为54.0::tyjt参数为54.0::X轴最大范围::无修改原因
+    - 54.0 # 第1311行::一致::官方参数为54.0::tyjt参数为54.0::Y轴最大范围::无修改原因
+    - 3.0 # 第1312行::一致::官方参数为3.0::tyjt参数为3.0::Z轴最大范围::无修改原因
+  - type: ObjectNameFilter # 第1313行::一致::官方参数为ObjectNameFilter::tyjt参数为ObjectNameFilter::目标名称过滤::无修改原因
+    classes: ${class_names} # 第1314行::一致::官方参数为${class_names}::tyjt参数相同::目标类别::无修改原因
+  - type: PointShuffle # 第1315行::一致::官方参数为PointShuffle::tyjt参数为PointShuffle::点云随机打乱::无修改原因
+  - type: RandomZoomIn # 第1316行::一致::官方参数为RandomZoomIn::tyjt参数为RandomZoomIn::随机放大增强::无修改原因
+    img_scale: (1600, 900) # 第1317行::一致::官方参数为(1600, 900)::tyjt参数相同::图像尺寸::无修改原因
+    ratio_range: (1.0, 1.5) # 第1318行::一致::官方参数为(1.0, 1.5)::tyjt参数相同::缩放比例范围::无修改原因
+  - type: PhotoMetricDistortionMultiView # 第1319行::一致::官方参数为PhotoMetricDistortionMultiView::tyjt参数为PhotoMetricDistortionMultiView::多视角光度畸变::无修改原因
+    brightness_delta: 32 # 第1320行::一致::官方参数为32::tyjt参数为32::亮度变化值::无修改原因
+    contrast_range: (0.5, 1.5) # 第1321行::一致::官方参数为(0.5, 1.5)::tyjt参数相同::对比度范围::无修改原因
+    saturation_range: (0.5, 1.5) # 第1322行::一致::官方参数为(0.5, 1.5)::tyjt参数相同::饱和度范围::无修改原因
+    hue_delta: 18 # 第1323行::一致::官方参数为18::tyjt参数为18::色调变化值::无修改原因
+  - type: RandomShiftScale # 第1324行::一致::官方参数为RandomShiftScale::tyjt参数为RandomShiftScale::随机平移缩放::无修改原因
+    shift_range: # 第1325行::一致::官方参数为[-0.1, 0.1]::tyjt参数相同::平移范围::无修改原因
+    - -0.1 # 第1326行::一致::官方参数为-0.1::tyjt参数为-0.1::平移最小值::无修改原因
+    - 0.1 # 第1327行::一致::官方参数为0.1::tyjt参数为0.1::平移最大值::无修改原因
+    scale_ratio_range: # 第1328行::一致::官方参数为[0.9, 1.1]::tyjt参数相同::缩放比例范围::无修改原因
+    - 0.9 # 第1329行::一致::官方参数为0.9::tyjt参数为0.9::缩放最小值::无修改原因
+    - 1.1 # 第1330行::一致::官方参数为1.1::tyjt参数为1.1::缩放最大值::无修改原因
+  - type: RandomCropImage # 第1331行::一致::官方参数为RandomCropImage::tyjt参数为RandomCropImage::随机裁剪图像::无修改原因
+    crop_size: (900, 1600) # 第1332行::一致::官方参数为(900, 1600)::tyjt参数相同::裁剪尺寸::无修改原因
+  - type: NormalizeMultiviewImage # 第1333行::一致::官方参数为NormalizeMultiviewImage::tyjt参数为NormalizeMultiviewImage::多视角图像归一化::无修改原因
+    mean: # 第1334行::一致::官方参数为[123.675, 116.28, 103.53]::tyjt参数相同::均值::无修改原因
+    - 123.675 # 第1335行::一致::官方参数为123.675::tyjt参数为123.675::R通道均值::无修改原因
+    - 116.28 # 第1336行::一致::官方参数为116.28::tyjt参数为116.28::G通道均值::无修改原因
+    - 103.53 # 第1337行::一致::官方参数为103.53::tyjt参数为103.53::B通道均值::无修改原因
+    std: # 第1338行::一致::官方参数为[58.395, 57.12, 57.375]::tyjt参数相同::标准差::无修改原因
+    - 58.395 # 第1339行::一致::官方参数为58.395::tyjt参数为58.395::R通道标准差::无修改原因
+    - 57.12 # 第1340行::一致::官方参数为57.12::tyjt参数为57.12::G通道标准差::无修改原因
+    - 57.375 # 第1341行::一致::官方参数为57.375::tyjt参数为57.375::B通道标准差::无修改原因
+    to_rgb: true # 第1342行::一致::官方参数为true::tyjt参数为true::转RGB格式::无修改原因
+  - type: PadMultiViewImage # 第1343行::一致::官方参数为PadMultiViewImage::tyjt参数为PadMultiViewImage::多视角图像填充::无修改原因
+    size_divisor: 32 # 第1344行::一致::官方参数为32::tyjt参数为32::尺寸除数::无修改原因
+  - type: LaserMix # 第1345行::一致::官方参数为LaserMix::tyjt参数为LaserMix::激光点云混合增强::无修改原因
+    prob: 0.5 # 第1346行::一致::官方参数为0.5::tyjt参数为0.5::增强概率::无修改原因
+    iou_thr: 0.1 # 第1347行::一致::官方参数为0.1::tyjt参数为0.1::IoU阈值::无修改原因
+    preprocess: # 第1348行::一致::官方参数存在::tyjt参数存在::预处理配置::无修改原因
+      num_try: 100 # 第1349行::一致::官方参数为100::tyjt参数为100::尝试次数::无修改原因
+      remove_points_after_sample: true # 第1350行::一致::官方参数为true::tyjt参数为true::采样后移除点::无修改原因
+      sample_additional: 1 # 第1351行::一致::官方参数为1::tyjt参数为1::额外采样数::无修改原因
+      sample_range: 60.0 # 第1352行::一致::官方参数为60.0::tyjt参数为60.0::采样范围::无修改原因
+  - type: DefaultFormatBundle3D # 第1353行::一致::官方参数为DefaultFormatBundle3D::tyjt参数为DefaultFormatBundle3D::3D数据格式封装::无修改原因
+    classes: ${class_names} # 第1354行::一致::官方参数为${class_names}::tyjt参数相同::类别名称::无修改原因
+  - type: Collect3D # 第1355行::一致::官方参数为Collect3D::tyjt参数为Collect3D::3D数据收集::无修改原因
+    keys: # 第1356行::不一致::官方参数为[img, points, radar, gt_bboxes_3d, gt_labels_3d]::tyjt参数为[img, points, gt_bboxes_3d, gt_labels_3d]::收集键值::移除雷达相关键
+    - img # 第1357行::一致::官方参数为img::tyjt参数为img::图像数据::无修改原因
+    - points # 第1358行::一致::官方参数为points::tyjt参数为points::点云数据::无修改原因
+    - radar # 第1359行::不一致::官方参数为radar::tyjt参数移除::雷达数据::TYJT数据集无雷达数据
+    - gt_bboxes_3d # 第1360行::一致::官方参数为gt_bboxes_3d::tyjt参数为gt_bboxes_3d::3D边界框::无修改原因
+    - gt_labels_3d # 第1361行::一致::官方参数为gt_labels_3d::tyjt参数为gt_labels_3d::3D标签::无修改原因
+    meta_keys: # 第1362行::一致::官方参数为[camera_intrinsics, camera2ego, lidar2ego, lidar2camera, lidar2image, camera2lidar, img_aug_matrix, lidar_aug_matrix]::tyjt参数相同::元数据键值::无修改原因
+    - camera_intrinsics # 第1363行::一致::官方参数为camera_intrinsics::tyjt参数为camera_intrinsics::相机内参::无修改原因
+    - camera2ego # 第1364行::一致::官方参数为camera2ego::tyjt参数为camera2ego::相机到自车变换::无修改原因
+    - lidar2ego # 第1365行::一致::官方参数为lidar2ego::tyjt参数为lidar2ego::激光雷达到自车变换::无修改原因
+    - lidar2camera # 第1366行::一致::官方参数为lidar2camera::tyjt参数为lidar2camera::激光雷达到相机变换::无修改原因
+    - lidar2image # 第1367行::一致::官方参数为lidar2image::tyjt参数为lidar2image::激光雷达到图像变换::无修改原因
+    - camera2lidar # 第1368行::一致::官方参数为camera2lidar::tyjt参数为camera2lidar::相机到激光雷达变换::无修改原因
+    - img_aug_matrix # 第1369行::一致::官方参数为img_aug_matrix::tyjt参数为img_aug_matrix::图像增强矩阵::无修改原因
+    - lidar_aug_matrix # 第1370行::一致::官方参数为lidar_aug_matrix::tyjt参数为lidar_aug_matrix::激光雷达增强矩阵::无修改原因
+  - type: GTDepth # 第1371行::一致::官方参数为GTDepth::tyjt参数为GTDepth::深度信息加载::无修改原因
+    keyframe_only: true # 第1372行::一致::官方参数为true::tyjt参数为true::仅关键帧::无修改原因
+  test_pipeline: # 第1373行::一致::官方参数存在::tyjt参数存在::测试流水线::无修改原因
+  - type: LoadPointsFromFile # 第1374行::一致::官方参数为LoadPointsFromFile::tyjt参数为LoadPointsFromFile::点云加载模块::无修改原因
+    coord_type: LIDAR # 第1375行::一致::官方参数为LIDAR::tyjt参数为LIDAR::坐标类型::无修改原因
+    load_dim: 5 # 第1376行::一致::官方参数为5::tyjt参数为5::加载维度::无修改原因
+    use_dim: 5 # 第1377行::一致::官方参数为5::tyjt参数为5::使用维度::无修改原因
+    file_client_args: # 第1378行::一致::官方参数存在::tyjt参数存在::文件客户端配置::无修改原因
+      backend: disk # 第1379行::一致::官方参数为disk::tyjt参数为disk::后端类型::无修改原因
+  - type: LoadImageFromFile # 第1380行::一致::官方参数为LoadImageFromFile::tyjt参数为LoadImageFromFile::图像加载模块::无修改原因
+    file_client_args: # 第1381行::一致::官方参数存在::tyjt参数存在::文件客户端配置::无修改原因
+      backend: disk # 第1382行::一致::官方参数为disk::tyjt参数为disk::后端类型::无修改原因
+  - type: LoadMultiViewImageFromFiles # 第1383行::一致::官方参数为LoadMultiViewImageFromFiles::tyjt参数为LoadMultiViewImageFromFiles::多视角图像加载::无修改原因
+    file_client_args: # 第1384行::一致::官方参数存在::tyjt参数存在::文件客户端配置::无修改原因
+      backend: disk # 第1385行::一致::官方参数为disk::tyjt参数为disk::后端类型::无修改原因
+  - type: PointToMultiViewDepth # 第1386行::一致::官方参数为PointToMultiViewDepth::tyjt参数为PointToMultiViewDepth::点云到多视角深度转换::无修改原因
+  - type: NormalizeMultiviewImage # 第1387行::一致::官方参数为NormalizeMultiviewImage::tyjt参数为NormalizeMultiviewImage::多视角图像归一化::无修改原因
+    mean: # 第1388行::一致::官方参数为[123.675, 116.28, 103.53]::tyjt参数相同::均值::无修改原因
+    - 123.675 # 第1389行::一致::官方参数为123.675::tyjt参数为123.675::R通道均值::无修改原因
+    - 116.28 # 第1390行::一致::官方参数为116.28::tyjt参数为116.28::G通道均值::无修改原因
+    - 103.53 # 第1391行::一致::官方参数为103.53::tyjt参数为103.53::B通道均值::无修改原因
+    std: # 第1392行::一致::官方参数为[58.395, 57.12, 57.375]::tyjt参数相同::标准差::无修改原因
+    - 58.395 # 第1393行::一致::官方参数为58.395::tyjt参数为58.395::R通道标准差::无修改原因
+    - 57.12 # 第1394行::一致::官方参数为57.12::tyjt参数为57.12::G通道标准差::无修改原因
+    - 57.375 # 第1395行::一致::官方参数为57.375::tyjt参数为57.375::B通道标准差::无修改原因
+    to_rgb: true # 第1396行::一致::官方参数为true::tyjt参数为true::转RGB格式::无修改原因
+  - type: PadMultiViewImage # 第1397行::一致::官方参数为PadMultiViewImage::tyjt参数为PadMultiViewImage::多视角图像填充::无修改原因
+    size_divisor: 32 # 第1398行::一致::官方参数为32::tyjt参数为32::尺寸除数::无修改原因
+  - type: DefaultFormatBundle3D # 第1399行::一致::官方参数为DefaultFormatBundle3D::tyjt参数为DefaultFormatBundle3D::3D数据格式封装::无修改原因
+    classes: ${class_names} # 第1400行::一致::官方参数为${class_names}::tyjt参数相同::类别名称::无修改原因
+      - type: Collect3D # 第1401行::一致::官方参数为Collect3D::tyjt参数为Collect3D::3D数据收集::无修改原因
+    keys: # 第1402行::不一致::官方参数为[img, points, radar]::tyjt参数为[img, points]::收集键值::移除雷达相关键
+    - img # 第1403行::一致::官方参数为img::tyjt参数为img::图像数据::无修改原因
+    - points # 第1404行::一致::官方参数为points::tyjt参数为points::点云数据::无修改原因
+    - radar # 第1405行::不一致::官方参数为radar::tyjt参数移除::雷达数据::TYJT数据集无雷达数据
+    meta_keys: # 第1406行::一致::官方参数为[camera_intrinsics, camera2ego, lidar2ego, lidar2camera, lidar2image, camera2lidar, timestamp]::tyjt参数相同::元数据键值::无修改原因
+    - camera_intrinsics # 第1407行::一致::官方参数为camera_intrinsics::tyjt参数为camera_intrinsics::相机内参::无修改原因
+    - camera2ego # 第1408行::一致::官方参数为camera2ego::tyjt参数为camera2ego::相机到自车变换::无修改原因
+    - lidar2ego # 第1409行::一致::官方参数为lidar2ego::tyjt参数为lidar2ego::激光雷达到自车变换::无修改原因
+    - lidar2camera # 第1410行::一致::官方参数为lidar2camera::tyjt参数为lidar2camera::激光雷达到相机变换::无修改原因
+    - lidar2image # 第1411行::一致::官方参数为lidar2image::tyjt参数为lidar2image::激光雷达到图像变换::无修改原因
+    - camera2lidar # 第1412行::一致::官方参数为camera2lidar::tyjt参数为camera2lidar::相机到激光雷达变换::无修改原因
+    - timestamp # 第1413行::一致::官方参数为timestamp::tyjt参数为timestamp::时间戳::无修改原因
+  - type: GTDepth # 第1414行::一致::官方参数为GTDepth::tyjt参数为GTDepth::深度信息加载::无修改原因
+    keyframe_only: true # 第1415行::一致::官方参数为true::tyjt参数为true::仅关键帧::无修改原因
+  eval_hooks: # 第1416行::一致::官方参数存在::tyjt参数存在::评估钩子::无修改原因
+  - type: EvalHook # 第1417行::一致::官方参数为EvalHook::tyjt参数为EvalHook::评估钩子类型::无修改原因
+    by_epoch: true # 第1418行::一致::官方参数为true::tyjt参数为true::按轮次评估::无修改原因
+    interval: 1 # 第1419行::一致::官方参数为1::tyjt参数为1::评估间隔::无修改原因
+    metric: bbox # 第1420行::一致::官方参数为bbox::tyjt参数为bbox::评估指标::无修改原因
+  log_processor: # 第1421行::一致::官方参数存在::tyjt参数存在::日志处理器::无修改原因
+    by_epoch: true # 第1422行::一致::官方参数为true::tyjt参数为true::按轮次处理::无修改原因
+    window_size: 50 # 第1423行::一致::官方参数为50::tyjt参数为50::窗口大小::无修改原因
+  model: # 第1424行::一致::官方参数存在::tyjt参数存在::模型配置::无修改原因
+    type: BEVFusion # 第1425行::一致::官方参数为BEVFusion::tyjt参数为BEVFusion::模型类型::无修改原因
+    data_preprocessor: # 第1426行::一致::官方参数存在::tyjt参数存在::数据预处理器::无修改原因
+      type: Det3DDataPreprocessor # 第1427行::一致::官方参数为Det3DDataPreprocessor::tyjt参数为Det3DDataPreprocessor::3D检测数据预处理器::无修改原因
+      mean: # 第1428行::一致::官方参数为[123.675, 116.28, 103.53]::tyjt参数相同::均值::无修改原因
+      - 123.675 # 第1429行::一致::官方参数为123.675::tyjt参数为123.675::R通道均值::无修改原因
+      - 116.28 # 第1430行::一致::官方参数为116.28::tyjt参数为116.28::G通道均值::无修改原因
+      - 103.53 # 第1431行::一致::官方参数为103.53::tyjt参数为103.53::B通道均值::无修改原因
+      std: # 第1432行::一致::官方参数为[58.395, 57.12, 57.375]::tyjt参数相同::标准差::无修改原因
+      - 58.395 # 第1433行::一致::官方参数为58.395::tyjt参数为58.395::R通道标准差::无修改原因
+      - 57.12 # 第1434行::一致::官方参数为57.12::tyjt参数为57.12::G通道标准差::无修改原因
+      - 57.375 # 第1435行::一致::官方参数为57.375::tyjt参数为57.375::B通道标准差::无修改原因
+      bgr_to_rgb: true # 第1436行::一致::官方参数为true::tyjt参数为true::BGR转RGB::无修改原因
+    pts_voxel_encoder: # 第1437行::一致::官方参数存在::tyjt参数存在::点云体素编码器::无修改原因
+      type: DynamicPillarFeatureNet # 第1438行::一致::官方参数为DynamicPillarFeatureNet::tyjt参数为DynamicPillarFeatureNet::动态柱体特征网络::无修改原因
+      in_channels: 5 # 第1439行::一致::官方参数为5::tyjt参数为5::输入通道数::无修改原因
+      feat_channels: # 第1440行::一致::官方参数为[64]::tyjt参数相同::特征通道数::无修改原因
+      - 64 # 第1441行::一致::官方参数为64::tyjt参数为64::特征通道数::无修改原因
+      with_distance: false # 第1442行::一致::官方参数为false::tyjt参数为false::包含距离信息::无修改原因
+      voxel_size: # 第1443行::一致::官方参数为[0.16, 0.16, 4.0]::tyjt参数相同::体素尺寸::无修改原因
+      - 0.16 # 第1444行::一致::官方参数为0.16::tyjt参数为0.16::X轴体素尺寸::无修改原因
+      - 0.16 # 第1445行::一致::官方参数为0.16::tyjt参数为0.16::Y轴体素尺寸::无修改原因
+      - 4.0 # 第1446行::一致::官方参数为4.0::tyjt参数为4.0::Z轴体素尺寸::无修改原因
+      point_cloud_range: # 第1447行::一致::官方参数为[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]::tyjt参数相同::点云范围::无修改原因
+      - -54.0 # 第1448行::一致::官方参数为-54.0::tyjt参数为-54.0::X轴最小范围::无修改原因
+      - -54.0 # 第1449行::一致::官方参数为-54.0::tyjt参数为-54.0::Y轴最小范围::无修改原因
+      - -5.0 # 第1450行::一致::官方参数为-5.0::tyjt参数为-5.0::Z轴最小范围::无修改原因
+      - 54.0 # 第1451行::一致::官方参数为54.0::tyjt参数为54.0::X轴最大范围::无修改原因
+      - 54.0 # 第1452行::一致::官方参数为54.0::tyjt参数为54.0::Y轴最大范围::无修改原因
+      - 3.0 # 第1453行::一致::官方参数为3.0::tyjt参数为3.0::Z轴最大范围::无修改原因
+    pts_middle_encoder: # 第1454行::一致::官方参数存在::tyjt参数存在::点云中编码器::无修改原因
+      type: PointPillarsScatter # 第1455行::一致::官方参数为PointPillarsScatter::tyjt参数为PointPillarsScatter::点柱体散射::无修改原因
+      in_channels: 64 # 第1456行::一致::官方参数为64::tyjt参数为64::输入通道数::无修改原因
+      output_shape: # 第1457行::一致::官方参数为[672, 672]::tyjt参数相同::输出形状::无修改原因
+      - 672 # 第1458行::一致::官方参数为672::tyjt参数为672::输出高度::无修改原因
+      - 672 # 第1459行::一致::官方参数为672::tyjt参数为672::输出宽度::无修改原因
+    img_backbone: # 第1460行::一致::官方参数存在::tyjt参数存在::图像骨干网络::无修改原因
+      type: ResNet # 第1461行::一致::官方参数为ResNet::tyjt参数为ResNet::ResNet骨干网络::无修改原因
+      depth: 50 # 第1462行::一致::官方参数为50::tyjt参数为50::网络深度::无修改原因
+      num_stages: 4 # 第1463行::一致::官方参数为4::tyjt参数为4::阶段数量::无修改原因
+      out_indices: # 第1464行::一致::官方参数为[0, 1, 2, 3]::tyjt参数相同::输出索引::无修改原因
+      - 0 # 第1465行::一致::官方参数为0::tyjt参数为0::输出索引0::无修改原因
+      - 1 # 第1466行::一致::官方参数为1::tyjt参数为1::输出索引1::无修改原因
+      - 2 # 第1467行::一致::官方参数为2::tyjt参数为2::输出索引2::无修改原因
+      - 3 # 第1468行::一致::官方参数为3::tyjt参数为3::输出索引3::无修改原因
+      frozen_stages: -1 # 第1469行::一致::官方参数为-1::tyjt参数为-1::冻结阶段::无修改原因
+      norm_cfg: # 第1470行::一致::官方参数存在::tyjt参数存在::归一化配置::无修改原因
+        type: SyncBN # 第1471行::一致::官方参数为SyncBN::tyjt参数为SyncBN::归一化类型::无修改原因
+        requires_grad: true # 第1472行::一致::官方参数为true::tyjt参数为true::需要梯度::无修改原因
+      norm_eval: false # 第1473行::一致::官方参数为false::tyjt参数为false::归一化评估模式::无修改原因
+      style: pytorch # 第1474行::一致::官方参数为pytorch::tyjt参数为pytorch::网络风格::无修改原因
+      dcn: # 第1475行::一致::官方参数存在::tyjt参数存在::可变形卷积配置::无修改原因
+        type: DCNv2 # 第1476行::一致::官方参数为DCNv2::tyjt参数为DCNv2::可变形卷积类型::无修改原因
+        groups: 16 # 第1477行::一致::官方参数为16::tyjt参数为16::分组数::无修改原因
+        deform_groups: 16 # 第1478行::一致::官方参数为16::tyjt参数为16::可变形分组数::无修改原因
+        fallback_on_stride: false # 第1479行::一致::官方参数为false::tyjt参数为false::步长回退::无修改原因
+      stage_with_dcn: # 第1480行::一致::官方参数为[false, false, true, true]::tyjt参数相同::带可变形卷积的阶段::无修改原因
+      - false # 第1481行::一致::官方参数为false::tyjt参数为false::阶段0::无修改原因
+      - false # 第1482行::一致::官方参数为false::tyjt参数为false::阶段1::无修改原因
+      - true # 第1483行::一致::官方参数为true::tyjt参数为true::阶段2::无修改原因
+      - true # 第1484行::一致::官方参数为true::tyjt参数为true::阶段3::无修改原因
+    img_neck: # 第1485行::一致::官方参数存在::tyjt参数存在::图像颈部网络::无修改原因
+      type: FPN # 第1486行::一致::官方参数为FPN::tyjt参数为FPN::特征金字塔网络::无修改原因
+      in_channels: # 第1487行::一致::官方参数为[256, 512, 1024, 2048]::tyjt参数相同::输入通道数::无修改原因
+      - 256 # 第1488行::一致::官方参数为256::tyjt参数为256::输入通道0::无修改原因
+      - 512 # 第1489行::一致::官方参数为512::tyjt参数为512::输入通道1::无修改原因
+      - 1024 # 第1490行::一致::官方参数为1024::tyjt参数为1024::输入通道2::无修改原因
+      - 2048 # 第1491行::一致::官方参数为2048::tyjt参数为2048::输入通道3::无修改原因
+      out_channels: 256 # 第1492行::一致::官方参数为256::tyjt参数为256::输出通道数::无修改原因
+      num_outs: 4 # 第1493行::一致::官方参数为4::tyjt参数为4::输出数量::无修改原因
+      start_level: 0 # 第1494行::一致::官方参数为0::tyjt参数为0::起始层级::无修改原因
+      add_extra_convs: on_output # 第1495行::一致::官方参数为on_output::tyjt参数为on_output::额外卷积添加位置::无修改原因
+      relu_before_extra_convs: false # 第1496行::一致::官方参数为false::tyjt参数为false::额外卷积前ReLU::无修改原因
+      no_norm_on_lateral: false # 第1497行::一致::官方参数为false::tyjt参数为false::横向连接无归一化::无修改原因
+      norm_cfg: # 第1498行::一致::官方参数存在::tyjt参数存在::归一化配置::无修改原因
+        type: SyncBN # 第1499行::一致::官方参数为SyncBN::tyjt参数为SyncBN::归一化类型::无修改原因
+        requires_grad: true # 第1500行::一致::官方参数为true::tyjt参数为true::需要梯度::无修改原因
+            img_view_transformer: # 第1501行::一致::官方参数存在::tyjt参数存在::图像视角变换器::无修改原因
+      type: LSSTransformer # 第1502行::一致::官方参数为LSSTransformer::tyjt参数为LSSTransformer::LSS变换器类型::无修改原因
+      in_channels: 256 # 第1503行::一致::官方参数为256::tyjt参数为256::输入通道数::无修改原因
+      out_channels: 256 # 第1504行::一致::官方参数为256::tyjt参数为256::输出通道数::无修改原因
+      feat_size: # 第1505行::一致::官方参数为[180, 320]::tyjt参数相同::特征尺寸::无修改原因
+      - 180 # 第1506行::一致::官方参数为180::tyjt参数为180::特征高度::无修改原因
+      - 320 # 第1507行::一致::官方参数为320::tyjt参数为320::特征宽度::无修改原因
+      downsample: 16 # 第1508行::一致::官方参数为16::tyjt参数为16::下采样率::无修改原因
+      num_feature_levels: 4 # 第1509行::一致::官方参数为4::tyjt参数为4::特征层级数量::无修改原因
+      num_cams: 6 # 第1510行::一致::官方参数为6::tyjt参数为6::相机数量::无修改原因
+      img_transformer: # 第1511行::一致::官方参数存在::tyjt参数存在::图像变换器::无修改原因
+        type: PerceptionTransformer # 第1512行::一致::官方参数为PerceptionTransformer::tyjt参数为PerceptionTransformer::感知变换器类型::无修改原因
+        num_layers: 3 # 第1513行::一致::官方参数为3::tyjt参数为3::层数::无修改原因
+        num_heads: 8 # 第1514行::一致::官方参数为8::tyjt参数为8::注意力头数::无修改原因
+        d_model: 256 # 第1515行::一致::官方参数为256::tyjt参数为256::模型维度::无修改原因
+        dropout: 0.1 # 第1516行::一致::官方参数为0.1::tyjt参数为0.1::dropout率::无修改原因
+        activation: relu # 第1517行::一致::官方参数为relu::tyjt参数为relu::激活函数::无修改原因
+      map2bev: # 第1518行::一致::官方参数存在::tyjt参数存在::映射到BEV::无修改原因
+        type: HeightCompression # 第1519行::一致::官方参数为HeightCompression::tyjt参数为HeightCompression::高度压缩类型::无修改原因
+        in_channels: 256 # 第1520行::一致::官方参数为256::tyjt参数为256::输入通道数::无修改原因
+      positional_encoding: # 第1521行::一致::官方参数存在::tyjt参数存在::位置编码::无修改原因
+        type: SinePositionalEncoding # 第1522行::一致::官方参数为SinePositionalEncoding::tyjt参数为SinePositionalEncoding::正弦位置编码::无修改原因
+        num_feats: 128 # 第1523行::一致::官方参数为128::tyjt参数为128::特征数量::无修改原因
+        normalize: true # 第1524行::一致::官方参数为true::tyjt参数为true::是否归一化::无修改原因
+        offset: 0.0 # 第1525行::一致::官方参数为0.0::tyjt参数为0.0::偏移量::无修改原因
+        temperature: 10000.0 # 第1526行::一致::官方参数为10000.0::tyjt参数为10000.0::温度参数::无修改原因
+    bev_encoder: # 第1527行::一致::官方参数存在::tyjt参数存在::BEV编码器::无修改原因
+      type: ResNetBEV # 第1528行::一致::官方参数为ResNetBEV::tyjt参数为ResNetBEV::BEV的ResNet编码器::无修改原因
+      in_channels: 512 # 第1529行::一致::官方参数为512::tyjt参数为512::输入通道数::无修改原因
+      stem_channels: 256 # 第1530行::一致::官方参数为256::tyjt参数为256::stem通道数::无修改原因
+      block_type: BasicBlock # 第1531行::一致::官方参数为BasicBlock::tyjt参数为BasicBlock::块类型::无修改原因
+      num_blocks: # 第1532行::一致::官方参数为[3, 4, 6, 3]::tyjt参数相同::块数量::无修改原因
+      - 3 # 第1533行::一致::官方参数为3::tyjt参数为3::块数量0::无修改原因
+      - 4 # 第1534行::一致::官方参数为4::tyjt参数为4::块数量1::无修改原因
+      - 6 # 第1535行::一致::官方参数为6::tyjt参数为6::块数量2::无修改原因
+      - 3 # 第1536行::一致::官方参数为3::tyjt参数为3::块数量3::无修改原因
+      out_indices: # 第1537行::一致::官方参数为[1, 2, 3]::tyjt参数相同::输出索引::无修改原因
+      - 1 # 第1538行::一致::官方参数为1::tyjt参数为1::输出索引1::无修改原因
+      - 2 # 第1539行::一致::官方参数为2::tyjt参数为2::输出索引2::无修改原因
+      - 3 # 第1540行::一致::官方参数为3::tyjt参数为3::输出索引3::无修改原因
+      norm_cfg: # 第1541行::一致::官方参数存在::tyjt参数存在::归一化配置::无修改原因
+        type: SyncBN # 第1542行::一致::官方参数为SyncBN::tyjt参数为SyncBN::归一化类型::无修改原因
+        requires_grad: true # 第1543行::一致::官方参数为true::tyjt参数为true::需要梯度::无修改原因
+    bbox_head: # 第1544行::一致::官方参数存在::tyjt参数存在::边界框头::无修改原因
+      type: CenterHead # 第1545行::一致::官方参数为CenterHead::tyjt参数为CenterHead::中心头类型::无修改原因
+      in_channels: # 第1546行::一致::官方参数为[512, 1024, 2048]::tyjt参数相同::输入通道数::无修改原因
+      - 512 # 第1547行::一致::官方参数为512::tyjt参数为512::输入通道0::无修改原因
+      - 1024 # 第1548行::一致::官方参数为1024::tyjt参数为1024::输入通道1::无修改原因
+      - 2048 # 第1549行::一致::官方参数为2048::tyjt参数为2048::输入通道2::无修改原因
+      tasks: # 第1550行::一致::官方参数存在::tyjt参数存在::任务配置::无修改原因
+      - class_names: # 第1551行::一致::官方参数为[car]::tyjt参数相同::类别名称::无修改原因
+        - car # 第1552行::一致::官方参数为car::tyjt参数为car::轿车::无修改原因
+        common_heads: # 第1553行::一致::官方参数存在::tyjt参数存在::公共头::无修改原因
+          reg: 3 # 第1554行::一致::官方参数为3::tyjt参数为3::回归头维度::无修改原因
+          height: 1 # 第1555行::一致::官方参数为1::tyjt参数为1::高度头维度::无修改原因
+          dim: 3 # 第1556行::一致::官方参数为3::tyjt参数为3::尺寸头维度::无修改原因
+          rot: 2 # 第1557行::一致::官方参数为2::tyjt参数为2::旋转头维度::无修改原因
+          vel: 2 # 第1558行::一致::官方参数为2::tyjt参数为2::速度头维度::无修改原因
+        code_weights: # 第1559行::一致::官方参数为[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2]::tyjt参数相同::编码权重::无修改原因
+        - 1.0 # 第1560行::一致::官方参数为1.0::tyjt参数为1.0::权重0::无修改原因
+        - 1.0 # 第1561行::一致::官方参数为1.0::tyjt参数为1.0::权重1::无修改原因
+        - 1.0 # 第1562行::一致::官方参数为1.0::tyjt参数为1.0::权重2::无修改原因
+        - 1.0 # 第1563行::一致::官方参数为1.0::tyjt参数为1.0::权重3::无修改原因
+        - 1.0 # 第1564行::一致::官方参数为1.0::tyjt参数为1.0::权重4::无修改原因
+        - 1.0 # 第1565行::一致::官方参数为1.0::tyjt参数为1.0::权重5::无修改原因
+        - 1.0 # 第1566行::一致::官方参数为1.0::tyjt参数为1.0::权重6::无修改原因
+        - 1.0 # 第1567行::一致::官方参数为1.0::tyjt参数为1.0::权重7::无修改原因
+        - 0.2 # 第1568行::一致::官方参数为0.2::tyjt参数为0.2::权重8::无修改原因
+        - 0.2 # 第1569行::一致::官方参数为0.2::tyjt参数为0.2::权重9::无修改原因
+        group_id: 0 # 第1570行::一致::官方参数为0::tyjt参数为0::组ID::无修改原因
+      - class_names: # 第1571行::一致::官方参数为[truck, construction_vehicle]::tyjt参数相同::类别名称::无修改原因
+        - truck # 第1572行::一致::官方参数为truck::tyjt参数为truck::卡车::无修改原因
+        - construction_vehicle # 第1573行::一致::官方参数为construction_vehicle::tyjt参数为construction_vehicle::工程车::无修改原因
+        common_heads: # 第1574行::一致::官方参数存在::tyjt参数存在::公共头::无修改原因
+          reg: 3 # 第1575行::一致::官方参数为3::tyjt参数为3::回归头维度::无修改原因
+          height: 1 # 第1576行::一致::官方参数为1::tyjt参数为1::高度头维度::无修改原因
+          dim: 3 # 第1577行::一致::官方参数为3::tyjt参数为3::尺寸头维度::无修改原因
+          rot: 2 # 第1578行::一致::官方参数为2::tyjt参数为2::旋转头维度::无修改原因
+          vel: 2 # 第1579行::一致::官方参数为2::tyjt参数为2::速度头维度::无修改原因
+        code_weights: # 第1580行::一致::官方参数为[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2]::tyjt参数相同::编码权重::无修改原因
+        - 1.0 # 第1581行::一致::官方参数为1.0::tyjt参数为1.0::权重0::无修改原因
+        - 1.0 # 第1582行::一致::官方参数为1.0::tyjt参数为1.0::权重1::无修改原因
+        - 1.0 # 第1583行::一致::官方参数为1.0::tyjt参数为1.0::权重2::无修改原因
+        - 1.0 # 第1584行::一致::官方参数为1.0::tyjt参数为1.0::权重3::无修改原因
+        - 1.0 # 第1585行::一致::官方参数为1.0::tyjt参数为1.0::权重4::无修改原因
+        - 1.0 # 第1586行::一致::官方参数为1.0::tyjt参数为1.0::权重5::无修改原因
+        - 1.0 # 第1587行::一致::官方参数为1.0::tyjt参数为1.0::权重6::无修改原因
+        - 1.0 # 第1588行::一致::官方参数为1.0::tyjt参数为1.0::权重7::无修改原因
+        - 0.2 # 第1589行::一致::官方参数为0.2::tyjt参数为0.2::权重8::无修改原因
+        - 0.2 # 第1590行::一致::官方参数为0.2::tyjt参数为0.2::权重9::无修改原因
+        group_id: 1 # 第1591行::一致::官方参数为1::tyjt参数为1::组ID::无修改原因
+      - class_names: # 第1592行::一致::官方参数为[bus, trailer]::tyjt参数相同::类别名称::无修改原因
+        - bus # 第1593行::一致::官方参数为bus::tyjt参数为bus::公交车::无修改原因
+        - trailer # 第1594行::一致::官方参数为trailer::tyjt参数为trailer::拖车::无修改原因
+        common_heads: # 第1595行::一致::官方参数存在::tyjt参数存在::公共头::无修改原因
+          reg: 3 # 第1596行::一致::官方参数为3::tyjt参数为3::回归头维度::无修改原因
+          height: 1 # 第1597行::一致::官方参数为1::tyjt参数为1::高度头维度::无修改原因
+          dim: 3 # 第1598行::一致::官方参数为3::tyjt参数为3::尺寸头维度::无修改原因
+          rot: 2 # 第1599行::一致::官方参数为2::tyjt参数为2::旋转头维度::无修改原因
+          vel: 2 # 第1600行::一致::官方参数为2::tyjt参数为2::速度头维度::无修改原因

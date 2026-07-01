@@ -1,0 +1,221 @@
+{
+  "CAM_FRONT": {
+    "calibrated_sensor_token": "f801bbdf-da41-af96-4cb8-f0410168e986",
+    "sensor_to_ego_translation": [
+      -9.3799544859815,
+      54.856585305925186,
+      5.703825423001204
+    ],
+    "sensor_to_ego_rotation": [
+      -0.0016005084833558315,
+      0.020315669294725034,
+      0.7583465420402865,
+      -0.6515326201438398
+    ],
+    "sensor_in_global_position": [
+      -9.3799544859815,
+      54.856585305925186,
+      5.703825423001204
+    ],
+    "ego_to_global_translation": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ego_to_global_rotation": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "camera_intrinsic": [
+      [
+        2954.80498,
+        0,
+        997.37239
+      ],
+      [
+        0,
+        2932.14416,
+        522.7289
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ]
+  },
+  "CAM_FRONT_RIGHT": {
+    "calibrated_sensor_token": "554912bf-c79f-53bb-e218-f2a557055eb4",
+    "sensor_to_ego_translation": [
+      53.67062691326791,
+      -3.450229890001552,
+      5.8082423835466575
+    ],
+    "sensor_to_ego_rotation": [
+      -0.47199369936246743,
+      0.5705431711684849,
+      0.5062644244199304,
+      -0.4420395915319028
+    ],
+    "sensor_in_global_position": [
+      53.67062691326791,
+      -3.450229890001552,
+      5.8082423835466575
+    ],
+    "ego_to_global_translation": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ego_to_global_rotation": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "camera_intrinsic": [
+      [
+        3000.0,
+        0,
+        960.0
+      ],
+      [
+        0,
+        3000.0,
+        540.0
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ]
+  },
+  "CAM_BACK": {
+    "calibrated_sensor_token": "b6e8c2dc-acec-7bb4-9676-67ca6c0c81bf",
+    "sensor_to_ego_translation": [
+      11.17060721133609,
+      -56.061745897140966,
+      6.141471617565363
+    ],
+    "sensor_to_ego_rotation": [
+      0.6430597113818416,
+      -0.765394338373482,
+      -0.023120102040214908,
+      0.010615084951658272
+    ],
+    "sensor_in_global_position": [
+      11.17060721133609,
+      -56.061745897140966,
+      6.141471617565363
+    ],
+    "ego_to_global_translation": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ego_to_global_rotation": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "camera_intrinsic": [
+      [
+        2990.24664,
+        0,
+        925.35099
+      ],
+      [
+        0,
+        2980.0229,
+        572.29958
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ]
+  },
+  "CAM_FRONT_LEFT": {
+    "calibrated_sensor_token": "1a5d2f84-1824-4844-0222-d23e67188686",
+    "sensor_to_ego_translation": [
+      -49.17699517610879,
+      -21.323825749927522,
+      5.946271623005208
+    ],
+    "sensor_to_ego_rotation": [
+      -0.4733848294841281,
+      0.5726387574777625,
+      -0.4914697990748982,
+      0.45436641132155603
+    ],
+    "sensor_in_global_position": [
+      -49.17699517610879,
+      -21.323825749927522,
+      5.946271623005208
+    ],
+    "ego_to_global_translation": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ego_to_global_rotation": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "camera_intrinsic": [
+      [
+        3000.0,
+        0,
+        960.0
+      ],
+      [
+        0,
+        3000.0,
+        540.0
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ]
+  },
+  "LIDAR_TOP": {
+    "calibrated_sensor_token": "53cce975-72b3-ae91-bc10-72da7ab52c44",
+    "sensor_to_ego_translation": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "sensor_to_ego_rotation": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "sensor_in_global_position": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ego_to_global_translation": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ego_to_global_rotation": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "camera_intrinsic": []
+  }
+}

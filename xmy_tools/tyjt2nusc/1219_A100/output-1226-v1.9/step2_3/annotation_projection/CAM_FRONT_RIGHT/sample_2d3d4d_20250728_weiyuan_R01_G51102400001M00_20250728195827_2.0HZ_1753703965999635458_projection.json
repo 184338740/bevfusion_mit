@@ -1,0 +1,729 @@
+{
+  "camera_channel": "CAM_FRONT_RIGHT",
+  "timestamp": "2d3d4d_20250728_weiyuan_R01_G51102400001M00_20250728195827_2.0HZ_1753703965999635458",
+  "total_annotations": 36,
+  "projection_details": [
+    {
+      "annotation_index": 0,
+      "category": "tyjt.truck",
+      "ego_position": [
+        31.9606,
+        41.6757,
+        0.9816
+      ],
+      "camera_position": [
+        35.08447194444224,
+        2.8574656773254157,
+        21.11690785923887
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        3691.660043884154,
+        767.7164336158596
+      ]
+    },
+    {
+      "annotation_index": 1,
+      "category": "tyjt.truck",
+      "ego_position": [
+        46.0413,
+        39.7311,
+        0.8826
+      ],
+      "camera_position": [
+        33.43145992111954,
+        5.381236363274104,
+        7.226074293938829
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        8602.791768764579,
+        1880.1117064696498
+      ]
+    },
+    {
+      "annotation_index": 2,
+      "category": "tyjt.truck",
+      "ego_position": [
+        45.5538,
+        43.2383,
+        0.9016
+      ],
+      "camera_position": [
+        36.925342598605525,
+        5.410369120177787,
+        7.800868399275636
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        8779.998679004462,
+        1786.7631428828658
+      ]
+    },
+    {
+      "annotation_index": 3,
+      "category": "tyjt.car",
+      "ego_position": [
+        45.6828,
+        25.838,
+        0.9896
+      ],
+      "camera_position": [
+        19.551150723005577,
+        4.679928377007293,
+        7.169672619427907
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        5456.455710541564,
+        1712.247498740099
+      ]
+    },
+    {
+      "annotation_index": 4,
+      "category": "tyjt.car",
+      "ego_position": [
+        22.5707,
+        55.0419,
+        0.8395
+      ],
+      "camera_position": [
+        48.23369984119846,
+        1.8416376925261346,
+        30.755951314058514
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        3537.343266759187,
+        630.0090235073972
+      ]
+    },
+    {
+      "annotation_index": 5,
+      "category": "tyjt.van",
+      "ego_position": [
+        -37.2695,
+        -31.7305,
+        1.1671
+      ],
+      "camera_position": [
+        -39.67448246382271,
+        -12.434321582869378,
+        87.13635169411128
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        185.6103343897116,
+        260.2113237417537
+      ]
+    },
+    {
+      "annotation_index": 6,
+      "category": "tyjt.car",
+      "ego_position": [
+        -28.4043,
+        -38.0789,
+        0.8916
+      ],
+      "camera_position": [
+        -45.84260975515335,
+        -10.832102191132389,
+        78.28441699671447
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -30.169289866531027,
+        268.1174080260459
+      ]
+    },
+    {
+      "annotation_index": 7,
+      "category": "tyjt.van",
+      "ego_position": [
+        -29.394,
+        -32.2281,
+        0.9855
+      ],
+      "camera_position": [
+        -40.015049620126845,
+        -10.876008777694686,
+        79.40591269285441
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        105.08704076037304,
+        270.67545254026834
+      ]
+    },
+    {
+      "annotation_index": 8,
+      "category": "tyjt.van",
+      "ego_position": [
+        -65.0653,
+        -25.3372,
+        0.9623
+      ],
+      "camera_position": [
+        -33.87676082615245,
+        -16.92486972135432,
+        114.69978740259444
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        450.56287749355204,
+        251.34254981064265
+      ]
+    },
+    {
+      "annotation_index": 9,
+      "category": "tyjt.tricyclist",
+      "ego_position": [
+        51.2877,
+        -11.2054,
+        0.7617
+      ],
+      "camera_position": [
+        -17.343246337142027,
+        4.4799624938036695,
+        0.6549203041146825
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -42922.34064894289,
+        13007.654607665938
+      ]
+    },
+    {
+      "annotation_index": 10,
+      "category": "tyjt.cyclist",
+      "ego_position": [
+        -19.6308,
+        -15.0452,
+        0.6977
+      ],
+      "camera_position": [
+        -22.66026535233401,
+        -8.200424639968347,
+        70.33356607211903
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        406.1214159419664,
+        307.8670586655757
+      ]
+    },
+    {
+      "annotation_index": 11,
+      "category": "tyjt.pedestrian",
+      "ego_position": [
+        24.5966,
+        -26.6285,
+        0.7476
+      ],
+      "camera_position": [
+        -33.306096386699146,
+        -0.8379527509218825,
+        26.485013759538504
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -1143.1493704951133,
+        462.94759994820924
+      ]
+    },
+    {
+      "annotation_index": 12,
+      "category": "tyjt.cyclist",
+      "ego_position": [
+        -18.9984,
+        -3.6237,
+        0.7358
+      ],
+      "camera_position": [
+        -11.236857214169664,
+        -7.687869684387744,
+        70.0254352242949
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        673.9745252954091,
+        320.29202219242995
+      ]
+    },
+    {
+      "annotation_index": 13,
+      "category": "tyjt.cyclist",
+      "ego_position": [
+        -6.1136,
+        25.107,
+        0.7365
+      ],
+      "camera_position": [
+        17.730088672223435,
+        -4.299003460511823,
+        58.15521037767617
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        1444.7381655470733,
+        385.75984534828507
+      ]
+    },
+    {
+      "annotation_index": 14,
+      "category": "tyjt.car",
+      "ego_position": [
+        0.9543,
+        -18.0285,
+        0.9054
+      ],
+      "camera_position": [
+        -25.202077114892443,
+        -4.8627762091470945,
+        49.95985034006243
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        104.2319484905287,
+        343.0246278796864
+      ]
+    },
+    {
+      "annotation_index": 15,
+      "category": "tyjt.tricyclist",
+      "ego_position": [
+        2.9087,
+        -30.2476,
+        1.0735
+      ],
+      "camera_position": [
+        -37.35943964070342,
+        -5.149210517919581,
+        47.66406345106877
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -358.48219717753017,
+        323.4966444732907
+      ]
+    },
+    {
+      "annotation_index": 16,
+      "category": "tyjt.car",
+      "ego_position": [
+        5.1289,
+        -22.9984,
+        1.1709
+      ],
+      "camera_position": [
+        -30.06797586061807,
+        -4.572843453283831,
+        45.66606688558618
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -150.8181906039924,
+        337.9080840513985
+      ]
+    },
+    {
+      "annotation_index": 17,
+      "category": "tyjt.car",
+      "ego_position": [
+        5.863,
+        -32.7083,
+        0.855
+      ],
+      "camera_position": [
+        -39.76508312268849,
+        -4.503920055821404,
+        44.726865966799885
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -532.8236937635686,
+        336.8826505518557
+      ]
+    },
+    {
+      "annotation_index": 18,
+      "category": "tyjt.truck",
+      "ego_position": [
+        1.95,
+        -41.9192,
+        2.1267
+      ],
+      "camera_position": [
+        -48.99287885056067,
+        -6.802438792627653,
+        48.09346973676963
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -747.5447602208272,
+        262.5069075648435
+      ]
+    },
+    {
+      "annotation_index": 19,
+      "category": "tyjt.van",
+      "ego_position": [
+        5.5146,
+        -44.6522,
+        1.4166
+      ],
+      "camera_position": [
+        -51.67877610042665,
+        -5.575768798398734,
+        44.63498658612959
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -977.9529226274021,
+        292.6684970337192
+      ]
+    },
+    {
+      "annotation_index": 20,
+      "category": "tyjt.car",
+      "ego_position": [
+        9.2286,
+        -21.4076,
+        1.143
+      ],
+      "camera_position": [
+        -28.394675642529283,
+        -3.7562777109686323,
+        41.682069217801114
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -188.56421565502058,
+        356.19769549452366
+      ]
+    },
+    {
+      "annotation_index": 21,
+      "category": "tyjt.car",
+      "ego_position": [
+        8.7059,
+        -28.7871,
+        0.9748
+      ],
+      "camera_position": [
+        -35.78391777560982,
+        -3.966515711125036,
+        42.01877637542435
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -470.79818162894003,
+        348.38239232486694
+      ]
+    },
+    {
+      "annotation_index": 22,
+      "category": "tyjt.cyclist",
+      "ego_position": [
+        11.5431,
+        -6.0864,
+        0.942
+      ],
+      "camera_position": [
+        -13.0511057954809,
+        -2.560392119596628,
+        39.87071810574359
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        397.5866532251499,
+        403.47690526917114
+      ]
+    },
+    {
+      "annotation_index": 23,
+      "category": "tyjt.cyclist",
+      "ego_position": [
+        9.0783,
+        -8.1274,
+        1.0098
+      ],
+      "camera_position": [
+        -15.138302188139196,
+        -3.143063944864635,
+        42.22648070162178
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        345.96379003941706,
+        384.82785628791765
+      ]
+    },
+    {
+      "annotation_index": 24,
+      "category": "tyjt.cyclist",
+      "ego_position": [
+        10.9807,
+        -26.6363,
+        0.9832
+      ],
+      "camera_position": [
+        -33.587754237757544,
+        -3.488314417068488,
+        39.83957670699726
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -456.649386629771,
+        360.8678035004311
+      ]
+    },
+    {
+      "annotation_index": 25,
+      "category": "tyjt.cyclist",
+      "ego_position": [
+        23.3693,
+        -12.1564,
+        0.8412
+      ],
+      "camera_position": [
+        -18.87194511103096,
+        -0.5933783171143365,
+        28.08248396355909
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -173.3226039511452,
+        482.1311215930284
+      ]
+    },
+    {
+      "annotation_index": 26,
+      "category": "tyjt.cyclist",
+      "ego_position": [
+        20.8079,
+        -36.8182,
+        0.7627
+      ],
+      "camera_position": [
+        -43.5626417589034,
+        -1.916222247327598,
+        29.92376304472384
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        -1471.5049663542934,
+        403.8064893213827
+      ]
+    },
+    {
+      "annotation_index": 27,
+      "category": "tyjt.car",
+      "ego_position": [
+        38.1693,
+        7.3415,
+        0.7069
+      ],
+      "camera_position": [
+        0.9068063662932273,
+        2.9145870441339063,
+        14.092450249101795
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        1046.3432230279097,
+        898.2409533077838
+      ]
+    },
+    {
+      "annotation_index": 28,
+      "category": "tyjt.cyclist",
+      "ego_position": [
+        37.0355,
+        2.172,
+        0.7665
+      ],
+      "camera_position": [
+        -4.277950476821648,
+        2.4564929169680934,
+        15.052246506549722
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        469.022337984282,
+        818.612380988868
+      ]
+    },
+    {
+      "annotation_index": 29,
+      "category": "tyjt.car",
+      "ego_position": [
+        41.8417,
+        3.0696,
+        0.711
+      ],
+      "camera_position": [
+        -3.283513039926245,
+        3.3991190734028454,
+        10.358542827763792
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        414.7290497203184,
+        1119.7183691696246
+      ]
+    },
+    {
+      "annotation_index": 30,
+      "category": "tyjt.car",
+      "ego_position": [
+        40.3542,
+        10.9572,
+        0.5504
+      ],
+      "camera_position": [
+        4.557300008117509,
+        3.5951139053117958,
+        12.071970583710566
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        1565.0467635704233,
+        1064.3346237212488
+      ]
+    },
+    {
+      "annotation_index": 31,
+      "category": "tyjt.pedestrian",
+      "ego_position": [
+        33.0093,
+        28.406,
+        0.9154
+      ],
+      "camera_position": [
+        21.84880756397533,
+        2.6003039999585047,
+        19.72409171099064
+      ],
+      "in_front_of_camera": true,
+      "in_image": false,
+      "image_coordinates": [
+        2774.5189681646043,
+        761.3591523781338
+      ]
+    },
+    {
+      "annotation_index": 32,
+      "category": "tyjt.pedestrian",
+      "ego_position": [
+        15.4255,
+        20.2383,
+        0.8353
+      ],
+      "camera_position": [
+        13.320251308743142,
+        -0.7570760965967058,
+        36.809151360946814
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        1539.1458639053997,
+        483.15744935918343
+      ]
+    },
+    {
+      "annotation_index": 33,
+      "category": "tyjt.car",
+      "ego_position": [
+        -1.2276,
+        29.3404,
+        0.7307
+      ],
+      "camera_position": [
+        22.060342724165867,
+        -3.263241063061608,
+        53.46791019625065
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        1623.1500283800858,
+        409.29204649944097
+      ]
+    },
+    {
+      "annotation_index": 34,
+      "category": "tyjt.car",
+      "ego_position": [
+        -44.5342,
+        -26.9904,
+        1.0365
+      ],
+      "camera_position": [
+        -35.09680101685853,
+        -13.414562475112207,
+        94.44013852260017
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        324.22019792880235,
+        261.40985959529735
+      ]
+    },
+    {
+      "annotation_index": 35,
+      "category": "tyjt.car",
+      "ego_position": [
+        -57.0864,
+        -25.0413,
+        0.9822
+      ],
+      "camera_position": [
+        -33.4139658717398,
+        -15.515928525506803,
+        106.85431507249831
+      ],
+      "in_front_of_camera": true,
+      "in_image": true,
+      "image_coordinates": [
+        421.8184535540637,
+        255.63529202151702
+      ]
+    }
+  ],
+  "in_view_count": 16,
+  "in_view_ratio": 44.44444444444444
+}

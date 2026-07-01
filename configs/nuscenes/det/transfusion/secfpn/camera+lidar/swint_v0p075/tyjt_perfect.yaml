@@ -1,0 +1,20 @@
+_base_: ['./default.yaml']
+
+# 只需要覆盖数据路径，其他保持默认
+data:
+  train:
+    dataset:
+      ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_train.pkl'
+  val:
+    ann_file: '/mnt/bevfusion_mit_xmy/xmy_tools/tyjt2pkl/step3_1_output/tyjt_infos_val.pkl'
+
+# 修复点云维度（关键！）
+train_pipeline:
+  - type: LoadPointsFromFile
+    coord_type: LIDAR
+    load_dim: 4
+    use_dim: [0, 1, 2, 3]
+    file_client_args:
+      backend: disk
+  - type: LoadMultiViewImageFromFiles
+    to_float32: true
