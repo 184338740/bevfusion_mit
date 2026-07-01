@@ -1,0 +1,22 @@
+BEV Fusion Visualization Configuration:
+Timestamp: 1753701446899737835
+BEV Range: ±75.0m
+FOV Range: up to 150.0m
+Total points: 218734
+Total labels: 57
+Boxes drawn: 57
+Cameras found: 4
+FOV intervals: [30, 60, 90, 120, 150]
+
+Object type colors:
+  car: red
+  truck: blue
+  cyclist: green
+  pedestrian: orange
+  default: black
+
+Camera colors:
+  SC_R1_Aw_CpcS_CAMR: red
+  SC_R1_Bn_CpcW_CAMR: green
+  SC_R1_Ce_CpcN_CAMR: blue
+  SC_R1_Ds_CpcE_CAMR: orange

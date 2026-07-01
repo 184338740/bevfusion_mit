@@ -1,0 +1,10 @@
+BEV Fusion Visualization Configuration: 
+Timestamp: 1753701446899737835
+BEV Range: ±75.0m
+FOV Range: up to 150.0m
+Total points: 218734
+Total labels: 57
+Boxes drawn: 57
+Cameras found: 4
+Obstacle types present: ['bicycle', 'car', 'cyclist', 'pedestrian', 'tricycle', 'tricyclist', 'truck', 'van']
+FOV angle: 60.0 degrees

@@ -117,6 +117,8 @@
 #   - 阈值调整后需重新运行推理才能生效。
 # =============================================================================
 
+
+
 import copy
 import torch
 from mmcv.cnn import ConvModule, build_conv_layer
@@ -133,9 +135,9 @@ from mmdet.core import build_bbox_coder, multi_apply
 from .centerpoint import CenterHead, clip_sigmoid, SeparateHead, DCNSeparateHead
 
 Debug = False
-if Debug:
-    import time
-    print(f">>>[xmy]🔵[mmdet3d/models/heads/bbox/xmy_centerhead_percls.py] >>> [Debug Mode = True] ")
+DebugWarning = False
+
+print(f">>>[xmy]🟢[mmdet3d/models/heads/bbox/xmy_centerhead_percls.py] >>>  Debug={Debug} DebugWarning={DebugWarning}")
 
 @HEADS.register_module()
 class XmyCenterHeadPerCls(CenterHead):
@@ -172,9 +174,9 @@ class XmyCenterHeadPerCls(CenterHead):
             self.task_class_loss_weights = None
 
         if self.task_class_loss_weights is not None:
-            print(f">>>[xmy]🔵[xmy_centerhead_percls.py]>>> [XmyCenterHeadPerCls] Task class loss weights: {self.task_class_loss_weights}")
+            print(f">>>[xmy]🟢[xmy_centerhead_percls.py]>>> [XmyCenterHeadPerCls] Task class loss weights: {self.task_class_loss_weights}")
         else:
-            print(">>>[xmy]🔵[xmy_centerhead_percls.py]>>> [XmyCenterHeadPerCls] No per-class loss weights, using uniform weighting.")
+            print(">>>[xmy]🟢[xmy_centerhead_percls.py]>>> [XmyCenterHeadPerCls] No per-class loss weights, using uniform weighting.")
 
         # import pdb;pdb.set_trace()
         # ========== 测试相关配置 ==========
@@ -187,10 +189,10 @@ class XmyCenterHeadPerCls(CenterHead):
         self._debug_printed = False
 
 
-
     @force_fp32(apply_to=("preds_dicts"))
     def loss(self, gt_bboxes_3d, gt_labels_3d, preds_dicts, **kwargs):
         """Loss function with per-class weighted classification loss."""
+        metas = kwargs.get('metas', []) 
         # Step1：获取Gt 
         # heatmaps：Gt heatmaps
         # anno_boxes： Gt 属性        
@@ -217,7 +219,7 @@ class XmyCenterHeadPerCls(CenterHead):
 
                 # 调试打印：
                 if not self._debug_printed and num_pos > 0:
-                    print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py]>>> [Task {task_id}] Class weights: {task_weights.tolist()}")
+                    print(f"\n>>>[xmy]🟢[xmy_centerhead_percls.py]>>> [XmyCenterHeadPerCls.loss()] >>> [Task {task_id}] Class weights: {task_weights.tolist()}")
                     mean_loss_before = element_loss.mean(dim=(0,2,3)).tolist()
                     mean_loss_after = weighted_loss.mean(dim=(0,2,3)).tolist()
                     print(f"  Mean loss per class (before weighting): {mean_loss_before}")
@@ -226,14 +228,58 @@ class XmyCenterHeadPerCls(CenterHead):
 
                 # 求和并除以正样本数
                 loss_heatmap = weighted_loss.sum() / max(num_pos, 1)
+                if DebugWarning:
+                    # sample_id = metas[0].get('sample_idx', metas[0].get('token', metas[0].get('lidar_path', 'unknown')))
+                    # batch_tokens = [meta.get('sample_idx', meta.get('token', 'unknown')) for meta in metas]
+                    import os, threading
+                    pid = os.getpid()
+                    tid = threading.get_ident()
+                    print(f">>>[xmy]🟢[bevfusion.py] >>> 【{pid}:{tid}】[⑥]【Heads阶段】heads输出 pred_heatmap: min={pred_heatmap.min().item():.4f}, max={pred_heatmap.max().item():.4f}, "
+                          f"has_nan={torch.isnan(pred_heatmap).any()}, has_inf={torch.isinf(pred_heatmap).any()}")
+                    print(f">>>[xmy]🟢[bevfusion.py] >>> 【{pid}:{tid}】[⑥]【Heads阶段】heads输出 gt_heatmap: min={gt_heatmap.min().item():.4f}, max={gt_heatmap.max().item():.4f}, "
+                          f"has_nan={torch.isnan(gt_heatmap).any()}, has_inf={torch.isinf(gt_heatmap).any()}")
+
             else:
                 # (3.2)无分类别权重的配置时： 使用原有的 reduction='mean' 损失
                 loss_heatmap = self.loss_cls(
                     pred_heatmap, gt_heatmap, avg_factor=max(num_pos, 1))
+                if DebugWarning:
+                    # sample_id = metas[0].get('sample_idx', metas[0].get('token', metas[0].get('lidar_path', 'unknown')))
+                    # batch_tokens = [meta.get('sample_idx', meta.get('token', 'unknown')) for meta in metas]
+                    import os, threading
+                    pid = os.getpid()
+                    tid = threading.get_ident()
+                    print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> 【{pid}:{tid}】[⑥]【Heads阶段】heads输出 pred_heatmap: min={pred_heatmap.min().item():.4f}, max={pred_heatmap.max().item():.4f}, "
+                          f"has_nan={torch.isnan(pred_heatmap).any()}, has_inf={torch.isinf(pred_heatmap).any()}")
+                    print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> 【{pid}:{tid}】[⑥]【Heads阶段】heads输出 gt_heatmap: min={gt_heatmap.min().item():.4f}, max={gt_heatmap.max().item():.4f}, "
+                          f"has_nan={torch.isnan(gt_heatmap).any()}, has_inf={torch.isinf(gt_heatmap).any()}")
 
             # ====== 回归损失（不变）======
             # Step2.2 回归损失（与基类相同）： 不做类别的额外加权
             target_box = anno_boxes[task_id]
+
+            if DebugWarning:
+                import os, threading
+                pid = os.getpid()
+                tid = threading.get_ident()
+                size_dims = target_box[..., 3:6]   # 注意：取最后一维的切片
+
+                # 定义对数空间阈值（根据实际数据统计调整）
+                LOG_MIN = -2.0   # 对应真实尺寸约 0.135 米， 如锥通
+                LOG_MAX = 3.0    # 对应真实尺寸约 20.08 米， 如卡车
+   
+                # 检查是否有超出正常范围的对数尺寸
+                invalid_mask = (size_dims < LOG_MIN) | (size_dims > LOG_MAX)
+                if invalid_mask.any():
+                    # 获取当前 batch 的 token（如果有）
+                    tokens = [meta.get('sample_idx', meta.get('token', 'unknown')) for meta in metas] if metas else []
+                    # 收集超限的对数值及其对应的真实尺寸（exp）
+                    invalid_dims = size_dims[invalid_mask]
+                    real_dims = torch.exp(invalid_dims)
+                    print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>  [⚠️ Warning] [ZeroDim] target_box has non-positive dims: tokens={tokens}, dims={size_dims[size_dims <= 0]}")
+                    print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>> [⚠️ Warning] target_box has abnormal log-dim: tokens={tokens}")
+                    print(f"    log-dim abnormal: {invalid_dims.tolist()}, corresponding real dim: {real_dims.tolist()}")
+
             # reconstruct the anno_box from multiple reg heads
             preds_dict[0]["anno_box"] = torch.cat(
                 (
@@ -258,20 +304,77 @@ class XmyCenterHeadPerCls(CenterHead):
 
             code_weights = self.train_cfg.get("code_weights", None)
             bbox_weights = mask * mask.new_tensor(code_weights)
+            
+            # if DebugWarning:
+            #     # 检查 pred 和 target_box
+            #     print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>  [DEBUG] pred: min={pred.min():.6f}, max={pred.max():.6f}, has_nan={torch.isnan(pred).any()}, has_inf={torch.isinf(pred).any()}")
+            #     print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>  [DEBUG] target_box: min={target_box.min():.6f}, max={target_box.max():.6f}, has_nan={torch.isnan(target_box).any()}, has_inf={torch.isinf(target_box).any()}")
+            #     print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>  [DEBUG] num = {num}, avg_factor = {num + 1e-4}")
+            #     print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>  [DEBUG] bbox_weights: min={bbox_weights.min():.6f}, max={bbox_weights.max():.6f}, has_nan={torch.isnan(bbox_weights).any()}, has_inf={torch.isinf(bbox_weights).any()}")
+            #     print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>  [DEBUG] mask: min={mask.min():.6f}, max={mask.max():.6f}, has_nan={torch.isnan(mask).any()}")
+
+
+            #     pred = torch.nan_to_num(pred, nan=0.0, posinf=10.0, neginf=-10.0)
+            #     target_box = torch.nan_to_num(target_box, nan=0.0, posinf=10.0, neginf=-10.0)
+            #     loss_bbox = self.loss_bbox(pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
+            if DebugWarning:
+                import os, threading
+                pid = os.getpid()
+                tid = threading.get_ident()
+                split_sizes = [2, 1, 3, 2, 2]
+                pred_parts = torch.split(pred, split_sizes, dim=-1)
+                target_parts = torch.split(target_box, split_sizes, dim=-1)
+                batch_tokens = [meta.get('sample_idx', meta.get('token', 'unknown')) for meta in metas]
+                print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> batch_tokens: {batch_tokens}")
+                part_names = ['reg', 'height', 'dim', 'rot', 'vel']
+                print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> 【{pid}:{tid}】[⑥-0]【Heads阶段】回归分量详细统计")
+                for name, p_part, t_part in zip(part_names, pred_parts, target_parts):
+                    print(f"  {name}: pred min={p_part.min().item():.4f}, max={p_part.max().item():.4f}, "
+                        f"has_nan={torch.isnan(p_part).any()}, has_inf={torch.isinf(p_part).any()}")
+                    print(f"        target min={t_part.min().item():.4f}, max={t_part.max().item():.4f}, "
+                        f"has_nan={torch.isnan(t_part).any()}, has_inf={torch.isinf(t_part).any()}")
             # 回归loss
             loss_bbox = self.loss_bbox(
                 pred, target_box, bbox_weights, avg_factor=(num + 1e-4)
             )
+            if DebugWarning:
+                import os, threading
+                pid = os.getpid()
+                tid = threading.get_ident()
+                # 定义每个回归分量的维度（根据 common_heads 的定义）
+                # 例如：reg:2, height:1, dim:3, rot:2, vel:2
+                split_sizes = [2, 1, 3, 2, 2]
+                pred_parts = torch.split(pred, split_sizes, dim=-1)
+                target_parts = torch.split(target_box, split_sizes, dim=-1)
+                part_names = ['reg', 'height', 'dim', 'rot', 'vel']
+                print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> 【{pid}:{tid}】[⑥-1]【Heads阶段】回归分量详细统计")
+                for name, p_part, t_part in zip(part_names, pred_parts, target_parts):
+                    print(f"  {name}: pred min={p_part.min().item():.4f}, max={p_part.max().item():.4f}, "
+                        f"has_nan={torch.isnan(p_part).any()}, has_inf={torch.isinf(p_part).any()}")
+                    print(f"        target min={t_part.min().item():.4f}, max={t_part.max().item():.4f}, "
+                        f"has_nan={torch.isnan(t_part).any()}, has_inf={torch.isinf(t_part).any()}")
+                print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> 【{pid}:{tid}】[⑥-2]【Heads阶段】【Loss】heatmap_loss = {loss_heatmap.item():.4f}")
+                print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> 【{pid}:{tid}】[⑥-3]【Heads阶段】【Loss】bbox_loss = {loss_bbox.item():.4f}")
+                print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>  [DEBUG] loss_bbox value: {loss_bbox.item() if not torch.isnan(loss_bbox) else 'NaN'}")
+
+                # if (torch.isnan(loss_bbox) or torch.isinf(loss_bbox)  or loss_bbox > 100.0):
+                #     sample_id = metas[0].get('sample_idx', metas[0].get('token', metas[0].get('lidar_path', 'unknown')))
+                #     # 获取当前 batch 的 tokens
+                #     batch_tokens = [meta.get('sample_idx', meta.get('token', 'unknown')) for meta in metas]
+                    # print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>  [⚠️ Warning] [NaN] loss_bbox is NaN/Inf for task {task_id}, tokens={batch_tokens}")
+                    # print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>   pred stats: min={pred.min()}, max={pred.max()}, has_nan={torch.isnan(pred).any()}")
+                    # print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>   target_box stats: min={target_box.min()}, max={target_box.max()}, has_nan={torch.isnan(target_box).any()}")
+                    # print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> [XmyCenterHeadPerCls.loss()] >>> [PID {pid} TID {tid}] >>>   bbox_weights stats: min={bbox_weights.min()}, max={bbox_weights.max()}, has_nan={torch.isnan(bbox_weights).any()}")
+            
             # step3：更新 loss_dict
             loss_dict[f"heatmap/task{task_id}"] = loss_heatmap
             loss_dict[f"bbox/task{task_id}"] = loss_bbox
         
-        # 在所有任务遍历完后设置标志为 True
+         # 在所有任务遍历完后设置标志为 True
         if self.task_class_loss_weights is not None and not self._debug_printed:
             self._debug_printed = True
 
         return loss_dict
-
 
     def _filter_by_class_score(self, boxes3d, scores, labels, task_id):
         """返回 per-box 的置信度阈值张量（不进行过滤）"""
@@ -331,8 +434,8 @@ class XmyCenterHeadPerCls(CenterHead):
             num_class_with_bg = self.num_classes[task_id]         # 当前任务的类别数
             batch_size = preds_dict[0]["heatmap"].shape[0]        # batch大小
             # if Debug:
-            #     print(f"\n>>>[xmy]🔵[xmy_centerhead_percls.py] >>> 处理任务{task_id}: {self.class_names[task_id]}")
-            #     print(f">>>[xmy]🔵[xmy_centerhead_percls.py] >>> 任务{task_id}的类别数: {num_class_with_bg}")
+            #     print(f"\n>>>[xmy]🟢[xmy_centerhead_percls.py] >>> 处理任务{task_id}: {self.class_names[task_id]}")
+            #     print(f">>>[xmy]🟢[xmy_centerhead_percls.py] >>> 任务{task_id}的类别数: {num_class_with_bg}")
 
             # 获取当前任务的特征图并做sigmoid处理
             batch_heatmap = preds_dict[0]["heatmap"].sigmoid()
@@ -391,6 +494,7 @@ class XmyCenterHeadPerCls(CenterHead):
                 # =================== circle NMS 分支 ===================
                 ret_task = []
                 for i in range(batch_size):
+
                     boxes3d = temp[i]["bboxes"]      # 已滤波
                     scores = temp[i]["scores"]
                     labels = temp[i]["labels"]
@@ -440,6 +544,7 @@ class XmyCenterHeadPerCls(CenterHead):
         num_samples = len(rets[0])
 
         ret_list = []
+                
         for i in range(num_samples):
             for k in rets[0][i].keys():
                 if k == "bboxes":
@@ -451,14 +556,15 @@ class XmyCenterHeadPerCls(CenterHead):
                     # 合并scores
                     scores = torch.cat([ret[i][k] for ret in rets])
                 elif k == "labels":
-		    # 合并labels
                     flag = 0
                     for j, num_class in enumerate(self.num_classes):
                         rets[j][i][k] += flag
                         flag += num_class
+
                     labels = torch.cat([ret[i][k].int() for ret in rets])
             ret_list.append([bboxes, scores, labels])
         return ret_list
+
 
     def get_task_detections(
         self,
@@ -519,6 +625,8 @@ class XmyCenterHeadPerCls(CenterHead):
             global_score_thr = self.test_cfg.get('score_threshold', 0.0)
             per_box_thresh = torch.full_like(top_scores, global_score_thr)
 
+            # print(f">>>[xmy]🟢[xmy_centerhead_percls.py][XmyCenterHeadPerCls]>>> [NMS rotate分支] Task {task_id}, class '{cls_name}' -> Score threshold = {self.per_class_score_threshold.get(cls_name, global_score_thr)}")
+
             # 根据类别设置 per-class 阈值（如果配置了）
             if self.per_class_score_threshold:
                 for cls_idx, cls_name in enumerate(task_class_names):
@@ -569,6 +677,7 @@ class XmyCenterHeadPerCls(CenterHead):
                     cls_scores = top_scores[mask]
                     cls_name = task_class_names[cls_label.item()]
                     nms_thr = self.per_class_nms_thr.get(cls_name, self.test_cfg.get("nms_thr", 0.2))
+                    # print(f">>>[xmy]🟢[xmy_centerhead_percls.py][XmyCenterHeadPerCls]>>>  [NMS rotate分支]  Task {task_id}, class '{cls_name}' -> NMS IoU threshold = {nms_thr} ")
                     cls_selected = nms_gpu(
                         cls_boxes,
                         cls_scores,

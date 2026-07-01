@@ -1,4 +1,5 @@
 import tempfile
+import os
 from os import path as osp
 from typing import Any, Dict
 
@@ -16,10 +17,11 @@ from .custom_3d import Custom3DDataset
 
 
 Debug = False
-print(f"\n>>>[xmy]🔵[nuscenes_dataset]🔵[mmdet3d/datasets/nuscenes_dataset.py] >>> [Debug Mode] = {Debug} ")
 if Debug:
     import time, json
     from collections import Counter
+    print(f"\n>>>[xmy]🔵[nuscenes_dataset]🔵[mmdet3d/datasets/nuscenes_dataset.py] >>> [Debug Mode = True] ")
+
 
 @DATASETS.register_module()
 class NuScenesDataset(Custom3DDataset):
@@ -217,7 +219,7 @@ class NuScenesDataset(Custom3DDataset):
         data_infos = data_infos[:: self.load_interval]
         self.metadata = data["metadata"]
         self.version = self.metadata["version"]
-        print(f">>>[xmy]🔵[nuscenes_dataset]🔵[nuscenes_dataset.py] >>> load_annotations(); self.version  = {self.version}")
+        print(f">>>[xmy]🔵 mmdet3d/datasets/nuscenes_dataset.py:206 load_annotations(); self.version  = {self.version}")
         return data_infos
 
     def get_data_info(self, index: int) -> Dict[str, Any]:
@@ -367,7 +369,7 @@ class NuScenesDataset(Custom3DDataset):
 
         if Debug:
             # 🔵 添加关键调试信息
-            print(f"\n>>>[xmy]🔵[nuscenes_dataset]🔵[nuscenes_dataset.py] >>>[DEBUG] _format_bbox 开始转换")
+            print(f"\n🔵 [DEBUG] _format_bbox 开始转换")
             print(f"🔵 self.CLASSES = {self.CLASSES}")
             print(f"🔵 mapped_class_names = {mapped_class_names}")
             print(f"🔵 结果数量: {len(results)}")
@@ -376,6 +378,7 @@ class NuScenesDataset(Custom3DDataset):
             annos = []
             boxes = output_to_nusc_box(det)
             sample_token = self.data_infos[sample_id]["token"]
+
             boxes = lidar_nusc_box_to_global(
                 self.data_infos[sample_id],
                 boxes,
@@ -385,6 +388,7 @@ class NuScenesDataset(Custom3DDataset):
             )
             for i, box in enumerate(boxes):
                 name = mapped_class_names[box.label]
+
                 if np.sqrt(box.velocity[0] ** 2 + box.velocity[1] ** 2) > 0.2:
                     if name in [
                         "car",
@@ -436,24 +440,10 @@ class NuScenesDataset(Custom3DDataset):
         metric="bbox",
         result_name="pts_bbox",
     ):
-        """Evaluation for a single model in nuScenes protocol.
-
-        Args:
-            result_path (str): Path of the result file.
-            logger (logging.Logger | str | None): Logger used for printing
-                related information during evaluation. Default: None.
-            metric (str): Metric name used for evaluation. Default: 'bbox'.
-            result_name (str): Result name in the metric prefix.
-                Default: 'pts_bbox'.
-
-        Returns:
-            dict: Dictionary of evaluation details.
-        """
-
         if Debug:
             # ========== 添加调试打印 ==========
             print("\n" + "="*80)
-            print(f">>>[xmy]🔵[nuscenes_dataset]🔵[nuscenes_dataset.py] >>>\n 🔵[xmy.DEBUG]>>>[DEBUG] 开始评估 _evaluate_single")
+            print(f"🔵[xmy.DEBUG]>>>[DEBUG] 开始评估 _evaluate_single")
             print(f'🔵[xmy.DEBUG]>>> _evaluate_single 开始')
             print(f'🔵[xmy.DEBUG]>>> self.version = "{self.version}"')
             print(f'🔵[xmy.DEBUG]>>> self.dataset_root = "{self.dataset_root}"')
@@ -497,12 +487,71 @@ class NuScenesDataset(Custom3DDataset):
             }
             print("="*80)            
 
+
+
+        """Evaluation for a single model in nuScenes protocol."""
         from nuscenes import NuScenes
         from nuscenes.eval.detection.evaluate import DetectionEval
 
         output_dir = osp.join(*osp.split(result_path)[:-1])
-	# 🔵 2. 设置评测集 eval_set
+
+        print(f">>>[xmy]🔵 mmdet3d/datasets/nuscenes_dataset.py:435 class NuScenesDataset: _evaluate_single(): self.version= {self.version}")
+
+        # 🔵 2. 设置评测集 eval_set
         nusc = NuScenes(version=self.version, dataroot=self.dataset_root, verbose=False)
+        if Debug:
+            # nusc加载后的全量数据分析
+            print("="*80)
+            print("🔵[NUSC全量数据分析] nusc对象加载完成")
+            print("="*80)
+
+            # 总样本数
+            total_samples = len(nusc.sample)
+            print(f"🔵 数据库总样本数: {total_samples}")
+
+            # 总标注数
+            total_annotations = len(nusc.sample_annotation)
+            print(f"🔵 数据库总标注数: {total_annotations}")
+
+            # 分析所有样本的标注类别分布
+            print(f"\n🔵[全量类别分布] 数据库所有标注的类别统计:")
+            all_categories = Counter()
+            all_samples_with_category = {}
+
+            for sample in nusc.sample:
+                sample_token = sample['token']
+                for ann_token in sample['anns']:
+                    ann = nusc.get('sample_annotation', ann_token)
+                    category_name = ann['category_name']
+                    all_categories[category_name] += 1
+                    
+                    # 记录包含该类别的样本
+                    if category_name not in all_samples_with_category:
+                        all_samples_with_category[category_name] = set()
+                    all_samples_with_category[category_name].add(sample_token)
+
+            # 打印所有类别，不截断
+            print(f"类别总数: {len(all_categories)}")
+            for category, count in sorted(all_categories.items(), key=lambda x: x[1], reverse=True):
+                percentage = (count / total_annotations) * 100
+                sample_count = len(all_samples_with_category.get(category, set()))
+                print(f"  {category:40} {count:6}个 ({percentage:5.1f}%) | 分布在{sample_count:4}个样本中")
+
+            # 特别检查bicycle和barrier相关类别
+            print(f"\n🔵[重点关注] bicycle和barrier相关类别:")
+            for category in all_categories:
+                if 'bicycle' in category.lower() or 'cycle' in category.lower():
+                    count = all_categories[category]
+                    sample_count = len(all_samples_with_category.get(category, set()))
+                    print(f"  {category:40} {count:6}个 | 分布在{sample_count:4}个样本中")
+                
+                if 'barrier' in category.lower():
+                    count = all_categories[category]
+                    sample_count = len(all_samples_with_category.get(category, set()))
+                    print(f"  {category:40} {count:6}个 | 分布在{sample_count:4}个样本中")
+
+            print("="*80)
+        # 🔵[TYJT修复]>>> 修复eval_set映射
         eval_set_map = {
             'v1.0-mini': 'mini_val',
             'v1.0-trainval': 'val',
@@ -524,7 +573,7 @@ class NuScenesDataset(Custom3DDataset):
             print(f'>>>[xmy]🔵[TYJT警告]>>> 未知版本 {self.version}, 使用默认eval_set: {eval_set}')
         
         print(f'>>>[xmy]🔵[TYJT调试]>>> 使用eval_set: {eval_set}, 数据集版本: {self.version}')
-
+        
         #  3. 创建评测器
         nusc_eval = DetectionEval(
             nusc,
@@ -534,10 +583,183 @@ class NuScenesDataset(Custom3DDataset):
             output_dir=output_dir,
             verbose=True,  # 改为True以显示详细调试信息
         )
+
+        # if Debug:
+        #     # DetectionEval初始化后的GT数据分析
+        #     print("\n" + "="*80)
+        #     print("🔵[EVAL_GT数据分析] DetectionEval初始化完成")
+        #     print("="*80)
+
+        #     # GT总统计
+        #     print(f"🔵 GT样本总数: {len(nusc_eval.gt_boxes.sample_tokens)}")
+        #     print(f"🔵 GT标注总数: {sum(len(boxes) for boxes in nusc_eval.gt_boxes.boxes.values())}")
+
+        #     # 详细类别分布
+        #     print(f"\n🔵[详细类别分布] GT中各类别统计:")
+        #     gt_category_counter = Counter()
+        #     gt_sample_with_category = {}
+
+        #     for sample_token, boxes in nusc_eval.gt_boxes.boxes.items():
+        #         for box in boxes:
+        #             cls_name = box.detection_name
+        #             gt_category_counter[cls_name] += 1
+                    
+        #             # 记录包含该类别的样本
+        #             if cls_name not in gt_sample_with_category:
+        #                 gt_sample_with_category[cls_name] = set()
+        #             gt_sample_with_category[cls_name].add(sample_token)
+
+        #     # 按标准顺序打印，不截断
+        #     standard_classes = ['car', 'truck', 'bus', 'trailer', 'construction_vehicle', 
+        #                         'pedestrian', 'motorcycle', 'bicycle', 'traffic_cone', 'barrier']
+
+        #     print("标准10类别的分布情况:")
+        #     total_gt_boxes = sum(gt_category_counter.values())
+        #     for cls in standard_classes:
+        #         count = gt_category_counter.get(cls, 0)
+        #         sample_count = len(gt_sample_with_category.get(cls, set()))
+        #         percentage = (count / total_gt_boxes * 100) if total_gt_boxes > 0 else 0
+        #         print(f"  {cls:25} {count:6}个 ({percentage:5.1f}%) | 分布在{sample_count:4}个样本中")
+
+        #     # 打印所有出现的类别（包括非标准类别）
+        #     print(f"\n🔵[所有类别] GT中实际出现的所有类别:")
+        #     for cls, count in sorted(gt_category_counter.items(), key=lambda x: x[1], reverse=True):
+        #         sample_count = len(gt_sample_with_category.get(cls, set()))
+        #         percentage = (count / total_gt_boxes * 100) if total_gt_boxes > 0 else 0
+        #         print(f"  {cls:25} {count:6}个 ({percentage:5.1f}%) | 分布在{sample_count:4}个样本中")
+
+        #     # 样本级别的统计
+        #     print(f"\n🔵[样本级别统计] 每个样本的标注数量分布:")
+        #     sample_box_counts = [len(boxes) for boxes in nusc_eval.gt_boxes.boxes.values()]
+        #     if sample_box_counts:
+        #         print(f"  平均每个样本标注数: {sum(sample_box_counts)/len(sample_box_counts):.1f}")
+        #         print(f"  最多标注的样本: {max(sample_box_counts)}个")
+        #         print(f"  最少标注的样本: {min(sample_box_counts)}个")
+                
+        #         # 按数量分布
+        #         count_distribution = Counter(sample_box_counts)
+        #         print(f"  样本标注数量分布:")
+        #         for count in sorted(count_distribution.keys()):
+        #             num_samples = count_distribution[count]
+        #             print(f"    有{count:3d}个标注的样本: {num_samples:3d}个")
+
+        #     print("="*80)
+
+
+        # ========== 核心token验证（续） ==========
+        if Debug:
+            print("\n" + "="*80)
+            print("🔵[TOKEN VERIFY] 核心token验证结果")
+            print("="*80)
+            
+            # 获取评测器GT token
+            gt_tokens = list(nusc_eval.gt_boxes.sample_tokens)
+            
+            # 从debug_data获取之前保存的数据
+            pkl_tokens = debug_data['pkl_tokens']
+            pred_tokens = debug_data['pred_tokens']
+            
+            # 1. 打印所有token
+            # print("\n(1) 所有token列表:")
+            # print(f"PKL tokens ({len(pkl_tokens)}个):")
+            # for i, token in enumerate(pkl_tokens):
+            #     print(f"  [{i:3d}] {token}")
+            
+            # print(f"\nsorted PKL tokens ({len(pkl_tokens)}个):")
+            # sorted_pkl_tokens = sorted(pkl_tokens, key=lambda x: x[-8:])
+            # for i, token in enumerate(sorted_pkl_tokens):
+            #     print(f"  [{i:3d}] {token}")            
+
+
+            # print(f"\nPred tokens ({len(pred_tokens)}个):")
+            # for i, token in enumerate(pred_tokens):
+            #     print(f"  [{i:3d}] {token}")
+            
+            # print(f"\nsorted Pred tokens ({len(pred_tokens)}个):")
+            # sorted_pred_tokens = sorted(pred_tokens, key=lambda x: x[-8:])
+            # for i, token in enumerate(sorted_pred_tokens):
+            #     print(f"  [{i:3d}] {token}")   
+
+            # print(f"\nGT tokens ({len(gt_tokens)}个):")
+            # for i, token in enumerate(gt_tokens):
+            #     print(f"  [{i:3d}] {token}")
+
+            # print(f"\nsorted GT tokens ({len(gt_tokens)}个):")
+            # sorted_gt_tokens = sorted(gt_tokens, key=lambda x: x[-8:])
+            # for i, token in enumerate(sorted_gt_tokens):
+            #     print(f"  [{i:3d}] {token}")      
+
+            # 2. 验证Pred token是否在PKL中（允许乱序）
+            print("\n(2) 验证Pred token是否在PKL中（允许乱序）:")
+            pkl_set = set(pkl_tokens)
+            pred_in_pkl_count = 0
+            pred_not_in_pkl = []
+            
+            for i, token in enumerate(pred_tokens):
+                if token in pkl_set:
+                    pred_in_pkl_count += 1
+                else:
+                    pred_not_in_pkl.append((i, token))
+            
+            print(f"  预测token总数: {len(pred_tokens)}")
+            print(f"  在PKL中找到的: {pred_in_pkl_count}")
+            print(f"  不在PKL中的: {len(pred_not_in_pkl)}")
+            
+            if pred_not_in_pkl:
+                print(f"  不在PKL中的token（前10个）:")
+                for idx, (i, token) in enumerate(pred_not_in_pkl[:10]):
+                    print(f"    预测索引[{i}]: {token}")
+            
+            # 3. 验证GT token是否在PKL中（允许乱序）
+            print("\n(3) 验证GT token是否在PKL中（允许乱序）:")
+            gt_in_pkl_count = 0
+            gt_not_in_pkl = []
+            
+            for i, token in enumerate(gt_tokens):
+                if token in pkl_set:
+                    gt_in_pkl_count += 1
+                else:
+                    gt_not_in_pkl.append((i, token))
+            
+            print(f"  GT token总数: {len(gt_tokens)}")
+            print(f"  在PKL中找到的: {gt_in_pkl_count}")
+            print(f"  不在PKL中的: {len(gt_not_in_pkl)}")
+            
+            if gt_not_in_pkl:
+                print(f"  不在PKL中的token（前10个）:")
+                for idx, (i, token) in enumerate(gt_not_in_pkl[:10]):
+                    print(f"    GT索引[{i}]: {token}")
+            
+            # 4. 综合结果
+            print("\n" + "="*80)
+            print("🔵[SUMMARY] 综合验证结果")
+            print("="*80)
+            
+            if pred_in_pkl_count == len(pred_tokens):
+                print("✅ Pred所有token都在PKL中")
+            else:
+                print(f"❌ Pred有{len(pred_not_in_pkl)}个token不在PKL中")
+            
+            if gt_in_pkl_count == len(gt_tokens):
+                print("✅ GT所有token都在PKL中")
+            else:
+                print(f"❌ GT有{len(gt_not_in_pkl)}个token不在PKL中")
+            
+            if pred_in_pkl_count == len(pred_tokens) and gt_in_pkl_count == len(gt_tokens):
+                print("✅ 完美：Pred和GT的所有token都在PKL中")
+            else:
+                print("❌ 存在问题：token不匹配")
+            
+            print("="*80)
+
+
+
+
+
         nusc_eval.main(render_curves=False)
 
-        # record metrics记录指标
-        print(f'>>>[xmy]🔵[nuscenes_dataset]🔵[nuscenes_dataset.py] >>> 保存: output_dir = {output_dir}')
+        # 记录指标
+        print(f'>>>[xmy]🔵[TYJT调试]>>> 保存: output_dir = {output_dir}')
         metrics = mmcv.load(osp.join(output_dir, "metrics_summary.json"))
         detail = dict()
         for name in self.CLASSES:
@@ -553,7 +775,11 @@ class NuScenesDataset(Custom3DDataset):
 
         detail["object/nds"] = metrics["nd_score"]
         detail["object/map"] = metrics["mean_ap"]
+
         return detail
+
+
+
 
     def format_results(self, results, jsonfile_prefix=None):
         """Format the results to json (standard format for COCO evaluation).
@@ -664,7 +890,8 @@ class NuScenesDataset(Custom3DDataset):
                 metrics.update(self._evaluate_single(result_files))
 
             if tmp_dir is not None:
-                tmp_dir.cleanup()
+                # tmp_dir.cleanup()
+                None
 
         return metrics
 

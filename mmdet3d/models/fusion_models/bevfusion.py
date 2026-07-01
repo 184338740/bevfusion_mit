@@ -21,11 +21,14 @@ from .base import Base3DFusionModel
 __all__ = ["BEVFusion"]
 
 Debug = False
-print(f"\n>>>[xmy]🟢[mmdet3d/models/fusion_models/bevfusion.py] >>> [Train.forward侧] >>> [Debug Mode = {Debug}] ")
 
 if Debug:
     import time
 
+Debug_Pdb = False
+DebugWarning = False
+
+print(f"\n>>>[xmy]🟢[mmdet3d/models/fusion_models/bevfusion.py] >>> [BEVFusion] >>> Debug={Debug}  Debug_Pdb={Debug_Pdb}  DebugWarning={DebugWarning}")
 
 @FUSIONMODELS.register_module()
 class BEVFusion(Base3DFusionModel):
@@ -108,9 +111,11 @@ class BEVFusion(Base3DFusionModel):
                     self.loss_scale[name] = 1.0
 
         # If the camera's vtransform is a BEVDepth version, then we're using depth loss. 
-        self.use_depth_loss = ((encoders.get('camera', {}) or {}).get('vtransform', {}) or {}).get('type', '') in ['BEVDepth', 'AwareBEVDepth', 'DBEVDepth', 'AwareDBEVDepth']
-
-
+        # self.use_depth_loss = ((encoders.get('camera', {}) or {}).get('vtransform', {}) or {}).get('type', '') in ['BEVDepth', 'AwareBEVDepth', 'DBEVDepth']
+        # [xmy][bugfix][0602] 将 xmyAwareBEVDepthLSSLiteV1 加入深度损失启用列表
+        # self.use_depth_loss = ((encoders.get('camera', {}) or {}).get('vtransform', {}) or {}).get('type', '') in ['BEVDepth', 'AwareBEVDepth', 'DBEVDepth', 'xmyAwareBEVDepthLSSLiteV1']
+        # [xmy][bugfix][0602] 将 xmyAwareBEVDepthNormalized 加入深度损失启用列表
+        self.use_depth_loss = ((encoders.get('camera', {}) or {}).get('vtransform', {}) or {}).get('type', '') in ['BEVDepth', 'AwareBEVDepth', 'DBEVDepth', 'xmyAwareBEVDepthLSSLiteV1', 'xmyAwareBEVDepthNormalized']
         self.init_weights()
 
     def init_weights(self) -> None:
@@ -166,6 +171,17 @@ class BEVFusion(Base3DFusionModel):
         if Debug:    
             # 视图变换计时
             vtransform_start = time.time()
+        if DebugWarning:
+            import os, threading
+            pid = os.getpid()
+            tid = threading.get_ident()
+            # ①-1 相机特征
+            print(f"\n>>>[xmy]🟢[bevfusion.py] >>> 【{pid}:{tid}】【①-1】[LSS-Input] 经过cam.FPN后的特征: min={x.min().item():.4f}, max={x.max().item():.4f}, "
+                f"has_nan={torch.isnan(x).any()}, has_inf={torch.isinf(x).any()}")
+            # ①-2 GT depth（如果传入）
+            if gt_depths is not None:
+                print(f"\n>>>[xmy]🟢[bevfusion.py] >>> 【{pid}:{tid}】【①-2】[LSS-Input] gt_depth特征: min={gt_depths.min().item():.4f}, max={gt_depths.max().item():.4f}, "
+                    f"has_nan={torch.isnan(gt_depths).any()}, has_inf={torch.isinf(gt_depths).any()}")
         x = self.encoders["camera"]["vtransform"](
             x,
             points,
@@ -194,7 +210,7 @@ class BEVFusion(Base3DFusionModel):
                 
                 # 添加时间戳（这是关键修改）
                 current_time = time.time()
-                print(f"\n>>>🟢[xmy][Train-forward] mmdet3d/models/fusion_models/bevfusion.py [BEVFusion调试] [{current_time:.6f}]  第Iter {self.debug_iter} ")
+                print(f"\n>>>🟢[xmy][Train-forward] bevfusion.py [BEVFusion调试] [{current_time:.6f}]  第Iter {self.debug_iter} ")
                 print(f"-- 相机编码器:")
                 print(f"  Backbone: {backbone_time:.3f}s")
                 print(f"  Neck: {neck_time:.3f}s") 
@@ -306,6 +322,9 @@ class BEVFusion(Base3DFusionModel):
         gt_labels_3d=None,
         **kwargs,
     ):
+        # print(f"\n>>>[xmy]🟢[bevfusion.py] >>> BEVFusion.forward() >>> metas = {metas}  ")
+        if Debug_Pdb:
+            import pdb; pdb.set_trace()
         if isinstance(img, list):
             raise NotImplementedError
         else:
@@ -476,14 +495,30 @@ class BEVFusion(Base3DFusionModel):
 
         batch_size = x.shape[0]
 
+        # 添加检测
+        if DebugWarning:
+            import os, threading
+            pid = os.getpid()
+            tid = threading.get_ident()
+            print(f">>>[xmy]🟢[bevfusion.py] >>> 【{pid}:{tid}】[④]【Fuser阶段】fuser后的输出feat: min={x.min().item():.4f}, max={x.max().item():.4f}, "
+                f"has_nan={torch.isnan(x).any()}, has_inf={torch.isinf(x).any()}")
+
         # 3.解码器 decoder
         # 解码器计时
         if Debug:
             decoder_start_time = time.time()
+        
         x = self.decoder["backbone"](x)
         x = self.decoder["neck"](x)
         if Debug:
             decoder_time = time.time() - decoder_start_time
+        # 添加检测
+        if DebugWarning:
+            import os, threading
+            pid = os.getpid()
+            tid = threading.get_ident()
+            print(f">>>[xmy]🟢[bevfusion.py] >>> 【{pid}:{tid}】[⑤]【decoder阶段】fuser后的输出feat: min={x.min().item():.4f}, max={x.max().item():.4f}, "
+                f"has_nan={torch.isnan(x).any()}, has_inf={torch.isinf(x).any()}")
 
         # 4. Heads， 计算loss
         if self.training:
@@ -495,7 +530,9 @@ class BEVFusion(Base3DFusionModel):
             for type_i, head in self.heads.items():
                 if type_i == "object":  # 检测类 head
                     pred_dict = head(x, metas)
-                    losses = head.loss(gt_bboxes_3d, gt_labels_3d, pred_dict)
+                    # 【xmy】传入 metas 传递，以便定位样本
+                    # losses = head.loss(gt_bboxes_3d, gt_labels_3d, pred_dict)
+                    losses = head.loss(gt_bboxes_3d, gt_labels_3d, pred_dict, metas=metas)
                 elif type_i == "map":  # 分割类 head
                     losses = head(x, gt_masks_bev)
                 else:
@@ -607,3 +644,4 @@ class BEVFusion(Base3DFusionModel):
                 else:
                     raise ValueError(f"unsupported head: {type_i}")
             return outputs
+

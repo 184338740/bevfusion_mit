@@ -1,0 +1,181 @@
+{
+  "analysis_summary": {
+    "total_packages": 13,
+    "total_samples": 87449,
+    "valid_samples": 66862,
+    "sub_packets": 746,
+    "analysis_time": "2025-12-26T22:10:09.801890",
+    "data_version": "v1.9-fixed"
+  },
+  "packages": [
+    {
+      "name": "2d3d4d_20250728_weiyuan",
+      "type": "all_in_one",
+      "sub_packets": 61,
+      "samples": 7010,
+      "valid_samples": 7010,
+      "quality_distribution": {
+        "excellent": 14020,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d4d_20250117",
+      "type": "hikvision",
+      "sub_packets": 60,
+      "samples": 7090,
+      "valid_samples": 7090,
+      "quality_distribution": {
+        "excellent": 14180,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d4d_20250708_weiyuan",
+      "type": "all_in_one",
+      "sub_packets": 49,
+      "samples": 5023,
+      "valid_samples": 5023,
+      "quality_distribution": {
+        "excellent": 10046,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d_20250114",
+      "type": "hikvision",
+      "sub_packets": 60,
+      "samples": 7194,
+      "valid_samples": 7194,
+      "quality_distribution": {
+        "excellent": 14388,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d4d_20250403",
+      "type": "hikvision",
+      "sub_packets": 0,
+      "samples": 0,
+      "valid_samples": 0,
+      "quality_distribution": {
+        "excellent": 0,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d_20250218",
+      "type": "hikvision",
+      "sub_packets": 134,
+      "samples": 16066,
+      "valid_samples": 5036,
+      "quality_distribution": {
+        "excellent": 32132,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d4d_20250408",
+      "type": "hikvision",
+      "sub_packets": 60,
+      "samples": 7112,
+      "valid_samples": 7112,
+      "quality_distribution": {
+        "excellent": 14224,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d4d_20250618_weiyuan",
+      "type": "all_in_one",
+      "sub_packets": 0,
+      "samples": 0,
+      "valid_samples": 0,
+      "quality_distribution": {
+        "excellent": 0,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d4d_20250218",
+      "type": "hikvision",
+      "sub_packets": 92,
+      "samples": 10593,
+      "valid_samples": 10593,
+      "quality_distribution": {
+        "excellent": 21186,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d_20250221",
+      "type": "hikvision",
+      "sub_packets": 120,
+      "samples": 14314,
+      "valid_samples": 4757,
+      "quality_distribution": {
+        "excellent": 28628,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d4d_20241218",
+      "type": "hikvision",
+      "sub_packets": 49,
+      "samples": 5863,
+      "valid_samples": 5863,
+      "quality_distribution": {
+        "excellent": 11726,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d4d_20241122_wuxi",
+      "type": "hikvision",
+      "sub_packets": 0,
+      "samples": 0,
+      "valid_samples": 0,
+      "quality_distribution": {
+        "excellent": 0,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    },
+    {
+      "name": "2d3d4d_20250213",
+      "type": "hikvision",
+      "sub_packets": 61,
+      "samples": 7184,
+      "valid_samples": 7184,
+      "quality_distribution": {
+        "excellent": 14368,
+        "good": 0,
+        "fair": 0,
+        "poor": 0
+      }
+    }
+  ]
+}

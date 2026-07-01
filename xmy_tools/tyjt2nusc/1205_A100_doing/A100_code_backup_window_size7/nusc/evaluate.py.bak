@@ -1,0 +1,552 @@
+# /data2/xmy/miniconda3/envs/BEVFusion_v4_torch1.13.0_cu116/lib/python3.8/site-packages/nuscenes/eval/detection$ cat evaluate.py
+# nuScenes dev-kit.
+# Code written by Holger Caesar & Oscar Beijbom, 2018.
+
+import argparse
+import json
+import os
+import random
+import time
+from typing import Tuple, Dict, Any
+
+import numpy as np
+
+from nuscenes import NuScenes
+from nuscenes.eval.common.config import config_factory
+from nuscenes.eval.common.data_classes import EvalBoxes
+from nuscenes.eval.common.loaders import load_prediction, load_gt, add_center_dist, filter_eval_boxes
+from nuscenes.eval.detection.algo import accumulate, calc_ap, calc_tp
+from nuscenes.eval.detection.constants import TP_METRICS
+from nuscenes.eval.detection.data_classes import DetectionConfig, DetectionMetrics, DetectionBox, \
+    DetectionMetricDataList
+from nuscenes.eval.detection.render import summary_plot, class_pr_curve, class_tp_curve, dist_pr_curve, visualize_sample
+
+
+class DetectionEval:
+    """
+    This is the official nuScenes detection evaluation code.
+    Results are written to the provided output_dir.
+
+    nuScenes uses the following detection metrics:
+    - Mean Average Precision (mAP): Uses center-distance as matching criterion; averaged over distance thresholds.
+    - True Positive (TP) metrics: Average of translation, velocity, scale, orientation and attribute errors.
+    - nuScenes Detection Score (NDS): The weighted sum of the above.
+
+    Here is an overview of the functions in this method:
+    - init: Loads GT annotations and predictions stored in JSON format and filters the boxes.
+    - run: Performs evaluation and dumps the metric data to disk.
+    - render: Renders various plots and dumps to disk.
+
+    We assume that:
+    - Every sample_token is given in the results, although there may be not predictions for that sample.
+
+    Please see https://www.nuscenes.org/object-detection for more details.
+    """
+    def __init__(self,
+                nusc: NuScenes,
+                config: DetectionConfig,
+                result_path: str,
+                eval_set: str,
+                output_dir: str = None,
+                verbose: bool = True,
+                overlap_th: float = 0.5):
+        """
+        Initialize a DetectionEval object.
+        :param nusc: A NuScenes object.
+        :param config: A DetectionConfig object.
+        :param result_path: Path of the nuScenes JSON result file.
+        :param eval_set: The dataset split to evaluate on, e.g. train, val or test.
+        :param output_dir: Folder to save plots and results to.
+        :param verbose: Whether to print to stdout.
+        :param overlap_th: The overlap threshold used to determine whether a box is a match.
+        """
+        self.nusc = nusc
+        self.result_path = result_path
+        self.eval_set = eval_set
+        self.output_dir = output_dir
+        self.verbose = verbose
+        self.cfg = config
+        self.overlap_th = overlap_th
+
+        # Check result file exists.
+        assert os.path.exists(result_path), 'Error: The result file does not exist!'
+
+        # Make dirs.
+        self.plot_dir = os.path.join(self.output_dir, 'plots')
+        if not os.path.isdir(self.output_dir):
+            os.makedirs(self.output_dir)
+        if not os.path.isdir(self.plot_dir):
+            os.makedirs(self.plot_dir)
+
+        # Load data.
+        if verbose:
+            print('Initializing nuScenes detection evaluation')
+        self.pred_boxes, self.meta = load_prediction(self.result_path, self.cfg.max_boxes_per_sample, DetectionBox,
+                                                    verbose=verbose)
+        self.gt_boxes = load_gt(self.nusc, self.eval_set, DetectionBox, verbose=verbose)
+
+        # 🔵[TYJT调试]>>> 详细调试信息
+        print(f'🔵[TYJT调试]>>> ========== 开始调试 ==========')
+        print(f'🔵[TYJT调试]>>> 数据集版本: {self.nusc.version}')
+        print(f'🔵[TYJT调试]>>> 评估集: {self.eval_set}')
+        print(f'🔵[TYJT调试]>>> 数据集路径: {self.nusc.dataroot}')
+        print(f'🔵[TYJT调试]>>> 总样本数: {len(self.nusc.sample)}')
+        print(f'🔵[TYJT调试]>>> 预测样本数: {len(self.pred_boxes.sample_tokens)}')
+        print(f'🔵[TYJT调试]>>> GT样本数: {len(self.gt_boxes.sample_tokens)}')
+        
+        # 显示前几个样本token
+        if len(self.pred_boxes.sample_tokens) > 0:
+            print(f'🔵[TYJT调试]>>> 预测样本token前5个: {self.pred_boxes.sample_tokens[:5]}')
+        if len(self.gt_boxes.sample_tokens) > 0:
+            print(f'🔵[TYJT调试]>>> GT样本token前5个: {self.gt_boxes.sample_tokens[:5]}')
+
+        # 🔵[TYJT修复]>>> 处理TYJT数据集
+        if 'tyjt' in self.nusc.version:
+            print(f'🔵[TYJT调试]>>> 检测到TYJT数据集')
+
+            test_categories = ['car', 'truck', 'pedestrian', 'motorcycle']
+            for cat in test_categories:
+                from nuscenes.eval.detection.utils import category_to_detection_name
+                result = category_to_detection_name(cat)
+                print(f'🔵[TYJT调试]>>> 类别映射 "{cat}" -> "{result}"')
+    
+            # 如果原始GT为空，手动创建GT
+            if len(self.gt_boxes.sample_tokens) == 0:
+                print(f'🔵[TYJT调试]>>> 原始GT为空，开始手动创建GT')
+                
+                # 导入必要的函数
+                from nuscenes.eval.common.loaders import category_to_detection_name
+                
+                # 手动创建GT boxes
+                from nuscenes.eval.common.data_classes import EvalBoxes
+                new_gt_boxes = EvalBoxes()
+                
+                # 从预测结果获取样本token
+                val_sample_tokens = set(self.pred_boxes.sample_tokens)
+                
+                print(f'🔵[TYJT调试]>>> 需要处理的样本数: {len(val_sample_tokens)}')
+                
+                # 加载每个样本的GT标注
+                valid_gt_count = 0
+                invalid_gt_count = 0
+                none_box_count = 0
+                
+                for i, sample_token in enumerate(val_sample_tokens):
+                    if verbose: print(f'🔵[TYJT调试]>>> 处理样本: {sample_token}')
+                    try:
+                        sample = self.nusc.get('sample', sample_token)
+                        if verbose: print(f'🔵[TYJT调试]>>> 样本信息: {sample.keys()}')
+                        if verbose: print(f'🔵[TYJT调试]>>> 样本标注数: {len(sample["anns"])}')
+                        
+                        sample_boxes = []
+                        
+                        # 获取该样本的所有标注
+                        for ann_token in sample['anns']:
+                            if verbose: print(f'🔵[TYJT调试]>>> 处理标注: {ann_token}')
+                            try:
+                                sample_annotation = self.nusc.get('sample_annotation', ann_token)
+                                if verbose: print(f'🔵[TYJT调试]>>> 标注类别: {sample_annotation["category_name"]}')
+                                
+                                # 转换为DetectionBox
+                                detection_name = category_to_detection_name(sample_annotation['category_name'])
+                                if verbose: print(f'🔵[TYJT调试]>>> 转换后类别: {detection_name}')
+                                
+                                if detection_name is None:
+                                    invalid_gt_count += 1
+                                    if verbose: print(f'🔵[TYJT调试]>>> 跳过无效类别: {sample_annotation["category_name"]}')
+                                    continue
+                                
+                                # 获取属性
+                                attr_tokens = sample_annotation['attribute_tokens']
+                                attribute_name = ''
+                                category = sample_annotation['category_name']
+                                # if i == 0: import pdb; pdb.set_trace()
+
+                                if attr_tokens and len(attr_tokens) > 0:
+                                    # 首先检查是否是TYJT数据集
+                                    if 'tyjt' in self.nusc.version:
+                                        # 🔵[TYJT专用]>>> 直接使用第一个属性token作为属性名
+                                        # 或者从annotation中提取原始属性信息
+                                        # attribute_name = f"tyjt.attribute.{attr_tokens[0]}"
+                                        # 改为使用标准属性名：
+                                        if category in ['car', 'truck', 'bus', 'trailer', 'construction_vehicle', 'vehicle.car', 'vehicle.truck']:
+                                            attribute_name = 'vehicle.parked'
+                                        elif category in ['pedestrian', 'human.pedestrian.adult']:
+                                            attribute_name = 'pedestrian.standing'
+                                        elif category in ['motorcycle', 'bicycle', 'vehicle.motorcycle', 'vehicle.bicycle']:
+                                            attribute_name = 'cycle.without_rider'
+                                        elif category in ['traffic_cone', 'barrier', 'movable_object.trafficcone', 'movable_object.barrier']:
+                                            attribute_name = ''  # 这些类别通常没有属性
+                                        else:
+                                            attribute_name = 'vehicle.parked'  # 默认属性
+                                    else:
+                                        # 标准NuScenes处理
+                                        try:
+                                            attribute_record = self.nusc.get('attribute', attr_tokens[0])
+                                            attribute_name = attribute_record['name']
+                                        except KeyError:
+                                            attribute_name = ''
+                                
+                                # 创建DetectionBox对象
+                                detection_box = DetectionBox(
+                                    sample_token=sample_token,
+                                    translation=sample_annotation['translation'],
+                                    size=sample_annotation['size'],
+                                    rotation=sample_annotation['rotation'],
+                                    velocity=self.nusc.box_velocity(sample_annotation['token'])[:2],
+                                    num_pts=sample_annotation['num_lidar_pts'] + sample_annotation['num_radar_pts'],
+                                    detection_name=detection_name,
+                                    detection_score=-1.0,
+                                    attribute_name=attribute_name
+                                )
+                                
+                                # 🔵[关键]>>> 检查box是否为None
+                                if detection_box is None:
+                                    none_box_count += 1
+                                    print(f'🔵[TYJT调试]>>> 警告: DetectionBox创建失败，返回None')
+                                    continue
+                                    
+                                sample_boxes.append(detection_box)
+                                valid_gt_count += 1
+                                    
+                            except Exception as e:
+                                invalid_gt_count += 1
+                                print(f'🔵[TYJT调试]>>> 处理标注 {ann_token} 失败: {e}')
+                                import traceback
+                                traceback.print_exc()
+                                continue
+                        
+                        if sample_boxes:
+                            new_gt_boxes.add_boxes(sample_token, sample_boxes)
+                            print(f'🔵[TYJT调试]>>> 样本 {sample_token} 添加了 {len(sample_boxes)} 个有效标注')
+                        else:
+                            print(f'🔵[TYJT调试]>>> 样本 {sample_token} 没有有效标注')
+                        
+                    except Exception as e:
+                        print(f'🔵[TYJT调试]>>> 加载样本 {sample_token} 失败: {e}')
+                        import traceback
+                        traceback.print_exc()
+                        continue
+                
+                self.gt_boxes = new_gt_boxes
+                
+                print(f'🔵[TYJT调试]>>> ========== GT创建完成 ==========')
+                print(f'🔵[TYJT调试]>>> 有效GT标注: {valid_gt_count}')
+                print(f'🔵[TYJT调试]>>> 无效GT标注: {invalid_gt_count}')
+                print(f'🔵[TYJT调试]>>> None框数量: {none_box_count}')
+                print(f'🔵[TYJT调试]>>> 最终GT样本数: {len(self.gt_boxes.sample_tokens)}')
+                print(f'🔵[TYJT调试]>>> 最终GT标注总数: {sum(len(boxes) for boxes in self.gt_boxes.boxes.values())}')
+
+        # 🔵[TYJT调试]>>> 检查None值
+        print(f'🔵[TYJT调试]>>> ========== 检查None值 ==========')
+        self._check_and_remove_none_boxes(self.pred_boxes, "预测框")
+        self._check_and_remove_none_boxes(self.gt_boxes, "GT框")
+
+        # 🔵[TYJT修复]>>> 确保样本匹配
+        pred_tokens = set(self.pred_boxes.sample_tokens)
+        gt_tokens = set(self.gt_boxes.sample_tokens)
+        
+        print(f'🔵[TYJT调试]>>> ========== 样本匹配检查 ==========')
+        print(f'🔵[TYJT调试]>>> 预测样本: {len(pred_tokens)}')
+        print(f'🔵[TYJT调试]>>> GT样本: {len(gt_tokens)}')
+        print(f'🔵[TYJT调试]>>> 共同样本: {len(pred_tokens & gt_tokens)}')
+        print(f'🔵[TYJT调试]>>> 预测独有: {len(pred_tokens - gt_tokens)}')
+        print(f'🔵[TYJT调试]>>> GT独有: {len(gt_tokens - pred_tokens)}')
+        
+        if pred_tokens != gt_tokens:
+            print(f'🔵[TYJT调试]>>> 错误: 样本不匹配!')
+            print(f'🔵[TYJT调试]>>> 预测有但GT无: {pred_tokens - gt_tokens}')
+            print(f'🔵[TYJT调试]>>> GT有但预测无: {gt_tokens - pred_tokens}')
+            raise ValueError(f'❌ TYJT数据集样本不匹配: 预测{len(pred_tokens)}个, GT{len(gt_tokens)}个')
+
+        # 原有的断言（现在应该能通过了）
+        assert set(self.pred_boxes.sample_tokens) == set(self.gt_boxes.sample_tokens), \
+            'Samples in split doesn\'t match samples in predictions.'
+
+        # Add center distances.
+        self.pred_boxes = add_center_dist(self.nusc, self.pred_boxes)
+        self.gt_boxes = add_center_dist(self.nusc, self.gt_boxes)
+
+        # Filter boxes (distance, points per box, etc.).
+        if verbose:
+            print('Filtering predictions')
+        self.pred_boxes = filter_eval_boxes(self.nusc, self.pred_boxes, self.cfg.class_range, verbose=verbose)
+        if verbose:
+            print('Filtering ground truth annotations')
+        self.gt_boxes = filter_eval_boxes(self.nusc, self.gt_boxes, self.cfg.class_range, verbose=verbose)
+
+        self.sample_tokens = self.gt_boxes.sample_tokens
+
+
+    def _check_and_remove_none_boxes(self, eval_boxes, box_type):
+        """检查并移除boxes中的None值"""
+        none_count = 0
+        total_boxes = 0
+        
+        # 直接清理原始boxes中的None值
+        for sample_token, boxes in list(eval_boxes.boxes.items()):  # 使用list避免修改时迭代
+            valid_boxes = []
+            for i, box in enumerate(boxes):
+                total_boxes += 1
+                if box is None:
+                    none_count += 1
+                    print(f'🔵[TYJT调试]>>> 在{box_type}中发现None: sample={sample_token}, index={i}')
+                elif box.detection_name is None:
+                    none_count += 1
+                    print(f'🔵[TYJT调试]>>> 在{box_type}中发现detection_name为None: sample={sample_token}, index={i}')
+                else:
+                    valid_boxes.append(box)
+            
+            if valid_boxes:
+                eval_boxes.boxes[sample_token] = valid_boxes
+            else:
+                # 如果没有有效框，移除该样本
+                del eval_boxes.boxes[sample_token]
+        
+        print(f'🔵[TYJT调试]>>> {box_type}清理: 总数={total_boxes}, None值={none_count}, 有效值={total_boxes-none_count}')
+        
+        return none_count
+
+
+
+    def _get_val_samples_from_bevfusion(self, verbose=False):
+        """
+        从BEVFusion的预测结果推断验证集样本
+        """
+        # 直接从预测结果中获取样本token（最可靠的方式）
+        pred_tokens = set(self.pred_boxes.sample_tokens)
+        
+        if verbose:
+            print(f'🔵[TYJT修复]>>> 从预测结果获取样本: {len(pred_tokens)}个')
+        
+        return pred_tokens
+
+    def _remove_none_boxes(self, verbose=False):
+        """
+        移除boxes中的None值
+        """
+        # 清理预测框
+        cleaned_pred_boxes = EvalBoxes()
+        for sample_token, boxes in self.pred_boxes.boxes.items():
+            valid_boxes = [box for box in boxes if box is not None]
+            if valid_boxes:
+                cleaned_pred_boxes.add_boxes(sample_token, valid_boxes)
+        self.pred_boxes = cleaned_pred_boxes
+        
+        # 清理GT框
+        cleaned_gt_boxes = EvalBoxes()
+        for sample_token, boxes in self.gt_boxes.boxes.items():
+            valid_boxes = [box for box in boxes if box is not None]
+            if valid_boxes:
+                cleaned_gt_boxes.add_boxes(sample_token, valid_boxes)
+        self.gt_boxes = cleaned_gt_boxes
+        
+        if verbose:
+            print(f'🔵[TYJT修复]>>> 清理后预测样本: {len(self.pred_boxes.sample_tokens)}')
+            print(f'🔵[TYJT修复]>>> 清理后GT样本: {len(self.gt_boxes.sample_tokens)}')
+
+
+
+
+    def evaluate(self) -> Tuple[DetectionMetrics, DetectionMetricDataList]:
+        """
+        Performs the actual evaluation.
+        :return: A tuple of high-level and the raw metric data.
+        """
+        start_time = time.time()
+
+        # -----------------------------------
+        # Step 1: Accumulate metric data for all classes and distance thresholds.
+        # -----------------------------------
+        if self.verbose:
+            print('Accumulating metric data...')
+        metric_data_list = DetectionMetricDataList()
+        for class_name in self.cfg.class_names:
+            for dist_th in self.cfg.dist_ths:
+                md = accumulate(self.gt_boxes, self.pred_boxes, class_name, self.cfg.dist_fcn_callable, dist_th)
+                metric_data_list.set(class_name, dist_th, md)
+
+        # -----------------------------------
+        # Step 2: Calculate metrics from the data.
+        # -----------------------------------
+        if self.verbose:
+            print('Calculating metrics...')
+        metrics = DetectionMetrics(self.cfg)
+        for class_name in self.cfg.class_names:
+            # Compute APs.
+            for dist_th in self.cfg.dist_ths:
+                metric_data = metric_data_list[(class_name, dist_th)]
+                ap = calc_ap(metric_data, self.cfg.min_recall, self.cfg.min_precision)
+                metrics.add_label_ap(class_name, dist_th, ap)
+
+            # Compute TP metrics.
+            for metric_name in TP_METRICS:
+                metric_data = metric_data_list[(class_name, self.cfg.dist_th_tp)]
+                if class_name in ['traffic_cone'] and metric_name in ['attr_err', 'vel_err', 'orient_err']:
+                    tp = np.nan
+                elif class_name in ['barrier'] and metric_name in ['attr_err', 'vel_err']:
+                    tp = np.nan
+                else:
+                    tp = calc_tp(metric_data, self.cfg.min_recall, metric_name)
+                metrics.add_label_tp(class_name, metric_name, tp)
+
+        # Compute evaluation time.
+        metrics.add_runtime(time.time() - start_time)
+
+        return metrics, metric_data_list
+
+    def render(self, metrics: DetectionMetrics, md_list: DetectionMetricDataList) -> None:
+        """
+        Renders various PR and TP curves.
+        :param metrics: DetectionMetrics instance.
+        :param md_list: DetectionMetricDataList instance.
+        """
+        if self.verbose:
+            print('Rendering PR and TP curves')
+
+        def savepath(name):
+            return os.path.join(self.plot_dir, name + '.pdf')
+
+        summary_plot(md_list, metrics, min_precision=self.cfg.min_precision, min_recall=self.cfg.min_recall,
+                     dist_th_tp=self.cfg.dist_th_tp, savepath=savepath('summary'))
+
+        for detection_name in self.cfg.class_names:
+            class_pr_curve(md_list, metrics, detection_name, self.cfg.min_precision, self.cfg.min_recall,
+                           savepath=savepath(detection_name + '_pr'))
+
+            class_tp_curve(md_list, metrics, detection_name, self.cfg.min_recall, self.cfg.dist_th_tp,
+                           savepath=savepath(detection_name + '_tp'))
+
+        for dist_th in self.cfg.dist_ths:
+            dist_pr_curve(md_list, metrics, dist_th, self.cfg.min_precision, self.cfg.min_recall,
+                          savepath=savepath('dist_pr_' + str(dist_th)))
+
+    def main(self,
+             plot_examples: int = 0,
+             render_curves: bool = True) -> Dict[str, Any]:
+        """
+        Main function that loads the evaluation code, visualizes samples, runs the evaluation and renders stat plots.
+        :param plot_examples: How many example visualizations to write to disk.
+        :param render_curves: Whether to render PR and TP curves to disk.
+        :return: A dict that stores the high-level metrics and meta data.
+        """
+        if plot_examples > 0:
+            # Select a random but fixed subset to plot.
+            random.seed(42)
+            sample_tokens = list(self.sample_tokens)
+            random.shuffle(sample_tokens)
+            sample_tokens = sample_tokens[:plot_examples]
+
+            # Visualize samples.
+            example_dir = os.path.join(self.output_dir, 'examples')
+            if not os.path.isdir(example_dir):
+                os.mkdir(example_dir)
+            for sample_token in sample_tokens:
+                visualize_sample(self.nusc,
+                                 sample_token,
+                                 self.gt_boxes if self.eval_set != 'test' else EvalBoxes(),
+                                 # Don't render test GT.
+                                 self.pred_boxes,
+                                 eval_range=max(self.cfg.class_range.values()),
+                                 savepath=os.path.join(example_dir, '{}.png'.format(sample_token)))
+
+        # Run evaluation.
+        metrics, metric_data_list = self.evaluate()
+
+        # Render PR and TP curves.
+        if render_curves:
+            self.render(metrics, metric_data_list)
+
+        # Dump the metric data, meta and metrics to disk.
+        if self.verbose:
+            print('Saving metrics to: %s' % self.output_dir)
+        metrics_summary = metrics.serialize()
+        metrics_summary['meta'] = self.meta.copy()
+        with open(os.path.join(self.output_dir, 'metrics_summary.json'), 'w') as f:
+            json.dump(metrics_summary, f, indent=2)
+        with open(os.path.join(self.output_dir, 'metrics_details.json'), 'w') as f:
+            json.dump(metric_data_list.serialize(), f, indent=2)
+
+        # Print high-level metrics.
+        print('mAP: %.4f' % (metrics_summary['mean_ap']))
+        err_name_mapping = {
+            'trans_err': 'mATE',
+            'scale_err': 'mASE',
+            'orient_err': 'mAOE',
+            'vel_err': 'mAVE',
+            'attr_err': 'mAAE'
+        }
+        for tp_name, tp_val in metrics_summary['tp_errors'].items():
+            print('%s: %.4f' % (err_name_mapping[tp_name], tp_val))
+        print('NDS: %.4f' % (metrics_summary['nd_score']))
+        print('Eval time: %.1fs' % metrics_summary['eval_time'])
+
+        # Print per-class metrics.
+        print()
+        print('Per-class results:')
+        print('Object Class\tAP\tATE\tASE\tAOE\tAVE\tAAE')
+        class_aps = metrics_summary['mean_dist_aps']
+        class_tps = metrics_summary['label_tp_errors']
+        for class_name in class_aps.keys():
+            print('%s\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f'
+                  % (class_name, class_aps[class_name],
+                     class_tps[class_name]['trans_err'],
+                     class_tps[class_name]['scale_err'],
+                     class_tps[class_name]['orient_err'],
+                     class_tps[class_name]['vel_err'],
+                     class_tps[class_name]['attr_err']))
+
+        return metrics_summary
+
+
+class NuScenesEval(DetectionEval):
+    """
+    Dummy class for backward-compatibility. Same as DetectionEval.
+    """
+
+
+if __name__ == "__main__":
+
+    # Settings.
+    parser = argparse.ArgumentParser(description='Evaluate nuScenes detection results.',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('result_path', type=str, help='The submission as a JSON file.')
+    parser.add_argument('--output_dir', type=str, default='~/nuscenes-metrics',
+                        help='Folder to store result metrics, graphs and example visualizations.')
+    parser.add_argument('--eval_set', type=str, default='val',
+                        help='Which dataset split to evaluate on, train, val or test.')
+    parser.add_argument('--dataroot', type=str, default='/data/sets/nuscenes',
+                        help='Default nuScenes data directory.')
+    parser.add_argument('--version', type=str, default='v1.0-trainval',
+                        help='Which version of the nuScenes dataset to evaluate on, e.g. v1.0-trainval.')
+    parser.add_argument('--config_path', type=str, default='',
+                        help='Path to the configuration file.'
+                             'If no path given, the CVPR 2019 configuration will be used.')
+    parser.add_argument('--plot_examples', type=int, default=10,
+                        help='How many example visualizations to write to disk.')
+    parser.add_argument('--render_curves', type=int, default=1,
+                        help='Whether to render PR and TP curves to disk.')
+    parser.add_argument('--verbose', type=int, default=1,
+                        help='Whether to print to stdout.')
+    args = parser.parse_args()
+
+    result_path_ = os.path.expanduser(args.result_path)
+    output_dir_ = os.path.expanduser(args.output_dir)
+    eval_set_ = args.eval_set
+    dataroot_ = args.dataroot
+    version_ = args.version
+    config_path = args.config_path
+    plot_examples_ = args.plot_examples
+    render_curves_ = bool(args.render_curves)
+    verbose_ = bool(args.verbose)
+
+    if config_path == '':
+        cfg_ = config_factory('detection_cvpr_2019')
+    else:
+        with open(config_path, 'r') as _f:
+            cfg_ = DetectionConfig.deserialize(json.load(_f))
+
+    nusc_ = NuScenes(version=version_, verbose=verbose_, dataroot=dataroot_)
+    nusc_eval = DetectionEval(nusc_, config=cfg_, result_path=result_path_, eval_set=eval_set_,
+                              output_dir=output_dir_, verbose=verbose_)
+    nusc_eval.main(plot_examples=plot_examples_, render_curves=render_curves_)

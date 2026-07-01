@@ -50,7 +50,7 @@
     - BEV 图降采样点云, 提高清晰度
     - 文件名包含元信息, 打印标注数量
 
-使用说明(v04.3): 
+使用说明: 
     python step2_tyjt_tools_Vis_Gt_pkl.py --pkl ./tyjt_infos_train.pkl --out_dir ./vis --num_samples=20
 """
 
@@ -554,7 +554,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--pkl', required=True)
     parser.add_argument('--out_dir', default='./vis_output')
-    parser.add_argument('--num_samples', type=int, default=20)
+    # parser.add_argument('--num_samples', type=int, default=20)
+    parser.add_argument('--num_samples', type=int, default=20, help='要处理的样本数量，设为 -1 表示处理全部')
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -626,8 +627,17 @@ def main():
     # =======================================
 
     total = len(infos)
-    indices = np.linspace(0, total-1, min(args.num_samples, total), dtype=int)
+    if args.num_samples == -1:
+        num_to_process = total
+        print(f"全量不抽样, 处理 {total} 个样本")
+
+    else:
+        num_to_process = min(args.num_samples, total)
+        print(f"等距采样, 处理 {num_to_process} 个样本（共 {total} 个）")
+
+    indices = np.linspace(0, total-1, num_to_process, dtype=int)
     for i, idx in enumerate(indices):
+        print(f"进度: {i+1}/{num_to_process}; (处理原始索引 {idx}/{total}); (Step: {args.num_samples})")
         visualize_sample(i, infos[idx], out_dir, TASKS)
 
     print("完成")

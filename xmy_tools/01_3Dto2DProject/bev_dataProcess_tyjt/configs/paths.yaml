@@ -1,0 +1,18 @@
+# Data paths
+data_root: "~/下载/2d3d4d_20250728_weiyuan/datasets/G51102400001M00_20250728191726_2.0HZ"
+calib_path: "~/下载/2d3d4d_20250728_weiyuan/calib/sensor2map_calib.json"
+
+# Camera mapping (calibration_name: folder_name)
+camera_mapping:
+  SC_R1_Ce_CpcN_CAMR: SC_1A_CamR
+  SC_R1_Bn_CpcW_CAMR: SC_1B_CamR
+  SC_R1_Aw_CpcS_CAMR: SC_1C_CamR
+  SC_R1_Ds_CpcE_CAMR: SC_1D_CamR
+
+# Output configuration
+output:
+  base_dir: "outputs"
+  visualizations: "visualizations"
+  statistics: "statistics"
+  projections: "projections"
+  reports: "mismatch_reports"

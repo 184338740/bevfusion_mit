@@ -1,0 +1,13 @@
+BEV 3D Box Visualization Configuration:
+Timestamp: 1753701446899737835
+BEV Range: ±75.0m
+Total points: 218734
+Points in range: 9728
+Total boxes: 57
+
+Label colors:
+  car: red
+  truck: blue
+  cyclist: green
+  pedestrian: orange
+  default: black

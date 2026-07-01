@@ -1,0 +1,806 @@
+# - 1
+# - 2
+# - 5
+# - 8
+# - 9
+# - 18
+# - 19
+# - 20
+# - 21
+# - 22
+# - 23
+# - 24
+# - 25
+# - 26
+# - 27
+# - 28
+# - 29
+# - 30
+# - 31
+# - 32
+# - 33
+# - 34
+# - 35
+# - 36
+# - 37
+# - 38
+# - 39
+# - 40
+# - 41
+# - 42
+# - 43
+# - 44
+# - 45
+# - 46
+# - 47
+# - 48
+# - 49
+# - 50
+# - 51
+# - 52
+# - 53
+# - 54
+# - 55
+# - 56
+# radar_voxel_size:
+# - 0.8
+# - 0.8
+# - 8
+reduce_beams: 32
+resume_from: null
+run_dir: runs/train-bevfusion-det-transfusion-finetune
+runner:
+  max_epochs: 1
+  type: CustomEpochBasedRunner
+seed: 0
+test_pipeline:
+- to_float32: true
+  type: LoadMultiViewImageFromFiles
+- coord_type: LIDAR
+  load_augmented: null
+  load_dim: 5
+  reduce_beams: 32
+  type: LoadPointsFromFile
+  use_dim: 5
+- load_augmented: null
+  load_dim: 5
+  pad_empty_sweeps: true
+  reduce_beams: 32
+  remove_close: true
+  sweeps_num: 0
+  type: LoadPointsFromMultiSweeps
+  use_dim: 5
+# 移除radar步骤
+# - compensate_velocity: true
+#   filtering: none
+#   load_dim: 18
+#   max_num: 2500
+#   normalize: false
+#   sweeps_num: 6
+#   type: LoadRadarPointsMultiSweeps
+#   use_dim:
+#   - 0
+#   - 1
+#   - 2
+#   - 5
+#   - 8
+#   - 9
+#   - 18
+#   - 19
+#   - 20
+#   - 21
+#   - 22
+#   - 23
+#   - 24
+#   - 25
+#   - 26
+#   - 27
+#   - 28
+#   - 29
+#   - 30
+#   - 31
+#   - 32
+#   - 33
+#   - 34
+#   - 35
+#   - 36
+#   - 37
+#   - 38
+#   - 39
+#   - 40
+#   - 41
+#   - 42
+#   - 43
+#   - 44
+#   - 45
+#   - 46
+#   - 47
+#   - 48
+#   - 49
+#   - 50
+#   - 51
+#   - 52
+#   - 53
+#   - 54
+#   - 55
+#   - 56
+- type: LoadAnnotations3D
+  with_attr_label: false
+  with_bbox_3d: true
+  with_label_3d: true
+- bot_pct_lim:
+  - 0.0
+  - 0.0
+  final_dim:
+  - 256
+  - 704
+  is_train: false
+  rand_flip: false
+  resize_lim:
+  - 0.48
+  - 0.48
+  rot_lim:
+  - 0.0
+  - 0.0
+  type: ImageAug3D
+
+# ============ xmy:临时修改 ==============
+- is_train: false
+  resize_lim:
+  - 1.0
+  - 1.0
+  rot_lim:
+  - 0.0
+  - 0.0
+  trans_lim: 0.0
+  type: GlobalRotScaleTrans
+- point_cloud_range:
+  - -54.0
+  - -54.0
+  - -5.0
+  - 54.0
+  - 54.0
+  - 3.0
+  type: PointsRangeFilter
+- mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  std:
+  - 0.229
+  - 0.224
+  - 0.225
+  type: ImageNormalize
+- classes:
+  - car
+  - truck
+  - bus
+  - pedestrian
+  - motorcycle
+  - bicycle
+  - construction_vehicle
+  - trailer
+  - traffic_cone
+  - barrier
+  type: DefaultFormatBundle3D
+- keys:
+  - img
+  - points
+  # - radar
+  - gt_bboxes_3d
+  - gt_labels_3d
+  meta_keys:
+  - camera_intrinsics
+  - camera2ego
+  - lidar2ego
+  - lidar2camera
+  - lidar2image
+  - camera2lidar
+  - img_aug_matrix
+  - lidar_aug_matrix
+  type: Collect3D
+- keyframe_only: true
+  type: GTDepth
+train_pipeline:
+- to_float32: true
+  type: LoadMultiViewImageFromFiles
+- coord_type: LIDAR
+  load_augmented: null
+  load_dim: 5
+  reduce_beams: 32
+  type: LoadPointsFromFile
+  use_dim: 5
+- load_augmented: null
+  load_dim: 5
+  pad_empty_sweeps: true
+  reduce_beams: 32
+  remove_close: true
+  sweeps_num: 0
+  type: LoadPointsFromMultiSweeps
+  use_dim: 5
+# 移除radar步骤
+# - compensate_velocity: true
+#   filtering: none
+#   load_dim: 18
+#   max_num: 2500
+#   normalize: false
+#   sweeps_num: 6
+#   type: LoadRadarPointsMultiSweeps
+#   use_dim:
+#   - 0
+#   - 1
+#   - 2
+#   - 5
+#   - 8
+#   - 9
+#   - 18
+#   - 19
+#   - 20
+#   - 21
+#   - 22
+#   - 23
+#   - 24
+#   - 25
+#   - 26
+#   - 27
+#   - 28
+#   - 29
+#   - 30
+#   - 31
+#   - 32
+#   - 33
+#   - 34
+#   - 35
+#   - 36
+#   - 37
+#   - 38
+#   - 39
+#   - 40
+#   - 41
+#   - 42
+#   - 43
+#   - 44
+#   - 45
+#   - 46
+#   - 47
+#   - 48
+#   - 49
+#   - 50
+#   - 51
+#   - 52
+#   - 53
+#   - 54
+#   - 55
+#   - 56
+- type: LoadAnnotations3D
+  with_attr_label: false
+  with_bbox_3d: true
+  with_label_3d: true
+
+- db_sampler:
+    classes:
+    - car
+    - truck
+    - bus
+    - pedestrian
+    - motorcycle
+    - bicycle
+    - construction_vehicle
+    - trailer
+    - traffic_cone
+    - barrier
+    dataset_root: /data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt
+    info_path: /data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt/tyjt_dbinfos_train.pkl
+    points_loader:
+      coord_type: LIDAR
+      load_dim: 5
+      reduce_beams: 32
+      type: LoadPointsFromFile
+      use_dim: 5
+    prepare:
+      filter_by_difficulty:
+      - -1
+      filter_by_min_points:  # 修正 dpsample,  主要应对 训练集中部分类缺失的问题
+        car: 5
+        truck: 5
+        bus: 1  # 缺失类别设为1，避免KeyError
+        pedestrian: 5
+        motorcycle: 5
+        bicycle: 5
+        construction_vehicle: 1  # 缺失类别设为1，避免KeyError
+        trailer: 1  # 缺失类别设为1，避免KeyError
+        traffic_cone: 1  # 缺失类别设为1，避免KeyError
+        barrier: 1  # 缺失类别设为1，避免KeyError
+    rate: 1.0
+    sample_groups:  # 修正后的类别
+      car: 2
+      truck: 3
+      bus: 0  # 缺失类别设为0，不采样
+      pedestrian: 2
+      motorcycle: 6
+      bicycle: 6
+      construction_vehicle: 0  # 缺失类别设为0，不采样
+      trailer: 0  # 缺失类别设为0，不采样
+      traffic_cone: 0  # 缺失类别设为0，不采样
+      barrier: 0  # 缺失类别设为0，不采样
+    stop_epoch: -1
+    type: ObjectPaste
+
+- bot_pct_lim:
+  - 0.0
+  - 0.0
+  final_dim:
+  - 256
+  - 704
+  is_train: true
+  rand_flip: true
+  resize_lim:
+  - 0.38
+  - 0.55
+  rot_lim:
+  - -5.4
+  - 5.4
+  type: ImageAug3D
+# ============ xmy:临时修改 ==============
+- is_train: true
+  resize_lim:
+  - 0.9
+  - 1.1
+  rot_lim:
+  - -0.78539816
+  - 0.78539816
+  trans_lim: 0.5
+  type: GlobalRotScaleTrans
+- type: RandomFlip3D
+- point_cloud_range:
+  - -54.0
+  - -54.0
+  - -5.0
+  - 54.0
+  - 54.0
+  - 3.0
+  type: PointsRangeFilter
+- point_cloud_range:
+  - -54.0
+  - -54.0
+  - -5.0
+  - 54.0
+  - 54.0
+  - 3.0
+  type: ObjectRangeFilter
+- classes:
+  - car
+  - truck
+  - bus
+  - pedestrian
+  - motorcycle
+  - bicycle
+  - construction_vehicle
+  - trailer
+  - traffic_cone
+  - barrier
+  type: ObjectNameFilter
+- mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  std:
+  - 0.229
+  - 0.224
+  - 0.225
+  type: ImageNormalize
+- fixed_prob: true
+  max_epoch: 1
+  mode: 1
+  offset: false
+  prob: 0.0
+  ratio: 0.5
+  rotate: 1
+  type: GridMask
+  use_h: true
+  use_w: true
+- type: PointShuffle
+- classes:
+  - car
+  - truck
+  - bus
+  - pedestrian
+  - motorcycle
+  - bicycle
+  - construction_vehicle
+  - trailer
+  - traffic_cone
+  - barrier
+  type: DefaultFormatBundle3D
+- keys:
+  - img
+  - points
+  # - radar
+  - gt_bboxes_3d
+  - gt_labels_3d
+  meta_keys:
+  - camera_intrinsics
+  - camera2ego
+  - lidar2ego
+  - lidar2camera
+  - lidar2image
+  - camera2lidar
+  - img_aug_matrix
+  - lidar_aug_matrix
+  type: Collect3D
+- keyframe_only: true
+  type: GTDepth
+use_dim: 5
+voxel_size:
+- 0.075
+- 0.075
+- 0.2
+结合你提供的完整 mmdet3d 配置文件，下面从可视化生效性、Loss 收敛监控、配置优化三个核心维度拆解，同时给出落地性的操作建议：
+一、当前配置已启用 TensorBoard 可视化（无需额外修改）
+你的配置中已经包含 mmdet3d 可视化的核心配置，训练时会自动记录 Loss 到 TensorBoard：
+yaml
+log_config:
+  hooks:
+  - type: TextLoggerHook  # 控制台/日志文件输出Loss
+  - type: TensorboardLoggerHook  # 自动写入TensorBoard日志
+  interval: 50  # 每50个iter记录一次train_loss
+这是 mmdet3d 原生支持的配置，结合你之前的 tools/train.py，训练时会自动在 run_dir: runs/train-bevfusion-det-transfusion-finetune 目录下生成 tensorboard 子目录，里面包含 Loss 等指标的日志。
+操作步骤（查看 Loss 收敛曲线）：
+执行训练脚本（tools/train.py + 该配置文件）；
+训练过程中 / 结束后，终端执行：
+bash
+运行
+tensorboard --logdir=runs/train-bevfusion-det-transfusion-finetune/tensorboard
+浏览器访问 http://localhost:6006，即可看到：
+训练 Loss（如 loss_cls/loss_bbox/loss_heatmap/ 总 Loss）；
+验证 Loss/3D 检测指标（如 mAP）；
+学习率变化曲线（lr）。
+二、当前配置中影响 Loss 收敛的关键参数（需注意）
+1. 训练轮数（测试级配置，需调整）
+yaml
+max_epochs: 1  # 全局+runner均设为1
+仅训练 1 轮无法看到 Loss 收敛趋势，建议调整为实际训练轮数（如 24/36，根据数据集大小）：
+yaml
+max_epochs: 24  # 全局配置
+runner:
+  max_epochs: 24  # 训练器配置
+  type: CustomEpochBasedRunner
+2. 验证频率（控制 Val Loss 记录）
+yaml
+evaluation:
+  interval: 1  # 每1轮验证一次，记录Val Loss
+该配置合理，能及时监控 Val Loss 是否过拟合；若数据集大，可调整为 2（每 2 轮验证一次）。
+3. 优化器配置（影响 Loss 下降速度）
+yaml
+optimizer:
+  lr: 0.0002  # 学习率
+  type: AdamW
+  weight_decay: 0.01
+lr_config:
+  min_lr_ratio: 0.001
+  policy: CosineAnnealing  # 余弦退火学习率
+  warmup: linear
+  warmup_iters: 500
+  warmup_ratio: 0.33333333
+AdamW + 余弦退火是 BEVFusion 常用配置，学习率 0.0002 适配单卡 / 8 卡（需根据 batch size 缩放）；
+warmup 500 iter 避免初始学习率过高导致 Loss 震荡。
+4. 数据增强（影响 Loss 稳定性）
+配置中启用了 2D/3D 数据增强（ImageAug3D/GlobalRotScaleTrans/RandomFlip3D 等），增强强度合理：
+2D 旋转：-5.4° ~ 5.4°；
+3D 旋转：-π/4 ~ π/4（-0.785~0.785 rad）；
+缩放：0.9~1.1；
+平移：0.5m。
+增强会让 Loss 初期波动稍大，但能提升泛化性，无需调整。
+5. 损失函数配置（BEVFusion 标准配置）
+yaml
+loss_cls:  # 分类损失（FocalLoss）
+  alpha: 0.25
+  gamma: 2.0
+  loss_weight: 1.0
+loss_bbox:  # 回归损失（L1Loss）
+  loss_weight: 0.25
+loss_heatmap:  # 热力图损失（GaussianFocalLoss）
+  loss_weight: 1.0
+损失权重配比合理，是 TransFusionHead 的标准配置，无需修改。
+三、进阶：从日志文件解析 Loss 并绘制 Matplotlib 曲线
+若你需要静态的 Loss 收敛图（如论文 / 报告用），可从训练生成的日志文件（run_dir 下的 YYYYMMDD_HHMMSS.log）解析 Loss 数值，以下是解析代码：
+python
+运行
+import re
+import matplotlib.pyplot as plt
+import numpy as np
+
+# ===================== 1. 解析日志文件 =====================
+def parse_mmdet3d_log(log_path):
+    """解析mmdet3d日志文件，提取train/val loss"""
+    train_loss_pattern = re.compile(r'Epoch \[\d+/\d+\]  iter: \d+  lr: \d+\.\d+  loss: (\d+\.\d+)')
+    val_loss_pattern = re.compile(r'Epoch \[\d+/\d+\]  val_loss: (\d+\.\d+)')
+    
+    train_loss_list = []
+    val_loss_list = []
+    with open(log_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            # 匹配train loss
+            train_match = train_loss_pattern.search(line)
+            if train_match:
+                train_loss = float(train_match.group(1))
+                train_loss_list.append(train_loss)
+            # 匹配val loss
+            val_match = val_loss_pattern.search(line)
+            if val_match:
+                val_loss = float(val_match.group(1))
+                val_loss_list.append(val_loss)
+    return train_loss_list, val_loss_list
+
+# 替换为你的日志文件路径
+log_path = 'runs/train-bevfusion-det-transfusion-finetune/20251211_100000.log'
+train_loss, val_loss = parse_mmdet3d_log(log_path)
+
+# ===================== 2. 绘制Loss曲线 =====================
+plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
+
+plt.figure(figsize=(12, 6))
+
+# 绘制train loss（按iter）
+plt.plot(range(1, len(train_loss)+1), train_loss, label='训练Loss (Train Loss)', color='blue', alpha=0.8)
+
+# 绘制val loss（按epoch，需对齐x轴）
+val_x = np.linspace(1, len(train_loss), len(val_loss))  # 均匀映射到train iter的x轴
+plt.plot(val_x, val_loss, label='验证Loss (Val Loss)', color='red', linewidth=2)
+
+plt.title('BEVFusion 训练/验证Loss收敛曲线', fontsize=14)
+plt.xlabel('训练迭代数 (Iter)', fontsize=12)
+plt.ylabel('损失值 (Loss)', fontsize=12)
+plt.legend(fontsize=12)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+
+# 保存图片
+plt.savefig('bevfusion_loss_convergence.png', dpi=300, bbox_inches='tight')
+plt.show()
+四、关键注意事项
+日志文件路径：训练时 tools/train.py 会将日志文件保存到 cfg.run_dir 下，文件名是时间戳（如 20251211_100000.log）；
+Val Loss 缺失问题：若日志中无 val_loss，需确认：
+配置中 evaluation.interval > 0；
+训练时 train_model 的 validate=True（你的 train.py 已设置）；
+TensorBoard 无数据：若 run_dir/tensorboard 为空，需确认：
+配置中 log_config.hooks 包含 TensorboardLoggerHook；
+训练时 log_interval 合理（配置中为 50，即每 50 iter 记录一次）；
+Loss 震荡 / 不收敛：
+检查学习率（batch size 为 1 时，建议 lr 下调至 0.0001）；
+检查数据增强强度（若 Loss 波动过大，可暂时降低旋转 / 缩放范围）；
+检查数据集完整性（db_sampler 中部分类别采样数为 0，需确认训练集是否包含这些类别）。
+总结
+你的配置已原生启用 TensorBoard 可视化，只需调整训练轮数即可看到完整的 Loss 收敛趋势；若需静态图表，可基于日志文件用上述代码解析绘制。核心关注的收敛 Loss 是：
+训练侧：总 Loss（loss）、分类 Loss（loss_cls）、回归 Loss（loss_bbox）；
+验证侧：val_loss（核心判断泛化性，若 Val Loss 上升则过拟合）。
+mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01$ ls
+20251210_220844.log  20251210_220844.log.json  configs.yaml  logging  tf_logs
+从你提供的目录文件列表来看，训练已经生成了完整的日志和 TensorBoard 数据文件，下面分快速查看 Loss 收敛（TensorBoard）、解析日志画静态曲线、日志文件解读三部分，给出具体操作步骤：
+一、快速查看 Loss 收敛（TensorBoard，优先推荐）
+你的目录中 tf_logs 是 mmdet3d 生成的 TensorBoard 日志目录（框架内 TensorboardLoggerHook 默认输出到 tf_logs，而非之前提到的 tensorboard 目录，这是 mmdet3d 版本差异导致），操作步骤：
+1. 启动 TensorBoard（服务器端执行）
+bash
+运行
+# 进入你的日志目录
+cd /data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01
+# 启动TensorBoard，指定tf_logs目录
+tensorboard --logdir=./tf_logs --port=6006 --host=0.0.0.0
+--port=6006：指定端口（默认 6006，若被占用可换如 6007）；
+--host=0.0.0.0：允许局域网 / 远程访问（服务器必备）。
+2. 访问 TensorBoard（本地浏览器）
+如果是远程服务器，需要先做端口转发（本地终端执行）：
+bash
+运行
+ssh -L 6006:localhost:6006 mingyuan@rss-ai-dev-suz-kjc-gpu01-a100
+然后打开本地浏览器，访问：http://localhost:6006，即可看到：
+SCALARS 面板：核心关注 loss（总训练 Loss）、val_loss（验证 Loss）、loss_cls/loss_bbox（分类 / 回归 Loss）、lr（学习率）；
+曲线解读：
+训练 Loss 应逐步下降并趋于平稳；
+验证 Loss 若先降后升 → 过拟合；若和训练 Loss 同步下降 → 正常收敛；若一直高 → 欠拟合。
+二、解析日志文件绘制静态 Loss 曲线
+若需要生成可保存 / 插入报告的静态曲线，可解析 20251210_220844.log（文本日志）或 20251210_220844.log.json（JSON 日志，解析更精准），以下是适配的解析代码：
+方案 1：解析文本日志（简单，适配 mmdet3d 输出格式）
+python
+运行
+import re
+import matplotlib.pyplot as plt
+import numpy as np
+
+# ========== 1. 配置日志路径 ==========
+log_path = "/data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01/20251210_220844.log"
+
+# ========== 2. 正则匹配Loss ==========
+# 匹配训练Loss（适配mmdet3d的日志格式：Epoch [1/1]  iter: 100  lr: 0.0002  loss: 2.345）
+train_loss_pattern = re.compile(r'Epoch \[\d+/\d+\]  iter: \d+  lr: \d+\.\d+  loss: (\d+\.\d+)')
+# 匹配验证Loss（若有）
+val_loss_pattern = re.compile(r'val_loss: (\d+\.\d+)')
+
+train_loss = []
+val_loss = []
+
+with open(log_path, 'r', encoding='utf-8') as f:
+    for line in f:
+        # 提取训练Loss
+        train_match = train_loss_pattern.search(line)
+        if train_match:
+            train_loss.append(float(train_match.group(1)))
+        # 提取验证Loss
+        val_match = val_loss_pattern.search(line)
+        if val_match:
+            val_loss.append(float(val_match.group(1)))
+
+# ========== 3. 绘制曲线 ==========
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans']  # Linux服务器无中文字体，用默认英文
+plt.rcParams['axes.unicode_minus'] = False
+
+plt.figure(figsize=(10, 6))
+
+# 绘制训练Loss
+if train_loss:
+    plt.plot(range(1, len(train_loss)+1), train_loss, label='Train Loss', color='#1f77b4', linewidth=1.5)
+# 绘制验证Loss（若有）
+if val_loss:
+    # 验证Loss按Epoch对齐，均匀映射到训练迭代轴
+    val_x = np.linspace(1, len(train_loss), len(val_loss))
+    plt.plot(val_x, val_loss, label='Val Loss', color='#ff7f0e', linewidth=2, linestyle='--')
+
+# 图表美化
+plt.title('BEVFusion Loss Convergence Curve', fontsize=14)
+plt.xlabel('Training Iterations', fontsize=12)
+plt.ylabel('Loss Value', fontsize=12)
+plt.legend(fontsize=11)
+plt.grid(True, alpha=0.3, linestyle='-')
+plt.tight_layout()
+
+# 保存图片（保存到当前目录，或指定路径）
+plt.savefig('/data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01/loss_curve.png', dpi=300, bbox_inches='tight')
+plt.close()
+
+print(f"✅ 训练Loss共 {len(train_loss)} 个数据点")
+print(f"✅ 验证Loss共 {len(val_loss)} 个数据点")
+print(f"✅ 曲线已保存到: /data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01/loss_curve.png")
+方案 2：解析 JSON 日志（更精准，无正则匹配误差）
+python
+运行
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+
+log_json_path = "/data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01/20251210_220844.log.json"
+
+train_loss = []
+val_loss = []
+
+# 逐行解析JSON日志（mmdet3d的JSON日志是每行一个JSON对象）
+with open(log_json_path, 'r', encoding='utf-8') as f:
+    for line in f:
+        try:
+            log_dict = json.loads(line.strip())
+            # 提取训练Loss
+            if 'loss' in log_dict and 'mode' in log_dict and log_dict['mode'] == 'train':
+                train_loss.append(log_dict['loss'])
+            # 提取验证Loss
+            if 'val_loss' in log_dict and 'mode' in log_dict and log_dict['mode'] == 'val':
+                val_loss.append(log_dict['val_loss'])
+        except json.JSONDecodeError:
+            continue
+
+# 后续绘图代码和方案1完全一致（复制方案1的绘图部分即可）
+三、目录文件解读 & 常见问题排查
+文件名	作用
+20251210_220844.log	纯文本日志，包含训练 / 验证的 Loss、lr、耗时、指标等（人工查看 / 正则解析）
+20251210_220844.log.json	结构化 JSON 日志，每行一个日志对象，解析更精准（无正则匹配错误）
+configs.yaml	训练时 dump 的完整配置文件，可核对可视化、训练轮数、Loss 配置等
+logging	mmdet3d 的日志辅助目录（无需关注）
+tf_logs	TensorBoard 日志目录（核心，启动 TensorBoard 需指定此目录）
+常见问题排查：
+TensorBoard 无数据：
+检查 tf_logs 内是否有子目录（如 events.out.tfevents.xxxx），若无则说明训练未正常记录，需核对配置中 log_config.hooks 包含 TensorboardLoggerHook；
+若有子目录但 TensorBoard 无曲线，执行 tensorboard --logdir=./tf_logs --reload_interval=5 强制刷新。
+日志中无 Val Loss：
+核对配置中 evaluation.interval 是否 > 0（你的配置是 1）；
+核对 train_model 的 validate=True（你的 train.py 已设置）；
+若训练轮数仅 1 轮且未完成验证，也会无 Val Loss。
+Loss 数值异常（如无穷大 / NaN）：
+检查日志中是否有 NaN/inf，若有 → 学习率过高 / 数据增强异常 / 数据集标注错误；
+临时解决方案：下调学习率（如从 0.0002→0.0001）、关闭部分数据增强（如 GridMask）。
+四、快速查看日志中的 Loss（终端命令）
+若只需快速查看训练 Loss 趋势，无需绘图，可在服务器终端执行：
+bash
+运行
+# 查看训练Loss（按行输出）
+grep "loss: " /data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01/20251210_220844.log
+
+# 查看验证Loss（若有）
+grep "val_loss: " /data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01/20251210_220844.log
+
+# 统计训练Loss的最大值/最小值/平均值
+grep "loss: " 20251210_220844.log | awk '{print $10}' | awk '{sum+=$1; max=$1>max?$1:max; min=$1<min?$1:min} END{print "Max Loss:",max,"Min Loss:",min,"Avg Loss:",sum/NR}'
+远程堡垒机不支持浏览器，我可以scp到本地再执行吧？
+完全可以！针对 “远程堡垒机无浏览器” 的场景，有两种更高效的方案（优先推荐端口转发，无需拷贝文件；若需离线查看则用 SCP 拷贝日志到本地），下面给出详细操作步骤：
+方案 1：本地端口转发（推荐，无需拷贝文件，实时查看）
+核心逻辑：通过 SSH 将远程服务器的 TensorBoard 端口（6006）映射到本地，本地浏览器访问localhost:6006即可直接查看远程的 Loss 曲线，无需拷贝任何文件。
+步骤 1：本地终端执行端口转发（关键）
+打开本地电脑的终端（Windows 用 PowerShell/CMD，Mac/Linux 用 Terminal），执行：
+bash
+运行
+# 格式：ssh -L 本地端口:localhost:远程端口 用户名@远程服务器IP
+ssh -L 6006:localhost:6006 mingyuan@rss-ai-dev-suz-kjc-gpu01-a100
+执行后会提示输入远程服务器的密码，输入后保持该终端窗口打开（关闭则端口转发失效）；
+若本地 6006 端口被占用（如本地也开了 TensorBoard），可换端口（如 6007）：
+bash
+运行
+ssh -L 6007:localhost:6006 mingyuan@rss-ai-dev-suz-kjc-gpu01-a100
+步骤 2：远程服务器启动 TensorBoard
+在远程堡垒机的终端，进入日志目录并启动 TensorBoard：
+bash
+运行
+# 进入你的日志目录
+cd /data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01
+# 启动TensorBoard（绑定0.0.0.0允许端口转发访问）
+tensorboard --logdir=./tf_logs --port=6006 --host=0.0.0.0
+若步骤 1 换了端口（如 6007），这里--port仍用 6006（因为转发的是远程的 6006 到本地 6007）。
+步骤 3：本地浏览器访问
+打开本地浏览器，输入：
+若用默认 6006 端口：http://localhost:6006
+若换了 6007 端口：http://localhost:6007
+即可看到远程服务器上的 Loss 收敛曲线（实时同步，训练过程中也能看）。
+方案 2：SCP 拷贝 tf_logs 到本地（离线查看）
+若不想保持端口转发，可将远程的tf_logs目录拷贝到本地，本地启动 TensorBoard 查看。
+步骤 1：本地终端执行 SCP 拷贝
+bash
+运行
+# 格式：scp -r 用户名@远程服务器IP:远程目录 本地目录
+scp -r mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01/tf_logs /Users/你的本地用户名/Desktop/
+-r：递归拷贝目录（必须加，因为 tf_logs 是目录）；
+替换/Users/你的本地用户名/Desktop/为你本地的目标路径（如 Windows：C:\Users\你的用户名\Desktop\）；
+输入远程密码后，等待拷贝完成（tf_logs 不大，通常几秒完成）。
+步骤 2：本地启动 TensorBoard
+本地终端进入拷贝后的目录，启动 TensorBoard：
+bash
+运行
+# 进入本地tf_logs所在目录（以桌面为例）
+cd /Users/你的本地用户名/Desktop/
+# 启动TensorBoard
+tensorboard --logdir=./tf_logs --port=6006
+步骤 3：本地浏览器访问
+打开本地浏览器，输入http://localhost:6006即可查看 Loss 曲线。
+补充：若堡垒机是 “双层跳转”（本地→堡垒机→目标 GPU 机）
+如果你的rss-ai-dev-suz-kjc-gpu01-a100是 GPU 机，且需要先连堡垒机再连 GPU 机，端口转发需用 “代理跳转”：
+bash
+运行
+# 本地终端执行（双层端口转发）
+ssh -L 6006:localhost:6006 -J 堡垒机用户名@堡垒机IP mingyuan@rss-ai-dev-suz-kjc-gpu01-a100
+-J：指定堡垒机作为代理，直接跳转到 GPU 机；
+后续步骤和方案 1 一致（GPU 机启动 TensorBoard，本地访问localhost:6006）。
+注意事项
+端口冲突：若本地 6006 被占用，可任意换端口（如 6008、8888），只需保持 “远程端口” 和 “转发的远程端口” 一致；
+TensorBoard 版本：本地需安装和远程一致的 TensorBoard 版本（pip install tensorboard），避免日志解析报错；
+离线绘图：若只想画静态图，也可 SCP 拷贝日志文件（20251210_220844.log）到本地，用之前给的解析代码绘制 Loss 曲线。
+两种方案都能解决 “远程无浏览器” 的问题，端口转发更高效（实时 + 无拷贝），SCP 适合离线查看，你可根据需求选择。
+总结下，最终可用环境的BEVFusion_v4_torch1.13.0_cu116的创建、debug历程，写成REAME.md:
+(1) 先说明调试原因：
+（1.1）最早版本BEVFusion_v2的环境情况、
+（1.2）BEVFusion_v2的问题、
+（1.3）基于BEVFusion_v2修复的心路历程：例如 尝试window_size 7& window size 8对于fp32、尺寸匹配等方面问题的现象等
+（1.4）最终BEVFusion_v2的结论
+
+（2）再说明创建 BEVFusion_v3_torch201_cuda118（torch2.x）的心路历程
+（2.1）BEVFusion_v3_torch201_cuda118 的最终环境清单(包含nvidia、nvcc、torch、cuda、内置cuda、mmcv等)
+（3.2）BEVFusion_v3_torch201_cuda118 的环境 为什么这么选择环境的心路历程和考虑逻辑
+（3.2）BEVFusion_v3_torch201_cuda118 的环境搭建、mmdet3d install的教程
+（3.3）BEVFusion_v3_torch201_cuda118 调试过程中重点调试碰到的问题，修改方案及最后失败无法处理的原因
+（2.1）BEVFusion_v3_torch201_cuda118 为什么创建 以及内部库的版本选择考虑
+（2.2）BEVFusion_v3_torch201_cuda118 的环境清单，包含nvidia、nvcc、torch、cuda、内置cuda、mmcv等
+（2.3）BEVFusion_v3_torch201_cuda118 的尝试和最后失败的原因和结论
+（3）再说明创建 BEVFusion_v4_torch1.13.0_cu116 的心路历程
+（3.1）BEVFusion_v4_torch1.13.0_cu116 的最终环境清单(包含nvidia、nvcc、torch、cuda、内置cuda、mmcv等)
+（3.2）BEVFusion_v4_torch1.13.0_cu116 的环境 为什么这么选择环境的心路历程和考虑逻辑
+（3.2）BEVFusion_v4_torch1.13.0_cu116 的环境搭建、mmdet3d install的教程
+（3.3）BEVFusion_v4_torch1.13.0_cu116 调试过程中碰到的问题，及如何修复的教程
+
+（4）总结BEVFsuion_mit 适配 A100的教程
+
+

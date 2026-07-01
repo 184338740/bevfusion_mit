@@ -1,0 +1,10 @@
+{
+    "lidar": [],
+    "camera": {
+        "SC_1A_CamR": [],
+        "SC_1B_CamR": [],
+        "SC_1C_CamR": [],
+        "SC_1D_CamR": []
+    },
+    "label": []
+}

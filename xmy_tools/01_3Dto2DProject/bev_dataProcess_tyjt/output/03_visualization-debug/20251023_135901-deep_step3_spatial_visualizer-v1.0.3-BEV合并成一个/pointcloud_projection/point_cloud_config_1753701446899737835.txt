@@ -1,0 +1,8 @@
+Point Cloud Configuration:
+max_points: 50000
+color_scheme: hot
+point_size: 3
+alpha: 0.8
+
+Total points projected: 200000
+Color map: hot

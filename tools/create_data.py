@@ -28,6 +28,8 @@ def nuscenes_data_prep(
     """
     if load_augmented is None:
         # otherwise, infos must have been created, we just skip.
+        print(f"🔵[xmy]>>> bevfusion_mit_xmy/tools/create_data.py::44::nuscenes_data_prep() ==> nuscenes_converter.create_nuscenes_infos() 第一步: 生成info文件(配置\文件路径\标定\Gt labels) ")
+        import pdb; pdb.set_trace()
         nuscenes_converter.create_nuscenes_infos(
             root_path, info_prefix, version=version, max_sweeps=max_sweeps
         )
@@ -41,7 +43,8 @@ def nuscenes_data_prep(
         # info_val_path = osp.join(root_path, f"{info_prefix}_infos_val.pkl")
         # nuscenes_converter.export_2d_annotation(root_path, info_train_path, version=version)
         # nuscenes_converter.export_2d_annotation(root_path, info_val_path, version=version)
-
+    print(f"🔵[xmy]>>> bevfusion_mit_xmy/tools/create_data.py::44::nuscenes_data_prep() ==> create_groundtruth_database()  第二步, (加载相机/Lidar/Radar 数据) ")
+    import pdb; pdb.set_trace()
     create_groundtruth_database(
         dataset_name,
         root_path,
@@ -96,6 +99,29 @@ if __name__ == "__main__":
         else:
             load_augmented = "pointpainting"
 
+    # if args.dataset == "nuscenes" and args.version != "v1.0-mini":
+    #     train_version = f"{args.version}-trainval"
+    #     nuscenes_data_prep(
+    #         root_path=args.root_path,
+    #         info_prefix=args.extra_tag,
+    #         version=train_version,
+    #         dataset_name="NuScenesDataset",
+    #         out_dir=args.out_dir,
+    #         max_sweeps=args.max_sweeps,
+    #         load_augmented=load_augmented,
+    #     )
+    #     test_version = f"{args.version}-test"
+    #     nuscenes_data_prep(
+    #         root_path=args.root_path,
+    #         info_prefix=args.extra_tag,
+    #         version=test_version,
+    #         dataset_name="NuScenesDataset",
+    #         out_dir=args.out_dir,
+    #         max_sweeps=args.max_sweeps,
+    #         load_augmented=load_augmented,
+    #     )
+
+    # 修改create_data.py中的版本判断逻辑
     if args.dataset == "nuscenes" and args.version != "v1.0-mini":
         # 🔵[xmy修复]>>> 明确处理test版本
         if 'test' in args.version:

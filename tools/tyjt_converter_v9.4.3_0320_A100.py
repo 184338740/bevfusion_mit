@@ -47,9 +47,9 @@ import datetime
 from tyjt_utils.tyjt_calib_utils import CalibrationProcessor
 
 # ==================== 全局配置 ====================
-Mode = "A100_all"
+DatasetInfos = "Local"
 
-if Mode == "Local":
+if DatasetInfos == "Local":
     PACKAGE_CONFIG = {
         "2d3d_20250114": {
             "type": "hikvision",
@@ -85,7 +85,7 @@ if Mode == "Local":
             }
         }
     }
-elif Mode == "A100_sub":
+elif DatasetInfos == "A100_sub":
     PACKAGE_CONFIG = {
         "2d3d_20250114": {
             "type": "hikvision",
@@ -121,7 +121,7 @@ elif Mode == "A100_sub":
             }
         }
     }
-elif Mode == "A100_all":
+elif DatasetInfos == "A100_all":
     PACKAGE_CONFIG = {
         # 海康相机产品（9个）
         "2d3d_20250114": {
@@ -368,8 +368,45 @@ elif Mode == "A100_all":
             }
         }
     }
+elif DatasetInfos == "A100_V031_sub":
+    PACKAGE_CONFIG = {
+        "2d3d4d_20250117": {
+            "type": "hikvision",
+            "calib_root": "calib/2d3d4d_20250117",
+            "group2map_file": "group2map_calib.json",
+            "camera2map_file": "camera2map_calib.json",
+            "intersections": {
+                "R26": {
+                    "group_key": "G32050700026M00",
+                    "cameras": [
+                        ("R26_Aw_CamS", "A"),
+                        ("R26_Bn_CamW", "B"),
+                        ("R26_Ce_CamN", "C"),
+                        ("R26_Ds_CamE", "D")
+                    ]
+                }
+            }
+        },
+        "2d3d4d_20250213": {
+            "type": "hikvision",
+            "calib_root": "calib/2d3d4d_20250213",
+            "group2map_file": "group2map_calib.json",
+            "camera2map_file": "camera2map_calib.json",
+            "intersections": {
+                "R26": {
+                    "group_key": "G32050700026M00",
+                    "cameras": [
+                        ("R26_Aw_CamS", "A"),
+                        ("R26_Bn_CamW", "B"),
+                        ("R26_Ce_CamN", "C"),
+                        ("R26_Ds_CamE", "D")
+                    ]
+                }
+            }
+        }
+    }
 else:
-    print(f"❌【Error】: PACKAGE_CONFIG not defined")
+    print(f"❌【Error】: PACKAGE_CONFIG not defined; DatasetVersion = {DatasetVersion}")
     import sys
     sys.exit(1)
 
@@ -806,11 +843,11 @@ def main():
     parser = argparse.ArgumentParser(description="TYJT 数据集 info 生成工具 v9.4.2 (NuScenes格式)")
     parser.add_argument("--data-root", type=str, default="/mnt/dataset/tyjt_RawData_all",
                         help="TYJT 数据集根目录")
-    parser.add_argument("--train-split", type=str, default="tyjt_data_infos/tyjt_train.txt",
+    parser.add_argument("--train-split", type=str, default="../datasets/tyjt2pkl/Local_V031/tyjt_train.txt",
                         help="训练集划分文件")
-    parser.add_argument("--val-split", type=str, default="tyjt_data_infos/tyjt_val.txt",
+    parser.add_argument("--val-split", type=str, default="../datasets/tyjt2pkl/Local_V031/tyjt_val.txt",
                         help="验证集划分文件")
-    parser.add_argument("--out-dir", type=str, default="./tyjt_data_infos_v04",
+    parser.add_argument("--out-dir", type=str, default="../datasets/tyjt2pkl/Local_V031/",
                         help="输出 pkl 文件的目录")
     parser.add_argument('--max-sweeps', type=int, default=10,
                         help='Number of sweeps (previous frames) to include for each sample')
@@ -849,7 +886,7 @@ def main():
 
     # 构建带 metadata 的完整结构
     metadata = {
-        "version": "v03-tyjt",
+        "version": 'Local_V031_sub', #"v03-tyjt",
         "description": "TYJT dataset converted for BEVFusion",
         "date_created": time.strftime("%Y-%m-%d %H:%M:%S")
     }

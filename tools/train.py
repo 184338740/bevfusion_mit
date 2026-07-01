@@ -1,3 +1,5 @@
+import debug_init_v2_xmy  # 必须最先导入！xmy
+
 import argparse
 import copy
 import os
@@ -16,6 +18,7 @@ from mmdet3d.datasets import build_dataset
 from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
 
+Debug = False
 
 def main():
     dist.init()
@@ -42,6 +45,13 @@ def main():
     # dump config
     cfg.dump(os.path.join(cfg.run_dir, "configs.yaml"))
 
+    cfg.dump(os.path.join('cur_configs.yaml'))
+    cfg.dump(os.path.join('cur_configs.json'))
+
+    if Debug:
+        print(cfg)
+        exit()
+
     # init the logger before other steps
     timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
     log_file = os.path.join(cfg.run_dir, f"{timestamp}.log")
@@ -63,9 +73,17 @@ def main():
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
+    print(f"🔵[xmy]>>> tools/train.py::  ==>  datasets = [build_dataset(cfg.data.train)]")
     datasets = [build_dataset(cfg.data.train)]
 
+    print(f"🔵[xmy]>>> tools/train.py::  ==>  model = build_model(cfg.model) ")
     model = build_model(cfg.model)
+    print("=== Velocity branch parameters ===")
+    for name, param in model.named_parameters():
+        if 'vel' in name:
+            print(f"🔵[xmy]>>> tools/train.py::  ==>  name {name};  param.shape {param.shape}")
+            
+    print(f"🔵[xmy]>>> tools/train.py::  ==>  model.init_weights() ")
     model.init_weights()
     if cfg.get("sync_bn", None):
         if not isinstance(cfg["sync_bn"], dict):
@@ -73,6 +91,7 @@ def main():
         model = convert_sync_batchnorm(model, exclude=cfg["sync_bn"]["exclude"])
 
     logger.info(f"Model:\n{model}")
+    print(f"🔵[xmy]>>> tools/train.py::  ==>  train_model(model, datasets, cfg, distributed=True, validate=True,  timestamp=timestamp,) ")
     train_model(
         model,
         datasets,
@@ -81,6 +100,8 @@ def main():
         validate=True,
         timestamp=timestamp,
     )
+    print(f"🔵[xmy]>>> tools/train.py::  train_model() End =============================================== ")
+
 
 
 if __name__ == "__main__":

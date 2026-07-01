@@ -15,6 +15,8 @@ Debug = False
 
 print(f">>>[xmy]🔵[mmdet3d/models/heads/bbox/centerpoint.py] >>> [Debug Mode = {Debug}] ")
 
+if Debug:
+    import time
 
 
 
@@ -655,12 +657,41 @@ class CenterHead(BaseModule):
             mask *= isnotnan
 
             code_weights = self.train_cfg.get("code_weights", None)
+            if Debug:
+                print(f"🔵[xmy]>>> centerpoint.py::  ==> [DEBUG] code_weights: {code_weights}, length: {len(code_weights) if code_weights is not None else None}")
+                print(f"🔵[xmy]>>> centerpoint.py::  ==> [DEBUG] target_box shape: {target_box.shape}")
             bbox_weights = mask * mask.new_tensor(code_weights)
             loss_bbox = self.loss_bbox(
                 pred, target_box, bbox_weights, avg_factor=(num + 1e-4)
             )
+            # 调试：单独计算速度损失
+            if Debug:
+                if 'vel' in preds_dict[0]:
+                    vel_tensor = preds_dict[0]['vel']
+                    print(f"[DEBUG] Task {task_id} vel shape: {vel_tensor.shape}")
+                    print(f"[DEBUG] vel stats: mean={vel_tensor.mean().item():.4f}, std={vel_tensor.std().item():.4f}")
+
+
+            #     if 'vel' in preds_dict[0]:
+            #         # 假设 code_weights 中速度对应的权重索引（通常为最后两个）
+            #         vel_weight = code_weights[-2:] if code_weights else [1.0, 1.0]
+            #         vel_pred = pred[..., -2:]          # 取最后两维作为速度预测
+            #         vel_target = target_box[..., -2:]  # 取最后两维作为速度真值
+            #         vel_mask = mask[..., -2:]          # 速度对应的mask
+            #         vel_loss = self.loss_bbox(vel_pred, vel_target, vel_mask, avg_factor=(num + 1e-4))
+            #         print(f"[DEBUG] Task {task_id} velocity loss: {vel_loss.item():.4f}")
             loss_dict[f"heatmap/task{task_id}"] = loss_heatmap
             loss_dict[f"bbox/task{task_id}"] = loss_bbox
+            
+            # ===== 添加打印 =====
+            if Debug:
+                print(f"[DEBUG] Task {task_id} bbox loss: {loss_bbox.item():.4f}")
+                # 可选：打印速度头的形状
+                if 'vel' in preds_dict[0]:
+                    print(f"[DEBUG] Task {task_id} vel shape: {preds_dict[0]['vel'].shape}")
+                import pdb; pdb.set_trace()
+            # ===================
+
         return loss_dict
 
     @force_fp32(apply_to=("preds_dicts"))
@@ -672,6 +703,12 @@ class CenterHead(BaseModule):
         Returns:
             list[dict]: Decoded bbox, scores and labels after nms.
         """
+        if Debug:
+            debug_time = time.time()
+            print(f"\n>>>[xmy]🔵[centerhead.py] >>> [DEBUG CenterHead.get_bboxes] 开始时间: {debug_time:.6f}")
+            print(f" 任务数量: {len(self.class_names)}")
+            print(f" 任务分组: {self.class_names}")
+            print(f" 每个任务的类别数: {self.num_classes}")
 
         if not isinstance(self.test_cfg["nms_type"], list):
             nms_types = [self.test_cfg["nms_type"] for _ in range(len(preds_dicts))]
@@ -699,6 +736,9 @@ class CenterHead(BaseModule):
         for task_id, preds_dict in enumerate(preds_dicts):
             num_class_with_bg = self.num_classes[task_id]
             batch_size = preds_dict[0]["heatmap"].shape[0]
+            if Debug:
+                print(f"\n🔵 处理任务{task_id}: {self.class_names[task_id]}")
+                print(f"🔵 任务{task_id}的类别数: {num_class_with_bg}")
             batch_heatmap = preds_dict[0]["heatmap"].sigmoid()
 
             batch_reg = preds_dict[0]["reg"]
@@ -726,9 +766,30 @@ class CenterHead(BaseModule):
                 reg=batch_reg,
                 task_id=task_id,
             )
+            if Debug:
+                print(f"\n🔵 处理任务{task_id}: {self.class_names[task_id]}")
+                # 🔵调试：查看解码后的原始标签
+                for i in range(min(2, batch_size)):  # 只看前2个样本
+                    boxes_info = temp[i]
+                    print(f"🔵 样本{i}任务{task_id}解码结果:")
+                    print(f"   框数量: {len(boxes_info['bboxes'])}")
+                    print(f"   原始标签: {boxes_info['labels'][:5].tolist() if len(boxes_info['labels']) > 0 else []}")
+                    print(f"   分数: {boxes_info['scores'][:5].tolist() if len(boxes_info['scores']) > 0 else []}")
+                    
+                    # 特别检查bicycle
+                    if task_id == 4:  # bicycle所在的任务
+                        bicycle_mask = boxes_info['labels'] == 1  # 任务内bicycle是索引1
+                        if bicycle_mask.any():
+                            print(f"   🚴 找到bicycle预测！索引: {boxes_info['labels'][bicycle_mask].tolist()}")
+                            print(f"     分数: {boxes_info['scores'][bicycle_mask].tolist()}")
+
             batch_reg_preds = [box["bboxes"] for box in temp]
             batch_cls_preds = [box["scores"] for box in temp]
             batch_cls_labels = [box["labels"] for box in temp]
+            if Debug:
+                # 🔴 调试：查看转换前的标签
+                print(f"🔴 任务{task_id}转换前的标签示例: {batch_cls_labels[0][:5].tolist() if len(batch_cls_labels[0]) > 0 else '无'}")
+
             if nms_types[task_id] == "circle":
                 ret_task = []
                 for i in range(batch_size):
@@ -766,6 +827,9 @@ class CenterHead(BaseModule):
                 )
 
         # Merge branches results
+        if Debug:
+            # 🔴 调试合并过程
+            print(f"\n🔴 开始合并{len(rets)}个任务的结果")
         num_samples = len(rets[0])
 
         ret_list = []

@@ -1,0 +1,937 @@
+================================================================================
+mit-BEVFusion 训练日志分析报告
+================================================================================
+分析时间: 2026-01-23 07:36:45
+日志路径: ../../../runs/tyjt_2d_CenterheadLSSfpn_V1_5_12_a_0122_Sub7010_48epoch/tf_logs/events.out.tfevents.1769082051.rss-ai-dev-suz-kjc-gpu01-a100.4102317.0
+
+1. 数据概览:
+----------------------------------------
+总指标数量: 113
+  train/loss/object/heatmap/task0: 528 个数据点
+  train/loss/object/bbox/task0: 528 个数据点
+  train/loss/object/heatmap/task1: 528 个数据点
+  train/loss/object/bbox/task1: 528 个数据点
+  train/loss/object/heatmap/task2: 528 个数据点
+  train/loss/object/bbox/task2: 528 个数据点
+  train/loss/object/heatmap/task3: 528 个数据点
+  train/loss/object/bbox/task3: 528 个数据点
+  train/loss/object/heatmap/task4: 528 个数据点
+  train/loss/object/bbox/task4: 528 个数据点
+  train/loss/object/heatmap/task5: 528 个数据点
+  train/loss/object/bbox/task5: 528 个数据点
+  train/loss: 528 个数据点
+  train/grad_norm: 528 个数据点
+  learning_rate: 576 个数据点
+  momentum: 576 个数据点
+  val/object/car_ap_dist_0.5: 48 个数据点
+  val/object/car_ap_dist_1.0: 48 个数据点
+  val/object/car_ap_dist_2.0: 48 个数据点
+  val/object/car_ap_dist_4.0: 48 个数据点
+  val/object/car_trans_err: 48 个数据点
+  val/object/car_scale_err: 48 个数据点
+  val/object/car_orient_err: 48 个数据点
+  val/object/car_vel_err: 48 个数据点
+  val/object/car_attr_err: 48 个数据点
+  val/object/mATE: 48 个数据点
+  val/object/mASE: 48 个数据点
+  val/object/mAOE: 48 个数据点
+  val/object/mAVE: 48 个数据点
+  val/object/mAAE: 48 个数据点
+  val/object/truck_ap_dist_0.5: 48 个数据点
+  val/object/truck_ap_dist_1.0: 48 个数据点
+  val/object/truck_ap_dist_2.0: 48 个数据点
+  val/object/truck_ap_dist_4.0: 48 个数据点
+  val/object/truck_trans_err: 48 个数据点
+  val/object/truck_scale_err: 48 个数据点
+  val/object/truck_orient_err: 48 个数据点
+  val/object/truck_vel_err: 48 个数据点
+  val/object/truck_attr_err: 48 个数据点
+  val/object/construction_vehicle_ap_dist_0.5: 48 个数据点
+  val/object/construction_vehicle_ap_dist_1.0: 48 个数据点
+  val/object/construction_vehicle_ap_dist_2.0: 48 个数据点
+  val/object/construction_vehicle_ap_dist_4.0: 48 个数据点
+  val/object/construction_vehicle_trans_err: 48 个数据点
+  val/object/construction_vehicle_scale_err: 48 个数据点
+  val/object/construction_vehicle_orient_err: 48 个数据点
+  val/object/construction_vehicle_vel_err: 48 个数据点
+  val/object/construction_vehicle_attr_err: 48 个数据点
+  val/object/bus_ap_dist_0.5: 48 个数据点
+  val/object/bus_ap_dist_1.0: 48 个数据点
+  val/object/bus_ap_dist_2.0: 48 个数据点
+  val/object/bus_ap_dist_4.0: 48 个数据点
+  val/object/bus_trans_err: 48 个数据点
+  val/object/bus_scale_err: 48 个数据点
+  val/object/bus_orient_err: 48 个数据点
+  val/object/bus_vel_err: 48 个数据点
+  val/object/bus_attr_err: 48 个数据点
+  val/object/trailer_ap_dist_0.5: 48 个数据点
+  val/object/trailer_ap_dist_1.0: 48 个数据点
+  val/object/trailer_ap_dist_2.0: 48 个数据点
+  val/object/trailer_ap_dist_4.0: 48 个数据点
+  val/object/trailer_trans_err: 48 个数据点
+  val/object/trailer_scale_err: 48 个数据点
+  val/object/trailer_orient_err: 48 个数据点
+  val/object/trailer_vel_err: 48 个数据点
+  val/object/trailer_attr_err: 48 个数据点
+  val/object/barrier_ap_dist_0.5: 48 个数据点
+  val/object/barrier_ap_dist_1.0: 48 个数据点
+  val/object/barrier_ap_dist_2.0: 48 个数据点
+  val/object/barrier_ap_dist_4.0: 48 个数据点
+  val/object/barrier_trans_err: 48 个数据点
+  val/object/barrier_scale_err: 48 个数据点
+  val/object/barrier_orient_err: 48 个数据点
+  val/object/barrier_vel_err: 48 个数据点
+  val/object/barrier_attr_err: 48 个数据点
+  val/object/motorcycle_ap_dist_0.5: 48 个数据点
+  val/object/motorcycle_ap_dist_1.0: 48 个数据点
+  val/object/motorcycle_ap_dist_2.0: 48 个数据点
+  val/object/motorcycle_ap_dist_4.0: 48 个数据点
+  val/object/motorcycle_trans_err: 48 个数据点
+  val/object/motorcycle_scale_err: 48 个数据点
+  val/object/motorcycle_orient_err: 48 个数据点
+  val/object/motorcycle_vel_err: 48 个数据点
+  val/object/motorcycle_attr_err: 48 个数据点
+  val/object/bicycle_ap_dist_0.5: 48 个数据点
+  val/object/bicycle_ap_dist_1.0: 48 个数据点
+  val/object/bicycle_ap_dist_2.0: 48 个数据点
+  val/object/bicycle_ap_dist_4.0: 48 个数据点
+  val/object/bicycle_trans_err: 48 个数据点
+  val/object/bicycle_scale_err: 48 个数据点
+  val/object/bicycle_orient_err: 48 个数据点
+  val/object/bicycle_vel_err: 48 个数据点
+  val/object/bicycle_attr_err: 48 个数据点
+  val/object/pedestrian_ap_dist_0.5: 48 个数据点
+  val/object/pedestrian_ap_dist_1.0: 48 个数据点
+  val/object/pedestrian_ap_dist_2.0: 48 个数据点
+  val/object/pedestrian_ap_dist_4.0: 48 个数据点
+  val/object/pedestrian_trans_err: 48 个数据点
+  val/object/pedestrian_scale_err: 48 个数据点
+  val/object/pedestrian_orient_err: 48 个数据点
+  val/object/pedestrian_vel_err: 48 个数据点
+  val/object/pedestrian_attr_err: 48 个数据点
+  val/object/traffic_cone_ap_dist_0.5: 48 个数据点
+  val/object/traffic_cone_ap_dist_1.0: 48 个数据点
+  val/object/traffic_cone_ap_dist_2.0: 48 个数据点
+  val/object/traffic_cone_ap_dist_4.0: 48 个数据点
+  val/object/traffic_cone_trans_err: 48 个数据点
+  val/object/traffic_cone_scale_err: 48 个数据点
+  val/object/traffic_cone_orient_err: 48 个数据点
+  val/object/traffic_cone_vel_err: 48 个数据点
+  val/object/traffic_cone_attr_err: 48 个数据点
+  val/object/nds: 48 个数据点
+  val/object/map: 48 个数据点
+
+2. 指标汇总:
+----------------------------------------
+train/loss/object/heatmap/task0:
+  最后值: 0.512521
+  平均值: 0.624950
+  最小值: 0.478438
+  最大值: 1.010193
+  数据点: 528个
+
+train/loss/object/bbox/task0:
+  最后值: 0.126551
+  平均值: 0.141260
+  最小值: 0.123525
+  最大值: 0.180277
+  数据点: 528个
+
+train/loss/object/heatmap/task1:
+  最后值: 0.189975
+  平均值: 0.897072
+  最小值: 0.139347
+  最大值: 4.226454
+  数据点: 528个
+
+train/loss/object/bbox/task1:
+  最后值: 0.088544
+  平均值: 0.158925
+  最小值: 0.074756
+  最大值: 0.388558
+  数据点: 528个
+
+train/loss/object/heatmap/task2:
+  最后值: 0.092979
+  平均值: 0.782822
+  最小值: 0.085298
+  最大值: 6.078541
+  数据点: 528个
+
+train/loss/object/bbox/task2:
+  最后值: 0.065122
+  平均值: 0.122702
+  最小值: 0.060938
+  最大值: 0.551536
+  数据点: 528个
+
+train/loss/object/heatmap/task3:
+  最后值: 0.014321
+  平均值: 0.042068
+  最小值: 0.009500
+  最大值: 0.155499
+  数据点: 528个
+
+train/loss/object/bbox/task3:
+  最后值: 0.018419
+  平均值: 0.032847
+  最小值: 0.015259
+  最大值: 0.064499
+  数据点: 528个
+
+train/loss/object/heatmap/task4:
+  最后值: 0.386832
+  平均值: 0.602473
+  最小值: 0.373663
+  最大值: 4.154073
+  数据点: 528个
+
+train/loss/object/bbox/task4:
+  最后值: 0.120491
+  平均值: 0.170752
+  最小值: 0.112625
+  最大值: 0.470434
+  数据点: 528个
+
+train/loss/object/heatmap/task5:
+  最后值: 0.707635
+  平均值: 0.990354
+  最小值: 0.671640
+  最大值: 1.742471
+  数据点: 528个
+
+train/loss/object/bbox/task5:
+  最后值: 0.267899
+  平均值: 0.306597
+  最小值: 0.263004
+  最大值: 0.423770
+  数据点: 528个
+
+train/loss:
+  最后值: 2.591289
+  平均值: 4.872822
+  最小值: 2.530901
+  最大值: 19.096321
+  数据点: 528个
+
+train/grad_norm:
+  最后值: inf
+  平均值: inf
+  最小值: 8.681945
+  最大值: inf
+  数据点: 528个
+
+val/object/car_ap_dist_0.5:
+  最后值: 0.000000
+  平均值: 0.040206
+  最小值: 0.000000
+  最大值: 0.717300
+  数据点: 48个
+
+val/object/car_ap_dist_1.0:
+  最后值: 0.020700
+  平均值: 0.129185
+  最小值: 0.015200
+  最大值: 0.861700
+  数据点: 48个
+
+val/object/car_ap_dist_2.0:
+  最后值: 0.402500
+  平均值: 0.499319
+  最小值: 0.395500
+  最大值: 0.885300
+  数据点: 48个
+
+val/object/car_ap_dist_4.0:
+  最后值: 0.536400
+  平均值: 0.607783
+  最小值: 0.531400
+  最大值: 0.895900
+  数据点: 48个
+
+val/object/car_trans_err:
+  最后值: 1.193500
+  平均值: 1.038323
+  最小值: 0.210000
+  最大值: 1.235700
+  数据点: 48个
+
+val/object/car_scale_err:
+  最后值: 0.263800
+  平均值: 0.242140
+  最小值: 0.131200
+  最大值: 0.279100
+  数据点: 48个
+
+val/object/car_orient_err:
+  最后值: 0.181500
+  平均值: 0.160854
+  最小值: 0.058400
+  最大值: 0.192600
+  数据点: 48个
+
+val/object/car_vel_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/car_attr_err:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/mATE:
+  最后值: 0.986300
+  平均值: 0.910656
+  最小值: 0.438000
+  最大值: 1.002700
+  数据点: 48个
+
+val/object/mASE:
+  最后值: 0.671700
+  平均值: 0.640654
+  最小值: 0.434800
+  最大值: 0.673400
+  数据点: 48个
+
+val/object/mAOE:
+  最后值: 0.606200
+  平均值: 0.566110
+  最小值: 0.290800
+  最大值: 0.614100
+  数据点: 48个
+
+val/object/mAVE:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/mAAE:
+  最后值: 0.750000
+  平均值: 0.734375
+  最小值: 0.625000
+  最大值: 0.750000
+  数据点: 48个
+
+val/object/truck_ap_dist_0.5:
+  最后值: 0.009500
+  平均值: 0.071000
+  最小值: 0.006300
+  最大值: 0.565600
+  数据点: 48个
+
+val/object/truck_ap_dist_1.0:
+  最后值: 0.119600
+  平均值: 0.227025
+  最小值: 0.101600
+  最大值: 0.743500
+  数据点: 48个
+
+val/object/truck_ap_dist_2.0:
+  最后值: 0.344700
+  平均值: 0.477863
+  最小值: 0.325300
+  最大值: 0.837500
+  数据点: 48个
+
+val/object/truck_ap_dist_4.0:
+  最后值: 0.532800
+  平均值: 0.632592
+  最小值: 0.513800
+  最大值: 0.877000
+  数据点: 48个
+
+val/object/truck_trans_err:
+  最后值: 0.827900
+  平均值: 0.727898
+  最小值: 0.202300
+  最大值: 0.882500
+  数据点: 48个
+
+val/object/truck_scale_err:
+  最后值: 0.364600
+  平均值: 0.331763
+  最小值: 0.189200
+  最大值: 0.374500
+  数据点: 48个
+
+val/object/truck_orient_err:
+  最后值: 0.158900
+  平均值: 0.151023
+  最小值: 0.044200
+  最大值: 0.197200
+  数据点: 48个
+
+val/object/truck_vel_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/truck_attr_err:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/construction_vehicle_ap_dist_0.5:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/construction_vehicle_ap_dist_1.0:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/construction_vehicle_ap_dist_2.0:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/construction_vehicle_ap_dist_4.0:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/construction_vehicle_trans_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/construction_vehicle_scale_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/construction_vehicle_orient_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/construction_vehicle_vel_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/construction_vehicle_attr_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/bus_ap_dist_0.5:
+  最后值: 0.000000
+  平均值: 0.043935
+  最小值: 0.000000
+  最大值: 0.534700
+  数据点: 48个
+
+val/object/bus_ap_dist_1.0:
+  最后值: 0.139800
+  平均值: 0.203733
+  最小值: 0.079200
+  最大值: 0.758800
+  数据点: 48个
+
+val/object/bus_ap_dist_2.0:
+  最后值: 0.345200
+  平均值: 0.426519
+  最小值: 0.323200
+  最大值: 0.857300
+  数据点: 48个
+
+val/object/bus_ap_dist_4.0:
+  最后值: 0.458600
+  平均值: 0.531238
+  最小值: 0.443500
+  最大值: 0.906900
+  数据点: 48个
+
+val/object/bus_trans_err:
+  最后值: 0.871200
+  平均值: 0.793292
+  最小值: 0.222600
+  最大值: 1.032900
+  数据点: 48个
+
+val/object/bus_scale_err:
+  最后值: 0.293600
+  平均值: 0.277985
+  最小值: 0.143100
+  最大值: 0.338300
+  数据点: 48个
+
+val/object/bus_orient_err:
+  最后值: 0.181900
+  平均值: 0.160640
+  最小值: 0.046300
+  最大值: 0.252200
+  数据点: 48个
+
+val/object/bus_vel_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/bus_attr_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/trailer_ap_dist_0.5:
+  最后值: 0.000000
+  平均值: 0.035123
+  最小值: 0.000000
+  最大值: 0.641900
+  数据点: 48个
+
+val/object/trailer_ap_dist_1.0:
+  最后值: 0.000000
+  平均值: 0.052633
+  最小值: 0.000000
+  最大值: 0.730300
+  数据点: 48个
+
+val/object/trailer_ap_dist_2.0:
+  最后值: 0.000000
+  平均值: 0.058273
+  最小值: 0.000000
+  最大值: 0.736300
+  数据点: 48个
+
+val/object/trailer_ap_dist_4.0:
+  最后值: 0.000000
+  平均值: 0.058587
+  最小值: 0.000000
+  最大值: 0.738700
+  数据点: 48个
+
+val/object/trailer_trans_err:
+  最后值: 1.000000
+  平均值: 0.931285
+  最小值: 0.173900
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/trailer_scale_err:
+  最后值: 1.000000
+  平均值: 0.941481
+  最小值: 0.379200
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/trailer_orient_err:
+  最后值: 1.000000
+  平均值: 0.903823
+  最小值: 0.081400
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/trailer_vel_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/trailer_attr_err:
+  最后值: 1.000000
+  平均值: 0.875000
+  最小值: 0.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/barrier_ap_dist_0.5:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/barrier_ap_dist_1.0:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/barrier_ap_dist_2.0:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/barrier_ap_dist_4.0:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/barrier_trans_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/barrier_scale_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/barrier_orient_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/barrier_vel_err:
+  最后值: nan
+  平均值: nan
+  最小值: nan
+  最大值: nan
+  数据点: 48个
+
+val/object/barrier_attr_err:
+  最后值: nan
+  平均值: nan
+  最小值: nan
+  最大值: nan
+  数据点: 48个
+
+val/object/motorcycle_ap_dist_0.5:
+  最后值: 0.010100
+  平均值: 0.110202
+  最小值: 0.008000
+  最大值: 0.833300
+  数据点: 48个
+
+val/object/motorcycle_ap_dist_1.0:
+  最后值: 0.113600
+  平均值: 0.301421
+  最小值: 0.107100
+  最大值: 0.910300
+  数据点: 48个
+
+val/object/motorcycle_ap_dist_2.0:
+  最后值: 0.403100
+  平均值: 0.563402
+  最小值: 0.377500
+  最大值: 0.921800
+  数据点: 48个
+
+val/object/motorcycle_ap_dist_4.0:
+  最后值: 0.453900
+  平均值: 0.609967
+  最小值: 0.416300
+  最大值: 0.924400
+  数据点: 48个
+
+val/object/motorcycle_trans_err:
+  最后值: 0.876400
+  平均值: 0.716927
+  最小值: 0.137200
+  最大值: 0.909700
+  数据点: 48个
+
+val/object/motorcycle_scale_err:
+  最后值: 0.411400
+  平均值: 0.368110
+  最小值: 0.167400
+  最大值: 0.419300
+  数据点: 48个
+
+val/object/motorcycle_orient_err:
+  最后值: 0.201500
+  平均值: 0.180244
+  最小值: 0.052900
+  最大值: 0.244300
+  数据点: 48个
+
+val/object/motorcycle_vel_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/motorcycle_attr_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/bicycle_ap_dist_0.5:
+  最后值: 0.000000
+  平均值: 0.052079
+  最小值: 0.000000
+  最大值: 0.897800
+  数据点: 48个
+
+val/object/bicycle_ap_dist_1.0:
+  最后值: 0.000000
+  平均值: 0.052783
+  最小值: 0.000000
+  最大值: 0.918300
+  数据点: 48个
+
+val/object/bicycle_ap_dist_2.0:
+  最后值: 0.000000
+  平均值: 0.052783
+  最小值: 0.000000
+  最大值: 0.918300
+  数据点: 48个
+
+val/object/bicycle_ap_dist_4.0:
+  最后值: 0.000000
+  平均值: 0.052783
+  最小值: 0.000000
+  最大值: 0.918300
+  数据点: 48个
+
+val/object/bicycle_trans_err:
+  最后值: 1.000000
+  平均值: 0.903869
+  最小值: 0.150600
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/bicycle_scale_err:
+  最后值: 1.000000
+  平均值: 0.896267
+  最小值: 0.108500
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/bicycle_orient_err:
+  最后值: 1.000000
+  平均值: 0.889617
+  最小值: 0.072000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/bicycle_vel_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/bicycle_attr_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/pedestrian_ap_dist_0.5:
+  最后值: 0.000000
+  平均值: 0.027898
+  最小值: 0.000000
+  最大值: 0.513200
+  数据点: 48个
+
+val/object/pedestrian_ap_dist_1.0:
+  最后值: 0.053500
+  平均值: 0.129690
+  最小值: 0.042700
+  最大值: 0.739200
+  数据点: 48个
+
+val/object/pedestrian_ap_dist_2.0:
+  最后值: 0.365800
+  平均值: 0.446844
+  最小值: 0.361400
+  最大值: 0.797700
+  数据点: 48个
+
+val/object/pedestrian_ap_dist_4.0:
+  最后值: 0.539800
+  平均值: 0.594852
+  最小值: 0.533400
+  最大值: 0.820100
+  数据点: 48个
+
+val/object/pedestrian_trans_err:
+  最后值: 1.093700
+  平均值: 0.995002
+  最小值: 0.284000
+  最大值: 1.150400
+  数据点: 48个
+
+val/object/pedestrian_scale_err:
+  最后值: 0.384000
+  平均值: 0.348742
+  最小值: 0.229900
+  最大值: 0.389500
+  数据点: 48个
+
+val/object/pedestrian_orient_err:
+  最后值: 0.732200
+  平均值: 0.648815
+  最小值: 0.258700
+  最大值: 0.773600
+  数据点: 48个
+
+val/object/pedestrian_vel_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/pedestrian_attr_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/traffic_cone_ap_dist_0.5:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/traffic_cone_ap_dist_1.0:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/traffic_cone_ap_dist_2.0:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/traffic_cone_ap_dist_4.0:
+  最后值: 0.000000
+  平均值: 0.000000
+  最小值: 0.000000
+  最大值: 0.000000
+  数据点: 48个
+
+val/object/traffic_cone_trans_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/traffic_cone_scale_err:
+  最后值: 1.000000
+  平均值: 1.000000
+  最小值: 1.000000
+  最大值: 1.000000
+  数据点: 48个
+
+val/object/traffic_cone_orient_err:
+  最后值: nan
+  平均值: nan
+  最小值: nan
+  最大值: nan
+  数据点: 48个
+
+val/object/traffic_cone_vel_err:
+  最后值: nan
+  平均值: nan
+  最小值: nan
+  最大值: nan
+  数据点: 48个
+
+val/object/traffic_cone_attr_err:
+  最后值: nan
+  平均值: nan
+  最小值: nan
+  最大值: nan
+  数据点: 48个
+
+val/object/nds:
+  最后值: 0.159196
+  平均值: 0.203448
+  最小值: 0.157659
+  最大值: 0.501147
+  数据点: 48个
+
+val/object/map:
+  最后值: 0.121240
+  平均值: 0.177243
+  最小值: 0.119518
+  最大值: 0.560037
+  数据点: 48个
+
+3. 训练问题诊断:
+----------------------------------------
+发现 5 个潜在问题:
+  1. val/object/barrier_vel_err: 包含NaN值
+  2. val/object/barrier_attr_err: 包含NaN值
+  3. val/object/traffic_cone_orient_err: 包含NaN值
+  4. val/object/traffic_cone_vel_err: 包含NaN值
+  5. val/object/traffic_cone_attr_err: 包含NaN值
+
+4. 针对BEVFusion的建议:
+----------------------------------------
+A. 如果2D检测效果不好:
+   1. 检查相机标定参数
+   2. 验证图像预处理流程
+   3. 调整CenterPoint参数
+   4. 检查数据增强策略
+
+B. 如果3D检测效果不好:
+   1. 检查LiDAR点云预处理
+   2. 验证BEV特征提取
+   3. 调整Voxelization参数
+   4. 检查坐标转换
+
+C. 如果多模态融合效果不好:
+   1. 检查时间同步
+   2. 验证特征对齐
+   3. 调整融合权重
+   4. 检查模态间的信息互补性
+
+D. 通用建议:
+   1. 检查数据标注质量
+   2. 验证数据分布
+   3. 调整学习率调度策略
+   4. 增加训练迭代次数
+   5. 尝试不同的优化器

@@ -1,0 +1,17 @@
+Point Cloud Projection Configuration:
+Timestamp: 1753701446899737835
+Total points projected: 20000
+Color map: hot
+
+Point Cloud Settings:
+  max_points: 5000
+  point_size: 3
+  alpha: 0.8
+
+Image size: (1920, 1080)
+
+Camera mapping:
+  SC_R1_Aw_CpcS_CAMR -> SC_1A_CamR
+  SC_R1_Bn_CpcW_CAMR -> SC_1B_CamR
+  SC_R1_Ce_CpcN_CAMR -> SC_1C_CamR
+  SC_R1_Ds_CpcE_CAMR -> SC_1D_CamR

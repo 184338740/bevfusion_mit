@@ -22,6 +22,9 @@ from ..builder import OBJECTSAMPLERS
 from .utils import noise_per_object_v3_
 
 Debug = False
+DebugWarning = False
+
+print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/transforms_3d.py] >>> [DataLoader侧]  >>> Debug = {Debug}; ; DebugWarning = {DebugWarning}")
 
 if Debug:
     import time
@@ -29,7 +32,6 @@ if Debug:
     # 如果没有，则创建一个简单的
     import threading
     import os
-    print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/transforms_3d.py] >>> [DataLoader侧]  >>> [Debug Mode = True] ")
     global_print_interval = 10
 
     def get_worker_info():
@@ -47,6 +49,200 @@ if Debug:
         process_id = os.getpid()
         return f"P{process_id}_T{thread_id%1000:03d}"
 
+
+
+@PIPELINES.register_module()
+class xmyPrintGTBoxes:
+    def __call__(self, results):
+        if 'gt_bboxes_3d' not in results:
+            return results
+        gt = results['gt_bboxes_3d']
+        # 处理 DataContainer
+        if hasattr(gt, 'data'):
+            gt = gt.data
+        if gt is not None and len(gt) > 0:
+            token = results.get('sample_idx', results.get('token', 'unknown'))
+            dims = gt.dims  # (N, 3)
+            print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/transforms_3d.py] >>> xmyPrintGTBoxes.__call__() >>>[PIPELINE] Sample {token}: original dims (w,l,h) = {dims.cpu().numpy()}")
+        return results
+
+@PIPELINES.register_module()
+class xmyMergeMetasToTop:
+    """将 data['metas'] 中的键值对提升到顶层，以便后续 Collect3D 收集， 如果重复不覆盖"""
+    def __call__(self, results):
+        if 'metas' in results:
+            metas = results['metas']
+            if hasattr(metas, 'data'):
+                metas = metas.data
+            for key, val in metas.items():
+                if key not in results:
+                    results[key] = val
+                else:
+                    # 可选：打印警告，提示键已存在
+                    print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/transforms_3d.py] >>> xmyMergeMetasToTop.__call__()  >>> Warning: key '{key}' already exists in top-level, skipping from metas")
+        return results
+
+# xmy: 实现失败！
+@PIPELINES.register_module()
+class xmyGTDepth:
+    """
+    生成深度图，适配 pipeline 顺序：DefaultFormatBundle3D → xmyGTDepth → Collect3D。
+    不依赖 Collect3D 打包的 DataContainer，可以正确处理 DefaultFormatBundle3D 后的数据类型。
+
+    与官方 GTDepth 的核心区别：
+      - 官方 GTDepth 依赖于 `Collect3D` 将数据包装为 DataContainer（拥有 .data 属性），
+        因此必须在 `Collect3D` 之后调用。
+      - 本模块直接使用原始 numpy/torch 数据，不要求 `.data` 属性，因此可以放置在 `Collect3D` 之前。
+      - 采用一次 `Collect3D` 的设计，可避免元信息（如 token、sample_idx）在两次 `Collect3D` 中丢失，
+        从而在训练发生 NaN 时能够定位到具体样本。
+
+    功能：
+      1. 根据输入图像尺寸创建空深度图 `depths`（形状 [B, N, H, W]）。
+      2. 利用 LiDAR 点云和相机内外参，将每个点云投影到对应的相机图像坐标系，
+         得到该像素位置的深度值（相机坐标系下的 Z 值）。
+      3. 将投影有效的深度值写入 `depths`，未覆盖的区域保持为 0。
+      4. 将生成的深度图存入 `data['depths']`，供后续 `AwareBEVDepth` 等模块使用。
+
+    参数：
+        keyframe_only (bool):
+            是否只使用关键帧点云（`points[:, 4] == 0`）。通常用于时序融合场景，
+            若为 True 则仅保留当前帧（时间戳=0）的点云。默认为 False。
+
+    使用示例（pipeline 配置）：
+        train_pipeline:
+          # ... 数据加载、增强 ...
+          - type: DefaultFormatBundle3D          # 将 points 等转为 DataContainer（可选）
+          - type: xmyGTDepth
+            keyframe_only: true
+          - type: Collect3D
+            keys: [..., depths]
+            meta_lis_keys: [token, sample_idx, ...]   # 保证 token 等元信息正确传递
+
+    注意事项：
+        - 本模块不修改官方 `GTDepth`，与原始版本共存，互不影响。
+        - 需要在 `pipeline` 中确保 `data` 字典包含以下字段：
+          `camera2ego`, `camera_intrinsics`, `img_aug_matrix`, `lidar_aug_matrix`,
+          `lidar2ego`, `camera2lidar`, `lidar2image`, `points`, `img`。
+        - `img` 可以是 PIL Image 列表或已预处理的张量，模块会自动获取其高度和宽度。
+        - 生成的 `depths` 与输入图像同分辨率，类型为 `torch.float32`。
+        - 如果开启 `DebugWarning`（在其他模块定义），当深度图出现 NaN/Inf 时会打印样本标识。
+    """
+    def __init__(self, keyframe_only=False):
+        self.keyframe_only = keyframe_only
+
+    def __call__(self, data):
+        # 安全获取原始数据（兼容 DataContainer）
+        def get_value(x):
+            if hasattr(x, 'data'):
+                return x.data
+            return x
+
+        # 将列表、numpy、memoryview 等统一转换为 torch.Tensor
+        def to_tensor(x):
+            if isinstance(x, memoryview):
+                x = np.asarray(x)
+            if isinstance(x, (list, tuple)):
+                if len(x) == 0:
+                    return torch.tensor([])
+                x = np.stack(x, axis=0)
+            if isinstance(x, np.ndarray):
+                return torch.from_numpy(x).float()
+            elif torch.is_tensor(x):
+                return x.float()
+            else:
+                return torch.tensor(x, dtype=torch.float32)
+
+        # 获取数据（此时矩阵字段可能仍是列表或 ndarray，img 是 Tensor）
+        sensor2ego = get_value(data['camera2ego'])
+        cam_intrinsic = get_value(data['camera_intrinsics'])
+        img_aug_matrix = get_value(data['img_aug_matrix'])
+        bev_aug_matrix = get_value(data['lidar_aug_matrix'])
+        lidar2ego = get_value(data['lidar2ego'])
+        camera2lidar = get_value(data['camera2lidar'])
+        lidar2image = get_value(data['lidar2image'])
+        points = get_value(data['points'])
+        img = get_value(data['img'])   # 4个相机的img，是list
+
+        # 统一转为 Tensor（确保后续运算一致）
+        sensor2ego = to_tensor(sensor2ego)
+        cam_intrinsic = to_tensor(cam_intrinsic)
+        img_aug_matrix = to_tensor(img_aug_matrix)
+        bev_aug_matrix = to_tensor(bev_aug_matrix)
+        lidar2ego = to_tensor(lidar2ego)
+        camera2lidar = to_tensor(camera2lidar)
+        lidar2image = to_tensor(lidar2image)
+
+        # 保留官方 GTDepth 中定义的变量（部分未使用，但保持一致性）
+        rots = sensor2ego[..., :3, :3]
+        trans = sensor2ego[..., :3, 3]
+        intrins = cam_intrinsic[..., :3, :3]
+        post_rots = img_aug_matrix[..., :3, :3]
+        post_trans = img_aug_matrix[..., :3, 3]
+        lidar2ego_rots = lidar2ego[..., :3, :3]
+        lidar2ego_trans = lidar2ego[..., :3, 3]
+        camera2lidar_rots = camera2lidar[..., :3, :3]
+        camera2lidar_trans = camera2lidar[..., :3, 3]
+
+        # 处理 points
+        if hasattr(points, 'tensor'):
+            points_tensor = points.tensor
+        else:
+            points_tensor = points
+
+        if self.keyframe_only:
+            points_tensor = points_tensor[points_tensor[:, 4] == 0]
+
+        # 获取图像尺寸（img 是 4D 张量）
+        if DebugWarning:
+            print(f">>>[xmy]🟡[transforms_3d.py] >>> xmyGTDepth.__call__() >>> len(img)={len(img)}")
+            print(f">>>[xmy]🟡[transforms_3d.py] >>> xmyGTDepth.__call__() >>> img[0].shape ={img[0].shape}")
+            print(f">>>[xmy]🟡[transforms_3d.py] >>> xmyGTDepth.__call__() >>> img[1].shape ={img[1].shape}")
+            print(f">>>[xmy]🟡[transforms_3d.py] >>> xmyGTDepth.__call__() >>> img[2].shape ={img[2].shape}")
+            print(f">>>[xmy]🟡[transforms_3d.py] >>> xmyGTDepth.__call__() >>> img[3].shape ={img[3].shape}")
+
+        N, C, H, W = img.shape
+
+        depth = torch.zeros(N, H, W, dtype=torch.float32)
+
+        # ========== 以下投影逻辑与官方 GTDepth 完全一致 ==========
+        cur_coords = points_tensor[:, :3]
+
+        # inverse aug
+        cur_coords -= bev_aug_matrix[:3, 3]
+        cur_coords = torch.inverse(bev_aug_matrix[:3, :3]).matmul(cur_coords.transpose(1, 0))
+        # lidar2image
+        cur_coords = lidar2image[:, :3, :3].matmul(cur_coords)
+        cur_coords += lidar2image[:, :3, 3].reshape(-1, 3, 1)
+        # get 2d coords
+        dist = cur_coords[:, 2, :]
+        cur_coords[:, 2, :] = torch.clamp(cur_coords[:, 2, :], 1e-5, 1e5)
+        cur_coords[:, :2, :] /= cur_coords[:, 2:3, :]
+
+        # imgaug
+        cur_coords = img_aug_matrix[:, :3, :3].matmul(cur_coords)
+        cur_coords += img_aug_matrix[:, :3, 3].reshape(-1, 3, 1)
+        cur_coords = cur_coords[:, :2, :].transpose(1, 2)
+
+        # normalize coords for grid sample
+        cur_coords = cur_coords[..., [1, 0]]
+
+        on_img = (
+            (cur_coords[..., 0] < H) & (cur_coords[..., 0] >= 0) &
+            (cur_coords[..., 1] < W) & (cur_coords[..., 1] >= 0)
+        )
+
+        for c in range(on_img.shape[0]):
+            masked_coords = cur_coords[c, on_img[c]].long()
+            masked_dist = dist[c, on_img[c]]
+            depth[c, masked_coords[:, 0], masked_coords[:, 1]] = masked_dist
+
+        # 可选：深度图 NaN 检测（便于定位异常样本）
+        if DebugWarning and (torch.isnan(depth).any() or torch.isinf(depth).any()):
+            sample_id = data.get('sample_idx', data.get('token', 'unknown'))
+            print(f"[Warning] xmyGTDepth: NaN/inf in depth for sample {sample_id}")
+
+        data['depths'] = depth
+        return data
 
 @PIPELINES.register_module()
 class GTDepth:
@@ -146,6 +342,8 @@ class GTDepth:
                             sample_id = str(points_data.metadata[key])
                             break
 
+        # print(f">>>[xmy]🟡[transforms_3d.py] >>> GTDepth.__call__() >>> data.keys()= { data.keys()}")
+        # print(f">>>[xmy]🟡[transforms_3d.py] >>> GTDepth.__call__() >>> data['metas'] = { data['metas']}")
         sensor2ego = data['camera2ego'].data
         cam_intrinsic = data['camera_intrinsics'].data 
         img_aug_matrix = data['img_aug_matrix'].data 
@@ -207,6 +405,12 @@ class GTDepth:
             masked_coords = cur_coords[c, on_img[c]].long()
             masked_dist = dist[c, on_img[c]]
             depth[c, masked_coords[:, 0], masked_coords[:, 1]] = masked_dist
+        
+        if DebugWarning:
+            # 检查深度真值是否有效
+            if torch.isnan(depth).any() or torch.isinf(depth).any():
+                sample_id = data.get('sample_idx', data.get('token', 'unknown'))
+                print(f">>>[xmy]🟡[transforms_3d.py] >>> [GTdepth::__call__()] >>> [⚠️ Warning] NaN/inf in depth for sample {sample_id}")
 
         data['depths'] = depth 
 
@@ -303,7 +507,7 @@ class ImageAug3D:
 
             # 🔍 添加详细的调试信息
             print(f"\n{'='*80}")
-            print(f"🔵[DEBUG] ImageAug3D 开始处理 - 样本: {sample_id[:12]}...")
+            print(f"🟡[DEBUG] ImageAug3D 开始处理 - 样本: {sample_id[:12]}...")
             print(f"{'='*80}")
             
             # 1. 打印原始图像信息

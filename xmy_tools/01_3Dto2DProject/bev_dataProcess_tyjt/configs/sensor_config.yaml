@@ -1,0 +1,20 @@
+# Sensor specifications
+cameras:
+  image_extension: ".jpg"
+  expected_resolution: [1920, 1080]
+  
+lidar:
+  pointcloud_extensions: [".pcd", ".npy"]
+  
+labels:
+  label_extension: ".json"
+  
+# Visualization settings
+visualization:
+  sensor_colors:
+    - [1.0, 0.0, 0.0]  # red
+    - [0.0, 1.0, 0.0]  # green  
+    - [0.0, 0.0, 1.0]  # blue
+    - [1.0, 1.0, 0.0]  # yellow
+  point_size: 2
+  background_color: [1.0, 1.0, 1.0]  # white

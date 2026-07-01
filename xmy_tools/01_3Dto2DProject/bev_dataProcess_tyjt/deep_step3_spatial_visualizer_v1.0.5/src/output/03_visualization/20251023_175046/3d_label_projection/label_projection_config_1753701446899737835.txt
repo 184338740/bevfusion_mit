@@ -1,0 +1,18 @@
+3D Label Projection Configuration:
+Timestamp: 1753701446899737835
+Total labels: 57
+Total projected boxes: 119
+Image size: (1920, 1080)
+
+Camera mapping:
+  SC_R1_Aw_CpcS_CAMR -> SC_1A_CamR
+  SC_R1_Bn_CpcW_CAMR -> SC_1B_CamR
+  SC_R1_Ce_CpcN_CAMR -> SC_1C_CamR
+  SC_R1_Ds_CpcE_CAMR -> SC_1D_CamR
+
+Label colors (BGR format):
+  car: (0, 255, 0)
+  truck: (255, 0, 0)
+  cyclist: (0, 0, 255)
+  pedestrian: (255, 255, 0)
+  default: (255, 255, 255)

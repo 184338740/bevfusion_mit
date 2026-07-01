@@ -1,0 +1,113 @@
+{
+  "overview": {
+    "total_packages": 2,
+    "total_sub_packages": 4,
+    "total_samples": 443,
+    "total_lidar_files": 443,
+    "total_cameras": 8,
+    "total_images": 876
+  },
+  "packages": {
+    "all_packages": [
+      "2d3d4d_20250728_weiyuan",
+      "converted_bin",
+      "2d3d4d_20250913_weiyuan"
+    ],
+    "valid_packages": [
+      "2d3d4d_20250728_weiyuan",
+      "2d3d4d_20250913_weiyuan"
+    ],
+    "package_details": {
+      "2d3d4d_20250728_weiyuan": {
+        "name": "2d3d4d_20250728_weiyuan",
+        "has_calib": true,
+        "has_datasets": true,
+        "sub_packages": [
+          "G51102400001M00_20250728191726_2.0HZ",
+          "G51102400001M00_20250728195827_2.0HZ"
+        ],
+        "sub_package_count": 2
+      },
+      "2d3d4d_20250913_weiyuan": {
+        "name": "2d3d4d_20250913_weiyuan",
+        "has_calib": true,
+        "has_datasets": true,
+        "sub_packages": [
+          "G51102400002M00_20250913175957_2.0HZ",
+          "G51102400002M00_20250913181456_2.0HZ"
+        ],
+        "sub_package_count": 2
+      }
+    },
+    "total_sub_packages": 4
+  },
+  "samples": {
+    "total_samples": 443,
+    "total_lidar_files": 443,
+    "package_samples": {
+      "2d3d4d_20250728_weiyuan": 235,
+      "2d3d4d_20250913_weiyuan": 208
+    },
+    "subpackage_samples": {
+      "2d3d4d_20250728_weiyuan/G51102400001M00_20250728191726_2.0HZ": 118,
+      "2d3d4d_20250728_weiyuan/G51102400001M00_20250728195827_2.0HZ": 117,
+      "2d3d4d_20250913_weiyuan/G51102400002M00_20250913175957_2.0HZ": 101,
+      "2d3d4d_20250913_weiyuan/G51102400002M00_20250913181456_2.0HZ": 107
+    }
+  },
+  "cameras": {
+    "camera_summary": {
+      "SC_1D_CamR": 118,
+      "SC_1C_CamR": 118,
+      "SC_1B_CamR": 118,
+      "SC_1A_CamR": 118,
+      "SC_2D_CamR": 101,
+      "SC_2C_CamR": 101,
+      "SC_2A_CamR": 101,
+      "SC_2B_CamR": 101
+    },
+    "camera_details": {
+      "SC_1D_CamR": {
+        "image_count": 118,
+        "package": "2d3d4d_20250728_weiyuan",
+        "has_image_dc": true
+      },
+      "SC_1C_CamR": {
+        "image_count": 118,
+        "package": "2d3d4d_20250728_weiyuan",
+        "has_image_dc": true
+      },
+      "SC_1B_CamR": {
+        "image_count": 118,
+        "package": "2d3d4d_20250728_weiyuan",
+        "has_image_dc": true
+      },
+      "SC_1A_CamR": {
+        "image_count": 118,
+        "package": "2d3d4d_20250728_weiyuan",
+        "has_image_dc": true
+      },
+      "SC_2D_CamR": {
+        "image_count": 101,
+        "package": "2d3d4d_20250913_weiyuan",
+        "has_image_dc": true
+      },
+      "SC_2C_CamR": {
+        "image_count": 101,
+        "package": "2d3d4d_20250913_weiyuan",
+        "has_image_dc": true
+      },
+      "SC_2A_CamR": {
+        "image_count": 101,
+        "package": "2d3d4d_20250913_weiyuan",
+        "has_image_dc": true
+      },
+      "SC_2B_CamR": {
+        "image_count": 101,
+        "package": "2d3d4d_20250913_weiyuan",
+        "has_image_dc": true
+      }
+    },
+    "total_images": 876
+  }
+}

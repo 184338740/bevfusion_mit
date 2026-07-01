@@ -1,0 +1,1000 @@
+                    'bicycle', 'construction_vehicle', 'trailer',
+                    'traffic_cone', 'barrier'
+                ],
+                type='DefaultFormatBundle3D'),
+            dict(
+                keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
+                meta_keys=[
+                    'camera_intrinsics', 'camera2ego', 'lidar2ego',
+                    'lidar2camera', 'lidar2image', 'camera2lidar',
+                    'img_aug_matrix', 'lidar_aug_matrix'
+                ],
+                type='Collect3D'),
+            dict(keyframe_only=True, type='GTDepth')
+        ],
+        test_mode=True,
+        type='NuScenesDataset'),
+    train=dict(
+        dataset=dict(
+            ann_file=
+            '/data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt/tyjt_infos_train.pkl',
+            box_type_3d='LiDAR',
+            dataset_root=
+            '/data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt',
+            map_classes=[
+                'drivable_area', 'ped_crossing', 'walkway', 'stop_line',
+                'carpark_area', 'divider'
+            ],
+            modality=dict(
+                use_camera=True,
+                use_external=False,
+                use_lidar=True,
+                use_map=False,
+                use_radar=False),
+            object_classes=[
+                'car', 'truck', 'bus', 'pedestrian', 'motorcycle', 'bicycle',
+                'construction_vehicle', 'trailer', 'traffic_cone', 'barrier'
+            ],
+            pipeline=[
+                dict(to_float32=True, type='LoadMultiViewImageFromFiles'),
+                dict(
+                    coord_type='LIDAR',
+                    load_augmented=None,
+                    load_dim=5,
+                    reduce_beams=32,
+                    type='LoadPointsFromFile',
+                    use_dim=5),
+                dict(
+                    load_augmented=None,
+                    load_dim=5,
+                    pad_empty_sweeps=True,
+                    reduce_beams=32,
+                    remove_close=True,
+                    sweeps_num=0,
+                    type='LoadPointsFromMultiSweeps',
+                    use_dim=5),
+                dict(
+                    type='LoadAnnotations3D',
+                    with_attr_label=False,
+                    with_bbox_3d=True,
+                    with_label_3d=True),
+                dict(
+                    db_sampler=dict(
+                        classes=[
+                            'car', 'truck', 'bus', 'pedestrian', 'motorcycle',
+                            'bicycle', 'construction_vehicle', 'trailer',
+                            'traffic_cone', 'barrier'
+                        ],
+                        dataset_root=
+                        '/data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt',
+                        info_path=
+                        '/data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt/tyjt_dbinfos_train.pkl',
+                        points_loader=dict(
+                            coord_type='LIDAR',
+                            load_dim=5,
+                            reduce_beams=32,
+                            type='LoadPointsFromFile',
+                            use_dim=5),
+                        prepare=dict(
+                            filter_by_difficulty=[-1],
+                            filter_by_min_points=dict(
+                                car=5,
+                                truck=5,
+                                bus=1,
+                                pedestrian=5,
+                                motorcycle=5,
+                                bicycle=5,
+                                construction_vehicle=1,
+                                trailer=1,
+                                traffic_cone=1,
+                                barrier=1)),
+                        rate=1.0,
+                        sample_groups=dict(
+                            car=2,
+                            truck=3,
+                            bus=0,
+                            pedestrian=2,
+                            motorcycle=6,
+                            bicycle=6,
+                            construction_vehicle=0,
+                            trailer=0,
+                            traffic_cone=0,
+                            barrier=0)),
+                    stop_epoch=-1,
+                    type='ObjectPaste'),
+                dict(
+                    bot_pct_lim=[0.0, 0.0],
+                    final_dim=[256, 704],
+                    is_train=True,
+                    rand_flip=True,
+                    resize_lim=[0.38, 0.55],
+                    rot_lim=[-5.4, 5.4],
+                    type='ImageAug3D'),
+                dict(
+                    is_train=True,
+                    resize_lim=[0.9, 1.1],
+                    rot_lim=[-0.78539816, 0.78539816],
+                    trans_lim=0.5,
+                    type='GlobalRotScaleTrans'),
+                dict(type='RandomFlip3D'),
+                dict(
+                    point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
+                    type='PointsRangeFilter'),
+                dict(
+                    point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
+                    type='ObjectRangeFilter'),
+                dict(
+                    classes=[
+                        'car', 'truck', 'bus', 'pedestrian', 'motorcycle',
+                        'bicycle', 'construction_vehicle', 'trailer',
+                        'traffic_cone', 'barrier'
+                    ],
+                    type='ObjectNameFilter'),
+                dict(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225],
+                    type='ImageNormalize'),
+                dict(
+                    fixed_prob=True,
+                    max_epoch=1,
+                    mode=1,
+                    offset=False,
+                    prob=0.0,
+                    ratio=0.5,
+                    rotate=1,
+                    type='GridMask',
+                    use_h=True,
+                    use_w=True),
+                dict(type='PointShuffle'),
+                dict(
+                    classes=[
+                        'car', 'truck', 'bus', 'pedestrian', 'motorcycle',
+                        'bicycle', 'construction_vehicle', 'trailer',
+                        'traffic_cone', 'barrier'
+                    ],
+                    type='DefaultFormatBundle3D'),
+                dict(
+                    keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
+                    meta_keys=[
+                        'camera_intrinsics', 'camera2ego', 'lidar2ego',
+                        'lidar2camera', 'lidar2image', 'camera2lidar',
+                        'img_aug_matrix', 'lidar_aug_matrix'
+                    ],
+                    type='Collect3D'),
+                dict(keyframe_only=True, type='GTDepth')
+            ],
+            test_mode=False,
+            type='NuScenesDataset',
+            use_valid_flag=True),
+        type='CBGSDataset'),
+    val=dict(
+        ann_file=
+        '/data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt/tyjt_infos_val.pkl',
+        box_type_3d='LiDAR',
+        dataset_root='/data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt',
+        map_classes=[
+            'drivable_area', 'ped_crossing', 'walkway', 'stop_line',
+            'carpark_area', 'divider'
+        ],
+        modality=dict(
+            use_camera=True,
+            use_external=False,
+            use_lidar=True,
+            use_map=False,
+            use_radar=False),
+        object_classes=[
+            'car', 'truck', 'bus', 'pedestrian', 'motorcycle', 'bicycle',
+            'construction_vehicle', 'trailer', 'traffic_cone', 'barrier'
+        ],
+        pipeline=[
+            dict(to_float32=True, type='LoadMultiViewImageFromFiles'),
+            dict(
+                coord_type='LIDAR',
+                load_augmented=None,
+                load_dim=5,
+                reduce_beams=32,
+                type='LoadPointsFromFile',
+                use_dim=5),
+            dict(
+                load_augmented=None,
+                load_dim=5,
+                pad_empty_sweeps=True,
+                reduce_beams=32,
+                remove_close=True,
+                sweeps_num=0,
+                type='LoadPointsFromMultiSweeps',
+                use_dim=5),
+            dict(
+                type='LoadAnnotations3D',
+                with_attr_label=False,
+                with_bbox_3d=True,
+                with_label_3d=True),
+            dict(
+                bot_pct_lim=[0.0, 0.0],
+                final_dim=[256, 704],
+                is_train=False,
+                rand_flip=False,
+                resize_lim=[0.48, 0.48],
+                rot_lim=[0.0, 0.0],
+                type='ImageAug3D'),
+            dict(
+                is_train=False,
+                resize_lim=[1.0, 1.0],
+                rot_lim=[0.0, 0.0],
+                trans_lim=0.0,
+                type='GlobalRotScaleTrans'),
+            dict(
+                point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
+                type='PointsRangeFilter'),
+            dict(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+                type='ImageNormalize'),
+            dict(
+                classes=[
+                    'car', 'truck', 'bus', 'pedestrian', 'motorcycle',
+                    'bicycle', 'construction_vehicle', 'trailer',
+                    'traffic_cone', 'barrier'
+                ],
+                type='DefaultFormatBundle3D'),
+            dict(
+                keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
+                meta_keys=[
+                    'camera_intrinsics', 'camera2ego', 'lidar2ego',
+                    'lidar2camera', 'lidar2image', 'camera2lidar',
+                    'img_aug_matrix', 'lidar_aug_matrix'
+                ],
+                type='Collect3D'),
+            dict(keyframe_only=True, type='GTDepth')
+        ],
+        test_mode=False,
+        type='NuScenesDataset'),
+    workers_per_gpu=1)
+dataset_root = '/data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt'
+dataset_type = 'NuScenesDataset'
+deterministic = False
+evaluation = dict(
+    interval=1,
+    pipeline=[
+        dict(to_float32=True, type='LoadMultiViewImageFromFiles'),
+        dict(
+            coord_type='LIDAR',
+            load_augmented=None,
+            load_dim=5,
+            reduce_beams=32,
+            type='LoadPointsFromFile',
+            use_dim=5),
+        dict(
+            load_augmented=None,
+            load_dim=5,
+            pad_empty_sweeps=True,
+            reduce_beams=32,
+            remove_close=True,
+            sweeps_num=0,
+            type='LoadPointsFromMultiSweeps',
+            use_dim=5),
+        dict(
+            type='LoadAnnotations3D',
+            with_attr_label=False,
+            with_bbox_3d=True,
+            with_label_3d=True),
+        dict(
+            bot_pct_lim=[0.0, 0.0],
+            final_dim=[256, 704],
+            is_train=False,
+            rand_flip=False,
+            resize_lim=[0.48, 0.48],
+            rot_lim=[0.0, 0.0],
+            type='ImageAug3D'),
+        dict(
+            is_train=False,
+            resize_lim=[1.0, 1.0],
+            rot_lim=[0.0, 0.0],
+            trans_lim=0.0,
+            type='GlobalRotScaleTrans'),
+        dict(
+            point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
+            type='PointsRangeFilter'),
+        dict(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+            type='ImageNormalize'),
+        dict(
+            classes=[
+                'car', 'truck', 'bus', 'pedestrian', 'motorcycle', 'bicycle',
+                'construction_vehicle', 'trailer', 'traffic_cone', 'barrier'
+            ],
+            type='DefaultFormatBundle3D'),
+        dict(
+            keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
+            meta_keys=[
+                'camera_intrinsics', 'camera2ego', 'lidar2ego', 'lidar2camera',
+                'lidar2image', 'camera2lidar', 'img_aug_matrix',
+                'lidar_aug_matrix'
+            ],
+            type='Collect3D'),
+        dict(keyframe_only=True, type='GTDepth')
+    ])
+fp16 = dict(loss_scale=dict(growth_interval=2000))
+gt_paste_stop_epoch = -1
+image_size = [256, 704]
+input_modality = dict(
+    use_camera=True,
+    use_external=False,
+    use_lidar=True,
+    use_map=False,
+    use_radar=False)
+load_augmented = None
+load_dim = 5
+load_from = 'pretrained/bevfusion-det.pth'
+log_config = dict(
+    hooks=[dict(type='TextLoggerHook'),
+           dict(type='TensorboardLoggerHook')],
+    interval=50)
+lr_config = dict(
+    min_lr_ratio=0.001,
+    policy='CosineAnnealing',
+    warmup='linear',
+    warmup_iters=500,
+    warmup_ratio=0.33333333)
+map_classes = [
+    'drivable_area', 'ped_crossing', 'walkway', 'stop_line', 'carpark_area',
+    'divider'
+]
+max_epochs = 1
+model = dict(
+    decoder=dict(
+        backbone=dict(
+            conv_cfg=dict(bias=False, type='Conv2d'),
+            in_channels=256,
+            layer_nums=[5, 5],
+            layer_strides=[1, 2],
+            norm_cfg=dict(eps=0.001, momentum=0.01, type='BN'),
+            out_channels=[128, 256],
+            type='SECOND'),
+        neck=dict(
+            in_channels=[128, 256],
+            norm_cfg=dict(eps=0.001, momentum=0.01, type='BN'),
+            out_channels=[256, 256],
+            type='SECONDFPN',
+            upsample_cfg=dict(bias=False, type='deconv'),
+            upsample_strides=[1, 2],
+            use_conv_for_no_stride=True)),
+    encoders=dict(
+        camera=dict(
+            backbone=dict(
+                attn_drop_rate=0.0,
+                convert_weights=True,
+                depths=[2, 2, 6, 2],
+                drop_path_rate=0.2,
+                drop_rate=0.0,
+                embed_dims=96,
+                init_cfg=dict(
+                    checkpoint='./pretrained/swin_tiny_patch4_window7_224.pth',
+                    type='Pretrained'),
+                mlp_ratio=4,
+                num_heads=[3, 6, 12, 24],
+                out_indices=[1, 2, 3],
+                patch_norm=True,
+                qk_scale=None,
+                qkv_bias=True,
+                type='SwinTransformer',
+                window_size=8,
+                with_cp=False),
+            neck=dict(
+                act_cfg=dict(inplace=True, type='ReLU'),
+                in_channels=[192, 384, 768],
+                norm_cfg=dict(requires_grad=True, type='BN2d'),
+                num_outs=3,
+                out_channels=256,
+                start_level=0,
+                type='GeneralizedLSSFPN',
+                upsample_cfg=dict(align_corners=False, mode='bilinear')),
+            vtransform=dict(
+                dbound=[1.0, 60.0, 0.5],
+                downsample=2,
+                feature_size=[32, 88],
+                image_size=[256, 704],
+                in_channels=256,
+                out_channels=80,
+                type='DepthLSSTransform',
+                xbound=[-54.0, 54.0, 0.3],
+                ybound=[-54.0, 54.0, 0.3],
+                zbound=[-10.0, 10.0, 20.0])),
+        lidar=dict(
+            backbone=dict(
+                block_type='basicblock',
+                encoder_channels=[[16, 16, 32], [32, 32, 64], [64, 64, 128],
+                                  [128, 128]],
+                encoder_paddings=[[0, 0, 1], [0, 0, 1], [0, 0, [1, 1, 0]],
+                                  [0, 0]],
+                in_channels=5,
+                order=['conv', 'norm', 'act'],
+                output_channels=128,
+                sparse_shape=[1440, 1440, 41],
+                type='SparseEncoder'),
+            voxelize=dict(
+                max_num_points=10,
+                max_voxels=[120000, 160000],
+                point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
+                voxel_size=[0.075, 0.075, 0.2]))),
+    fuser=dict(in_channels=[80, 256], out_channels=256, type='ConvFuser'),
+    heads=dict(
+        map=None,
+        object=dict(
+            activation='relu',
+            auxiliary=True,
+            bbox_coder=dict(
+                code_size=10,
+                out_size_factor=8,
+                pc_range=[-54.0, -54.0],
+                post_center_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+                score_threshold=0.0,
+                type='TransFusionBBoxCoder',
+                voxel_size=[0.075, 0.075]),
+            bn_momentum=0.1,
+            common_heads=dict(
+                center=[2, 2],
+                dim=[3, 2],
+                height=[1, 2],
+                rot=[2, 2],
+                vel=[2, 2]),
+            dropout=0.1,
+            ffn_channel=256,
+            hidden_channel=128,
+            in_channels=512,
+            loss_bbox=dict(loss_weight=0.25, reduction='mean', type='L1Loss'),
+            loss_cls=dict(
+                alpha=0.25,
+                gamma=2.0,
+                loss_weight=1.0,
+                reduction='mean',
+                type='FocalLoss',
+                use_sigmoid=True),
+            loss_heatmap=dict(
+                loss_weight=1.0, reduction='mean', type='GaussianFocalLoss'),
+            nms_kernel_size=3,
+            num_classes=10,
+            num_decoder_layers=1,
+            num_heads=8,
+            num_proposals=200,
+            test_cfg=dict(
+                dataset='nuScenes',
+                grid_size=[1440, 1440, 41],
+                nms_type=None,
+                out_size_factor=8,
+                pc_range=[-54.0, -54.0],
+                voxel_size=[0.075, 0.075]),
+            train_cfg=dict(
+                assigner=dict(
+                    cls_cost=dict(
+                        alpha=0.25,
+                        gamma=2.0,
+                        type='FocalLossCost',
+                        weight=0.15),
+                    iou_calculator=dict(
+                        coordinate='lidar', type='BboxOverlaps3D'),
+                    iou_cost=dict(type='IoU3DCost', weight=0.25),
+                    reg_cost=dict(type='BBoxBEVL1Cost', weight=0.25),
+                    type='HungarianAssigner3D'),
+                code_weights=[
+                    1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2
+                ],
+                dataset='nuScenes',
+                gaussian_overlap=0.1,
+                grid_size=[1440, 1440, 41],
+                min_radius=2,
+                out_size_factor=8,
+                point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
+                pos_weight=-1,
+                voxel_size=[0.075, 0.075, 0.2]),
+            type='TransFusionHead')),
+    type='BEVFusion')
+momentum_config = dict(policy='cyclic')
+object_classes = [
+    'car', 'truck', 'bus', 'pedestrian', 'motorcycle', 'bicycle',
+    'construction_vehicle', 'trailer', 'traffic_cone', 'barrier'
+]
+optimizer = dict(lr=0.0002, type='AdamW', weight_decay=0.01)
+optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
+point_cloud_range = [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+reduce_beams = 32
+resume_from = None
+run_dir = 'runs/v8.1-1210-01'
+runner = dict(max_epochs=1, type='CustomEpochBasedRunner')
+seed = 0
+test_pipeline = [
+    dict(to_float32=True, type='LoadMultiViewImageFromFiles'),
+    dict(
+        coord_type='LIDAR',
+        load_augmented=None,
+        load_dim=5,
+        reduce_beams=32,
+        type='LoadPointsFromFile',
+        use_dim=5),
+    dict(
+        load_augmented=None,
+        load_dim=5,
+        pad_empty_sweeps=True,
+        reduce_beams=32,
+        remove_close=True,
+        sweeps_num=0,
+        type='LoadPointsFromMultiSweeps',
+        use_dim=5),
+    dict(
+        type='LoadAnnotations3D',
+        with_attr_label=False,
+        with_bbox_3d=True,
+        with_label_3d=True),
+    dict(
+        bot_pct_lim=[0.0, 0.0],
+        final_dim=[256, 704],
+        is_train=False,
+        rand_flip=False,
+        resize_lim=[0.48, 0.48],
+        rot_lim=[0.0, 0.0],
+        type='ImageAug3D'),
+    dict(
+        is_train=False,
+        resize_lim=[1.0, 1.0],
+        rot_lim=[0.0, 0.0],
+        trans_lim=0.0,
+        type='GlobalRotScaleTrans'),
+    dict(
+        point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
+        type='PointsRangeFilter'),
+    dict(
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225],
+        type='ImageNormalize'),
+    dict(
+        classes=[
+            'car', 'truck', 'bus', 'pedestrian', 'motorcycle', 'bicycle',
+            'construction_vehicle', 'trailer', 'traffic_cone', 'barrier'
+        ],
+        type='DefaultFormatBundle3D'),
+    dict(
+        keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
+        meta_keys=[
+            'camera_intrinsics', 'camera2ego', 'lidar2ego', 'lidar2camera',
+            'lidar2image', 'camera2lidar', 'img_aug_matrix', 'lidar_aug_matrix'
+        ],
+        type='Collect3D'),
+    dict(keyframe_only=True, type='GTDepth')
+]
+train_pipeline = [
+    dict(to_float32=True, type='LoadMultiViewImageFromFiles'),
+    dict(
+        coord_type='LIDAR',
+        load_augmented=None,
+        load_dim=5,
+        reduce_beams=32,
+        type='LoadPointsFromFile',
+        use_dim=5),
+    dict(
+        load_augmented=None,
+        load_dim=5,
+        pad_empty_sweeps=True,
+        reduce_beams=32,
+        remove_close=True,
+        sweeps_num=0,
+        type='LoadPointsFromMultiSweeps',
+        use_dim=5),
+    dict(
+        type='LoadAnnotations3D',
+        with_attr_label=False,
+        with_bbox_3d=True,
+        with_label_3d=True),
+    dict(
+        db_sampler=dict(
+            classes=[
+                'car', 'truck', 'bus', 'pedestrian', 'motorcycle', 'bicycle',
+                'construction_vehicle', 'trailer', 'traffic_cone', 'barrier'
+            ],
+            dataset_root=
+            '/data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt',
+            info_path=
+            '/data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt/tyjt_dbinfos_train.pkl',
+            points_loader=dict(
+                coord_type='LIDAR',
+                load_dim=5,
+                reduce_beams=32,
+                type='LoadPointsFromFile',
+                use_dim=5),
+            prepare=dict(
+                filter_by_difficulty=[-1],
+                filter_by_min_points=dict(
+                    car=5,
+                    truck=5,
+                    bus=1,
+                    pedestrian=5,
+                    motorcycle=5,
+                    bicycle=5,
+                    construction_vehicle=1,
+                    trailer=1,
+                    traffic_cone=1,
+                    barrier=1)),
+            rate=1.0,
+            sample_groups=dict(
+                car=2,
+                truck=3,
+                bus=0,
+                pedestrian=2,
+                motorcycle=6,
+                bicycle=6,
+                construction_vehicle=0,
+                trailer=0,
+                traffic_cone=0,
+                barrier=0),
+            stop_epoch=-1,
+            type='ObjectPaste')),
+    dict(
+        bot_pct_lim=[0.0, 0.0],
+        final_dim=[256, 704],
+        is_train=True,
+        rand_flip=True,
+        resize_lim=[0.38, 0.55],
+        rot_lim=[-5.4, 5.4],
+        type='ImageAug3D'),
+    dict(
+        is_train=True,
+        resize_lim=[0.9, 1.1],
+        rot_lim=[-0.78539816, 0.78539816],
+        trans_lim=0.5,
+        type='GlobalRotScaleTrans'),
+    dict(type='RandomFlip3D'),
+    dict(
+        point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
+        type='PointsRangeFilter'),
+    dict(
+        point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
+        type='ObjectRangeFilter'),
+    dict(
+        classes=[
+            'car', 'truck', 'bus', 'pedestrian', 'motorcycle', 'bicycle',
+            'construction_vehicle', 'trailer', 'traffic_cone', 'barrier'
+        ],
+        type='ObjectNameFilter'),
+    dict(
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225],
+        type='ImageNormalize'),
+    dict(
+        fixed_prob=True,
+        max_epoch=1,
+        mode=1,
+        offset=False,
+        prob=0.0,
+        ratio=0.5,
+        rotate=1,
+        type='GridMask',
+        use_h=True,
+        use_w=True),
+    dict(type='PointShuffle'),
+    dict(
+        classes=[
+            'car', 'truck', 'bus', 'pedestrian', 'motorcycle', 'bicycle',
+            'construction_vehicle', 'trailer', 'traffic_cone', 'barrier'
+        ],
+        type='DefaultFormatBundle3D'),
+    dict(
+        keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
+        meta_keys=[
+            'camera_intrinsics', 'camera2ego', 'lidar2ego', 'lidar2camera',
+            'lidar2image', 'camera2lidar', 'img_aug_matrix', 'lidar_aug_matrix'
+        ],
+        type='Collect3D'),
+    dict(keyframe_only=True, type='GTDepth')
+]
+use_dim = 5
+voxel_size = [0.075, 0.075, 0.2]
+
+
+2025-12-10 15:12:16,367 - mmdet3d - INFO - Set random seed to 0, deterministic mode: False
+>>>[xmy]🔵[0] bevfusion_mit_xmy/mmdet3d/datasets/nuscenes_dataset.py:206 load_annotations(); self.version  = v1.0-tyjt-trainval
+2025-12-10 15:12:20,222 - mmdet3d - INFO - load 126765 car database infos
+2025-12-10 15:12:20,222 - mmdet3d - INFO - load 157898 pedestrian database infos
+2025-12-10 15:12:20,222 - mmdet3d - INFO - load 30807 truck database infos
+2025-12-10 15:12:20,222 - mmdet3d - INFO - load 12949 motorcycle database infos
+2025-12-10 15:12:20,222 - mmdet3d - INFO - load 1069 bicycle database infos
+2025-12-10 15:12:20,223 - mmdet3d - INFO - load 1049 bus database infos
+2025-12-10 15:12:20,223 - mmdet3d - INFO - load 152 traffic_cone database infos
+2025-12-10 15:12:20,223 - mmdet3d - INFO - load 600 trailer database infos
+2025-12-10 15:12:20,223 - mmdet3d - INFO - load 0 construction_vehicle database infos
+2025-12-10 15:12:20,223 - mmdet3d - INFO - load 0 barrier database infos
+2025-12-10 15:12:20,620 - mmdet3d - INFO - After filter database:
+2025-12-10 15:12:20,620 - mmdet3d - INFO - load 123375 car database infos
+2025-12-10 15:12:20,620 - mmdet3d - INFO - load 155228 pedestrian database infos
+2025-12-10 15:12:20,620 - mmdet3d - INFO - load 30590 truck database infos
+2025-12-10 15:12:20,620 - mmdet3d - INFO - load 12857 motorcycle database infos
+2025-12-10 15:12:20,620 - mmdet3d - INFO - load 972 bicycle database infos
+2025-12-10 15:12:20,620 - mmdet3d - INFO - load 1046 bus database infos
+2025-12-10 15:12:20,620 - mmdet3d - INFO - load 152 traffic_cone database infos
+2025-12-10 15:12:20,621 - mmdet3d - INFO - load 592 trailer database infos
+2025-12-10 15:12:20,621 - mmdet3d - INFO - load 0 construction_vehicle database infos
+2025-12-10 15:12:20,621 - mmdet3d - INFO - load 0 barrier database infos
+[xmy]>>> /opt/venv/lib/python3.8/site-packages/nuscenes/eval/detection/data_classes.py class_range.keys() = dict_keys(['car', 'truck', 'bus', 'trailer', 'construction_vehicle', 'pedestrian', 'motorcycle', 'bicycle', 'traffic_cone', 'barrier']); DETECTION_NAMES=['car', 'truck', 'bus', 'trailer', 'construction_vehicle', 'pedestrian', 'motorcycle', 'bicycle', 'traffic_cone', 'barrier'] 
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/torch/functional.py:478: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at  /opt/conda/conda-bld/pytorch_1659484683044/work/aten/src/ATen/native/TensorShape.cpp:2894.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+2025-12-10 15:12:21,027 - mmdet - INFO - load checkpoint from local path: ./pretrained/swin_tiny_patch4_window7_224.pth
+Traceback (most recent call last):
+  File "/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py", line 69, in build_from_cfg
+    return obj_cls(**args)
+  File "/cephfsdata/users/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/models/fusion_models/bevfusion.py", line 99, in __init__
+    self.init_weights()
+  File "/cephfsdata/users/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/models/fusion_models/bevfusion.py", line 103, in init_weights
+    self.encoders["camera"]["backbone"].init_weights()
+  File "/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmdet/models/backbones/swin.py", line 742, in init_weights
+    self.load_state_dict(state_dict, False)
+  File "/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1604, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for SwinTransformer:
+        size mismatch for stages.0.blocks.0.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.0.blocks.1.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.1.blocks.0.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.1.blocks.1.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.0.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.1.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.2.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.3.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.4.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.5.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.3.blocks.0.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.3.blocks.1.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+
+
+During handling of the above exception, another exception occurred:
+
+
+Traceback (most recent call last):
+  File "tools/train.py", line 89, in <module>
+    main()
+  File "tools/train.py", line 70, in main
+    model = build_model(cfg.model)
+  File "/cephfsdata/users/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/models/builder.py", line 41, in build_model
+    return build_fusion_model(cfg, train_cfg=train_cfg, test_cfg=test_cfg)
+  File "/cephfsdata/users/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/models/builder.py", line 35, in build_fusion_model
+    return FUSIONMODELS.build(
+  File "/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py", line 237, in build
+    return self.build_func(*args, **kwargs, registry=self)
+  File "/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py", line 72, in build_from_cfg
+    raise type(e)(f'{obj_cls.__name__}: {e}')
+RuntimeError: BEVFusion: Error(s) in loading state_dict for SwinTransformer:
+        size mismatch for stages.0.blocks.0.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.0.blocks.1.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.1.blocks.0.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.1.blocks.1.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.0.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.1.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.2.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.3.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.4.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.2.blocks.5.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.3.blocks.0.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+        size mismatch for stages.3.blocks.1.attn.w_msa.relative_position_index: copying a param with shape torch.Size([49, 49]) from checkpoint, the shape in current model is torch.Size([64, 64]).
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpirun detected that one or more processe
+核心问题定位
+修改window_size=8后，预训练权重维度不匹配：预训练权重swin_tiny_patch4_window7_224.pth是基于window_size=7训练的，其中relative_position_index参数的维度是7×7=49；而当前模型window_size=8，该参数维度变为8×8=64，导致权重加载时报错。
+解决方案（快速解决，推荐）
+修改配置文件中 SwinTransformer 的权重加载策略，忽略不匹配的参数（relative_position_index是可学习参数，跳过加载后模型会重新初始化，不影响核心预训练权重的复用）。
+步骤 1：修改配置文件的init_cfg
+找到配置文件中model.encoders.camera.backbone.init_cfg，新增strict=False（忽略不匹配的参数）：
+yaml
+model:
+  encoders:
+    camera:
+      backbone:
+        attn_drop_rate: 0.0
+        convert_weights: True
+        depths: [2, 2, 6, 2]
+        drop_path_rate: 0.2
+        drop_rate: 0.0
+        embed_dims: 96
+        init_cfg:
+          checkpoint: './pretrained/swin_tiny_patch4_window7_224.pth'
+          type: 'Pretrained'
+          strict: False  # 新增：忽略权重维度不匹配的参数
+        mlp_ratio: 4
+        num_heads: [3, 6, 12, 24]
+        out_indices: [1, 2, 3]
+        patch_norm: True
+        qk_scale: None
+        qkv_bias: True
+        type: 'SwinTransformer'
+        window_size: 8  # 已修改为8
+        with_cp: False
+步骤 2：重新执行训练（带环境变量）
+bash
+运行
+# 加载A100适配环境变量
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
+export NVIDIA_TF32_OVERRIDE=0
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+
+# 重新训练
+torchpack dist-run -np 1 python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01
+备选方案（追求极致性能，可选）
+如果希望完全适配window_size=8的预训练权重，需要重新生成relative_position_index参数并替换预训练权重中的对应值（适合有一定开发经验的场景）：
+python
+运行
+import torch
+# 加载原始预训练权重
+ckpt = torch.load('./pretrained/swin_tiny_patch4_window7_224.pth')
+# 删除所有relative_position相关的不匹配参数
+for k in list(ckpt.keys()):
+    if 'relative_position_index' in k or 'relative_position_bias_table' in k:
+        del ckpt[k]
+# 保存处理后的权重
+torch.save(ckpt, './pretrained/swin_tiny_patch4_window8_224_adapted.pth')
+然后修改配置文件中的checkpoint路径为处理后的权重：
+yaml
+init_cfg:
+  checkpoint: './pretrained/swin_tiny_patch4_window8_224_adapted.pth'
+  type: 'Pretrained'
+  strict: False
+关键说明
+为什么strict=False可行？
+不匹配的仅为relative_position_index（窗口位置编码）和relative_position_bias_table（窗口位置偏置），这部分参数占比极小，跳过加载后模型会随机初始化，训练中快速收敛；
+核心的卷积、注意力层权重（如 qkv、proj 等）仍能正常加载，保留预训练的特征提取能力。
+性能影响？
+仅修改strict=False后，训练初期的 loss 可能略高，但 1-2 个 epoch 后会快速追上原始配置；
+最终模型性能与原始window_size=7的配置无显著差异（A100 上训练速度还会更快）。
+按此方案修改后，即可解决权重加载的维度不匹配问题，训练正常启动。
+---------------------------------------------------------------------
+(BEVFusion_v2) mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205$ # 加载A100适配环境变量
+(BEVFusion_v2) mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205$ export CUBLAS_WORKSPACE_CONFIG=:4096:8
+(BEVFusion_v2) mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205$ export NVIDIA_TF32_OVERRIDE=0
+(BEVFusion_v2) mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205$ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+(BEVFusion_v2) mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205$ torchpack dist-run -np 1 python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01
+No protocol specified
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/__init__.py:20: UserWarning: On January 1, 2023, MMCV will release v2.0.0, in which it will remove components related to the training process and add a data transformation module. In addition, it will rename the package names mmcv to mmcv-lite and mmcv-full to mmcv. See https://github.com/open-mmlab/mmcv/blob/master/docs/en/compatibility.md for more details.
+  warnings.warn(
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SparseConv2d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SparseConv3d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SparseConv4d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SparseConvTranspose2d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SparseConvTranspose3d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SparseInverseConv2d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SparseInverseConv3d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SubMConv2d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SubMConv3d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/mmcv/utils/registry.py:275: UserWarning: SubMConv4d is already registered in conv layer, overwrite it (compatible with spconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/cephfsdata/users/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/core/bbox/box_np_ops.py:781: NumbaDeprecationWarning: The 'nopython' keyword argument was not supplied to the 'numba.jit' decorator. The implicit default value for this argument is currently False, but it will be changed to True in Numba 0.59.0. See https://numba.readthedocs.io/en/stable/reference/deprecation.html#deprecation-of-object-mode-fall-back-behaviour-when-using-jit for details.
+  def points_in_convex_polygon_jit(points, polygon, clockwise=True):
+Traceback (most recent call last):
+  File "tools/train.py", line 89, in <module>
+    main()
+  File "tools/train.py", line 36, in main
+    torch.cuda.set_device(dist.local_rank())
+  File "/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/torch/cuda/__init__.py", line 314, in set_device
+    torch._C._cuda_setDevice(device)
+  File "/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/torch/cuda/__init__.py", line 217, in _lazy_init
+    torch._C._cuda_init()
+RuntimeError: Unrecognized CachingAllocator option: expandable_segments
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been a
+核心错误定位
+RuntimeError: Unrecognized CachingAllocator option: expandable_segments原因是：PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True 这个环境变量参数仅支持 PyTorch 2.0+ 版本，而你当前环境的 PyTorch 版本较低，无法识别该参数，导致 CUDA 初始化失败。
+解决方案（分步执行）
+步骤 1：清除不兼容的环境变量，重新设置适配的变量
+bash
+运行
+# 清除错误的环境变量
+unset PYTORCH_CUDA_ALLOC_CONF
+
+
+# 仅保留A100适配的核心环境变量（兼容低版本PyTorch）
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
+export NVIDIA_TF32_OVERRIDE=0
+# 新增：强制指定单卡（避免多卡检测问题）
+export CUDA_VISIBLE_DEVICES=0
+步骤 2：修复训练命令的设备设置（单卡场景简化）
+torchpack dist-run -np 1 适用于分布式训练，但单卡场景下可直接用python执行（避免分布式设备初始化问题）：
+bash
+运行
+# 单卡训练，直接执行（无需torchpack dist-run）
+python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01
+（可选）如果仍需用 torchpack 执行（兼容分布式）
+修改命令，显式指定设备：
+bash
+运行
+torchpack dist-run -np 1 --no-rsh python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01
+关键补充说明
+环境变量适配性：
+expandable_segments 是 PyTorch 2.0+ 引入的 CUDA 内存分配优化参数，低版本（如 1.13/1.12）不支持，必须移除；
+CUBLAS_WORKSPACE_CONFIG=:4096:8 是 A100 必需的（解决 CUDA 算子兼容性），NVIDIA_TF32_OVERRIDE=0 禁用 TF32 提升精度，这两个保留即可。
+单卡 / 多卡区分：
+单卡训练时，直接用python执行比torchpack dist-run -np 1 更稳定，避免分布式初始化的设备检测问题；
+如果是多卡（如 8 卡），需恢复torchpack dist-run -np 8，但仍要移除PYTORCH_CUDA_ALLOC_CONF。
+验证 CUDA 环境：执行前可先验证 CUDA 是否可用：
+bash
+运行
+python -c "import torch; print(torch.cuda.is_available()); print(torch.__version__); print(torch.cuda.device_count())"
+输出应包含：True + PyTorch 版本 + 1（单卡）。
+按此修改后，即可解决 CUDA 初始化的参数不识别问题，训练命令能正常启动。
+pconv 2.3.6)
+  warnings.warn(f"{name} is already registered in {self.name}, overwrite it (compatible with spconv 2.3.6)")
+/cephfsdata/users/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/core/bbox/box_np_ops.py:781: NumbaDeprecationWarning: The 'nopython' keyword argument was not supplied to the 'numba.jit' decorator. The implicit default value for this argument is currently False, but it will be changed to True in Numba 0.59.0. See https://numba.readthedocs.io/en/stable/reference/deprecation.html#deprecation-of-object-mode-fall-back-behaviour-when-using-jit for details.
+  def points_in_convex_polygon_jit(points, polygon, clockwise=True):
+No protocol specified
+--------------------------------------------------------------------------
+WARNING: There is at least non-excluded one OpenFabrics device found,
+but there are no active ports detected (or Open MPI was unable to use
+them).  This is most certainly not what you wanted.  Check your
+cables, subnet manager configuration, etc.  The openib BTL will be
+ignored for this job.
+
+
+  Local host: rss-ai-dev-suz-kjc-gpu01-a100
+--------------------------------------------------------------------------
+Traceback (most recent call last):
+  File "tools/train.py", line 89, in <module>
+    main()
+  File "tools/train.py", line 23, in main
+    dist.init()
+  File "/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/site-packages/torchpack/distributed/context.py", line 23, in init
+    master_host = 'tcp://' + os.environ['MASTER_HOST']
+  File "/data2/xmy/miniconda3/envs/BEVFusion_v2/lib/python3.8/os.py", line 675, in __getitem__
+    raise KeyError(key) from None
+KeyError: 'MASTER_HOST'
+(BEVFusion_v2) mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205$ torchpack dist-run -np 1 --no-rsh python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01
+usage: torchpack dist-run [-h] -np NPROC [-H HOSTS] [-hostfile HOSTFILE] [-v] ...
+torchpack dist-run: error: unrecognized arguments: --no-rsh
+(BEVFusion_v2) mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205$ torchpack dist-run -np 1 --no-rsh python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01
+usage: torchpack dist-run [-h] -np NPROC [-H HOSTS] [-hostfile HOSTFILE] [-v] ...
+torchpack dist-run: error: unrecognized arguments: --no-rsh
+核心问题定位
+KeyError: 'MASTER_HOST'：torchpack dist-run 是分布式训练工具，需要设置MASTER_HOST/MASTER_PORT等分布式环境变量，单卡训练无需使用该工具；
+--no-rsh 参数错误：torchpack dist-run 不支持该参数（这是 OpenMPI 的参数），导致命令解析失败。
+最终解决方案（单卡训练，最简且稳定）
+步骤 1：设置单卡环境变量（禁用分布式）
+bash
+运行
+# 清除分布式相关残留环境变量
+unset MASTER_HOST
+unset MASTER_PORT
+unset RANK
+unset WORLD_SIZE
+unset LOCAL_RANK
+
+
+# 强制指定仅使用第0张A100卡
+export CUDA_VISIBLE_DEVICES=0
+# A100必需的CUDA兼容配置（保留）
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
+export NVIDIA_TF32_OVERRIDE=0
+步骤 2：直接用 python 执行（无需 torchpack）
+bash
+运行
+python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01
+关键说明
+为什么不用 torchpack？
+torchpack dist-run 是为多机 / 多卡分布式训练设计的，单卡场景下使用会触发分布式初始化逻辑，需要额外配置MASTER_HOST等环境变量，完全没必要；
+直接用python执行是单卡训练的标准方式，能跳过分布式初始化，避免MASTER_HOST缺失的错误。
+如果脚本强制依赖 dist.init ()（极少数情况）若训练脚本里硬编码了dist.init()（分布式初始化），需临时修改脚本跳过分布式：打开tools/train.py，找到dist.init()的代码行（大概第 23 行），修改为：
+python
+运行
+# 原代码
+# dist.init()
+# 替换为：仅在多卡时初始化分布式，单卡跳过
+import os
+if 'CUDA_VISIBLE_DEVICES' in os.environ and len(os.environ['CUDA_VISIBLE_DEVICES'].split(',')) > 1:
+    dist.init()
+else:

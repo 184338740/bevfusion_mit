@@ -1,0 +1,68 @@
+{
+  "camera_counts": {
+    "SC_1A_CamR": 118,
+    "SC_1B_CamR": 118,
+    "SC_1C_CamR": 118,
+    "SC_1D_CamR": 118
+  },
+  "point_cloud_counts": 118,
+  "label_counts": 118,
+  "object_statistics": {
+    "total_objects": 5299,
+    "type_distribution": {
+      "car": 1791,
+      "bicycle": 118,
+      "cyclist": 1871,
+      "pedestrian": 656,
+      "truck": 501,
+      "tricyclist": 177,
+      "tricycle": 19,
+      "van": 92,
+      "bus": 73,
+      "cone": 1
+    },
+    "size_statistics": {
+      "length": {
+        "mean": 0,
+        "std": 0,
+        "min": 0,
+        "max": 0,
+        "count": 0
+      },
+      "width": {
+        "mean": 0,
+        "std": 0,
+        "min": 0,
+        "max": 0,
+        "count": 0
+      },
+      "height": {
+        "mean": 0,
+        "std": 0,
+        "min": 0,
+        "max": 0,
+        "count": 0
+      }
+    },
+    "position_statistics": {
+      "x": {
+        "mean": 0,
+        "std": 0,
+        "min": 0,
+        "max": 0
+      },
+      "y": {
+        "mean": 0,
+        "std": 0,
+        "min": 0,
+        "max": 0
+      },
+      "z": {
+        "mean": 0,
+        "std": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  }
+}

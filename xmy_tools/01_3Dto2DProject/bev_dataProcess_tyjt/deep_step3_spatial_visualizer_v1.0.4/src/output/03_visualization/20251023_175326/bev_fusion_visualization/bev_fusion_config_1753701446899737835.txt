@@ -1,0 +1,21 @@
+BEV Fusion Visualization Configuration:
+Timestamp: 1753701446899737835
+BEV Range: ±75.0m
+FOV Range: up to 150m
+Total points: 218734
+Total labels: 57
+Boxes drawn: 57
+Cameras found: 4
+Obstacle types present: ['bicycle', 'car', 'cyclist', 'pedestrian', 'tricycle', 'tricyclist', 'truck', 'van']
+
+Camera FOV settings:
+  Horizontal FOV: 60 degrees
+  Max FOV range: 150.0m
+  Distance intervals: [30, 60, 90, 120, 150]
+
+Label colors:
+  car: red
+  truck: blue
+  cyclist: green
+  pedestrian: orange
+  default: black

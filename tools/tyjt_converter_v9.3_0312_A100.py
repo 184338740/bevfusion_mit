@@ -1,15 +1,7 @@
 #!/usr/bin/env python3
 """
-# v9.3
 TYJT 数据集预处理脚本，生成 BEVFusion 所需的 info pkl 文件。
-基于 tyjt_calib_utils.py 中的 CalibrationProcessor 进行标定解析
-
-[feature]: Step1, 编写tyjt 生成 tyjt_infos_train.pkl 和  tyjt_infos_val.pkl 的工具
-版本 v9.3:
-    - 功能: TYJT 数据集预处理脚本，生成 BEVFusion 所需的 info pkl 文件
-    - 输出：
-        tyjt_infos_train.pkl 
-        tyjt_infos_val.pkl
+基于 tyjt_calib_utils.py 中的 CalibrationProcessor 进行标定解析。
 """
 
 """

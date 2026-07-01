@@ -1,0 +1,73 @@
+===== NuScenes与nuscenes_tyjt差异报告 =====
+官方路径: /mnt/bevfusion_mit_xmy/data/nuscenes_tmp
+转换后路径: /mnt/bevfusion_mit_xmy/xmy_tools/tyjt2nusc/output/step1/nuscenes_tyjt/v1.0-tyjt
+
+=== calibrated_sensor.json 差异 ===
+1. : 列表长度不匹配 (官方: 120, 转换后: 10)
+2. [0].sensor2ego_rotation: 转换后存在额外键
+3. [0].ego2global_rotation: 转换后存在额外键
+4. [0].sensor2ego_translation: 转换后存在额外键
+5. [0].ego2global_translation: 转换后存在额外键
+6. [1].sensor2ego_rotation: 转换后存在额外键
+7. [1].ego2global_rotation: 转换后存在额外键
+8. [1].sensor2ego_translation: 转换后存在额外键
+9. [1].ego2global_translation: 转换后存在额外键
+10. [1].camera_intrinsic: 列表长度不匹配 (官方: 0, 转换后: 3)
+11. [2].sensor2ego_rotation: 转换后存在额外键
+12. [2].ego2global_rotation: 转换后存在额外键
+13. [2].sensor2ego_translation: 转换后存在额外键
+14. [2].ego2global_translation: 转换后存在额外键
+15. [2].camera_intrinsic: 列表长度不匹配 (官方: 0, 转换后: 3)
+
+=== category.json 差异 ===
+1. : 列表长度不匹配 (官方: 23, 转换后: 20)
+
+=== ego_pose.json 差异 ===
+1. : 列表长度不匹配 (官方: 31206, 转换后: 354)
+
+=== instance.json 差异 ===
+1. : 列表长度不匹配 (官方: 911, 转换后: 9510)
+
+=== log.json 差异 ===
+1. : 列表长度不匹配 (官方: 8, 转换后: 2)
+
+=== map.json 差异 ===
+1. : 列表长度不匹配 (官方: 4, 转换后: 1)
+2. [0].log_tokens: 列表长度不匹配 (官方: 26, 转换后: 0)
+
+=== sample.json 差异 ===
+1. : 列表长度不匹配 (官方: 404, 转换后: 354)
+2. [0].data: 转换后存在额外键
+3. [0].anns: 转换后存在额外键
+4. [1].data: 转换后存在额外键
+5. [1].anns: 转换后存在额外键
+6. [2].data: 转换后存在额外键
+7. [2].anns: 转换后存在额外键
+
+=== sample_annotation.json 差异 ===
+1. : 列表长度不匹配 (官方: 18538, 转换后: 9510)
+2. [0].next: 转换后缺失该键
+3. [0].prev: 转换后缺失该键
+4. [0].category_name: 转换后存在额外键
+5. [0].attribute_tokens: 列表长度不匹配 (官方: 1, 转换后: 0)
+6. [0].rotation[1]: 类型不匹配 (官方: float, 转换后: int)
+7. [0].rotation[2]: 类型不匹配 (官方: float, 转换后: int)
+8. [1].next: 转换后缺失该键
+9. [1].prev: 转换后缺失该键
+10. [1].category_name: 转换后存在额外键
+11. [1].attribute_tokens: 列表长度不匹配 (官方: 1, 转换后: 0)
+12. [1].rotation[1]: 类型不匹配 (官方: float, 转换后: int)
+13. [1].rotation[2]: 类型不匹配 (官方: float, 转换后: int)
+14. [2].next: 转换后缺失该键
+15. [2].prev: 转换后缺失该键
+16. [2].category_name: 转换后存在额外键
+17. [2].attribute_tokens: 列表长度不匹配 (官方: 1, 转换后: 0)
+18. [2].rotation[1]: 类型不匹配 (官方: float, 转换后: int)
+19. [2].rotation[2]: 类型不匹配 (官方: float, 转换后: int)
+
+=== sample_data.json 差异 ===
+1. : 列表长度不匹配 (官方: 31206, 转换后: 1770)
+
+=== scene.json 差异 ===
+1. : 列表长度不匹配 (官方: 10, 转换后: 2)
+

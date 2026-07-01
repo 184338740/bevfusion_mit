@@ -1,0 +1,12 @@
+LABEL Projection Configuration:
+Timestamp: 1753701446899737835
+total_labels: 57
+total_projected_boxes: 75
+image_size: (1920, 1080)
+
+Label colors:
+  car: (0, 255, 0)
+  truck: (255, 0, 0)
+  cyclist: (0, 0, 255)
+  pedestrian: (255, 255, 0)
+  default: (255, 255, 255)

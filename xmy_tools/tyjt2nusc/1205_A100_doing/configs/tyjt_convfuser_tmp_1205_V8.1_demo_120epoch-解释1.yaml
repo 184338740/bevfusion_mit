@@ -1,0 +1,475 @@
+# ==================== 基础配置 ====================
+checkpoint_config:
+  interval: 1  # 每1个epoch保存一次checkpoint
+  max_keep_ckpts: 1  # 最多保留1个最新checkpoint
+cudnn_benchmark: false  # 关闭cudnn基准测试，避免训练初期性能波动
+deterministic: false  # 关闭确定性训练，提升训练速度
+dataset_root: /data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt  # 数据集根路径
+dataset_type: NuScenesDataset  # 数据集类型（NuScenes标准格式）
+gt_paste_stop_epoch: 12  # 目标粘贴增强停止epoch
+image_size: [256, 704]  # 图像输入尺寸（H×W）
+load_augmented: null
+load_dim: 5  # LiDAR点云加载维度（x,y,z,intensity,ring）
+load_from: pretrained/bevfusion-det.pth  # 预训练权重路径
+log_config:
+  hooks:
+  - type: TextLoggerHook  # 文本日志钩子
+  - type: TensorboardLoggerHook  # TensorBoard日志钩子（可视化训练）
+  interval: 50  # 每50个迭代打印一次日志
+lr_config:
+  min_lr_ratio: 0.001  # 最小学习率比例（基础lr×0.001）
+  policy: CosineAnnealing  # 学习率策略（余弦退火）
+  warmup: linear  # 线性预热
+  warmup_iters: 1000  # 预热迭代次数
+  warmup_ratio: 0.1  # 预热初始学习率比例（基础lr×0.1）
+map_classes:  # 地图类别（与NuScenes一致）
+- drivable_area
+- ped_crossing
+- walkway
+- stop_line
+- carpark_area
+- divider
+max_epochs: 24  # 总训练epoch数（当前24epoch，后续可调整为120）
+momentum_config:
+  policy: cyclic  # 循环动量策略
+object_classes:  # 目标检测类别（10类，与NuScenes一致）
+- car
+- truck
+- bus
+- pedestrian
+- motorcycle
+- bicycle
+- construction_vehicle
+- trailer
+- traffic_cone
+- barrier
+optimizer:
+  lr: 0.0002  # 基础学习率（论文同款）
+  type: AdamW  # 优化器类型
+  weight_decay: 0.01  # 权重衰减（抑制过拟合）
+optimizer_config:
+  grad_clip:  # 梯度裁剪（防止梯度爆炸）
+    max_norm: 35  # 最大范数
+    norm_type: 2  # 范数类型（L2）
+point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]  # 点云范围（x,y,z min/max，单位m）
+reduce_beams: 32  # 保留32线LiDAR点云
+resume_from: null  # 恢复训练路径（null=从头训练）
+run_dir: runs/train-bevfusion-det-transfusion-finetune  # 运行日志保存路径
+runner:
+  max_epochs: ${max_epochs}  # 训练周期（与max_epochs一致）
+  type: CustomEpochBasedRunner  # 自定义epoch-based runner
+seed: 0  # 随机种子（保证实验可复现）
+use_dim: 5  # LiDAR点云使用维度（与load_dim一致）
+voxel_size: [0.075, 0.075, 0.2]  # 体素尺寸（x,y,z，单位m）
+
+# ==================== 输入模态配置 ====================
+input_modality:
+  use_camera: true  # 启用相机
+  use_external: false  # 禁用外部传感器
+  use_lidar: true  # 启用LiDAR
+  use_map: false  # 禁用地图
+  use_radar: false  # 禁用雷达（核心配置，与下方注释配置呼应）
+
+# ==================== 数据增强配置 ====================
+augment2d:  # 2D图像增强（相机图像）
+  gridmask:
+    fixed_prob: true
+    prob: 0.0  # 网格掩码增强关闭
+  resize:  # 随机缩放范围
+  - [0.38, 0.55]
+  - [0.48, 0.48]
+  rotate: [-5.4, 5.4]  # 随机旋转角度（度）
+augment3d:  # 3D点云增强（LiDAR点云）
+  rotate: [-0.78539816, 0.78539816]  # 随机旋转角度（弧度，±45°）
+  scale: [0.9, 1.1]  # 随机缩放比例
+  translate: 0.5  # 随机平移最大距离（m）
+
+# ==================== 数据加载配置 ====================
+data:
+  samples_per_gpu: 1  # 单GPU batch size
+  workers_per_gpu: 1  # 单GPU数据加载线程数
+  # 训练集配置
+  train:
+    type: CBGSDataset  # 类别平衡采样数据集（解决类别不平衡）
+    dataset:
+      type: NuScenesDataset
+      test_mode: false
+      use_valid_flag: true  # 使用有效标注标记
+      ann_file: ${dataset_root}/tyjt_infos_train.pkl  # 训练集标注文件
+      dataset_root: ${dataset_root}
+      modality: ${input_modality}
+      object_classes: ${object_classes}
+      map_classes: ${map_classes}
+      pipeline:  # 训练数据处理流水线
+      - type: LoadMultiViewImageFromFiles  # 加载多视角相机图像
+        to_float32: true
+      - type: LoadPointsFromFile  # 加载单帧LiDAR点云
+        coord_type: LIDAR
+        load_dim: ${load_dim}
+        use_dim: ${use_dim}
+        reduce_beams: ${reduce_beams}
+      - type: LoadPointsFromMultiSweeps  # 加载多帧LiDAR点云（时序增强）
+        load_dim: ${load_dim}
+        use_dim: ${use_dim}
+        sweeps_num: 0  # 不加载历史帧
+        pad_empty_sweeps: true
+        remove_close: true
+        reduce_beams: ${reduce_beams}
+      - type: LoadAnnotations3D  # 加载3D标注（bbox+label）
+        with_bbox_3d: true
+        with_label_3d: true
+        with_attr_label: false
+      - type: ObjectPaste  # 目标粘贴增强（平衡小类别样本）
+        db_sampler:
+          classes: ${object_classes}
+          dataset_root: ${dataset_root}
+          info_path: ${dataset_root}/tyjt_dbinfos_train.pkl  # 样本库路径
+          points_loader:
+            type: LoadPointsFromFile
+            coord_type: LIDAR
+            load_dim: ${load_dim}
+            use_dim: ${use_dim}
+            reduce_beams: ${reduce_beams}
+          prepare:
+            filter_by_difficulty: [-1]  # 不过滤难度等级
+            filter_by_min_points:  # 每个类别最小点数阈值
+              car: 5
+              truck: 5
+              bus: 1
+              pedestrian: 5
+              motorcycle: 5
+              bicycle: 5
+              construction_vehicle: 1
+              trailer: 1
+              traffic_cone: 1
+              barrier: 1
+          rate: 1.0  # 粘贴比例
+          sample_groups:  # 类别采样权重
+            car: 2
+            truck: 3
+            bus: 0
+            pedestrian: 2
+            motorcycle: 6
+            bicycle: 6
+            construction_vehicle: 0
+            trailer: 0
+            traffic_cone: 0
+            barrier: 0
+        stop_epoch: -1  # 始终启用
+      - type: ImageAug3D  # 相机图像3D增强
+        is_train: true
+        final_dim: ${image_size}
+        resize_lim: [0.38, 0.55]
+        rot_lim: [-5.4, 5.4]
+        rand_flip: true
+        bot_pct_lim: [0.0, 0.0]
+      - type: GlobalRotScaleTrans  # 全局旋转/缩放/平移增强（xmy临时修改）
+        is_train: true
+        resize_lim: [0.9, 1.1]
+        rot_lim: [-0.78539816, 0.78539816]
+        trans_lim: 0.5
+      - type: RandomFlip3D  # 3D随机翻转
+      - type: PointsRangeFilter  # 点云范围过滤
+        point_cloud_range: ${point_cloud_range}
+      - type: ObjectRangeFilter  # 目标范围过滤
+        point_cloud_range: ${point_cloud_range}
+      - type: ObjectNameFilter  # 类别过滤
+        classes: ${object_classes}
+      - type: ImageNormalize  # 图像归一化（ImageNet标准）
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
+      - type: GridMask  # 网格掩码增强（当前关闭）
+        fixed_prob: true
+        prob: 0.0
+        mode: 1
+        ratio: 0.5
+        rotate: 1
+        max_epoch: ${max_epochs}
+        offset: false
+        use_h: true
+        use_w: true
+      - type: PointShuffle  # 点云打乱
+      - type: DefaultFormatBundle3D  # 格式化输出
+        classes: ${object_classes}
+      - type: Collect3D  # 收集模型输入数据
+        keys: [img, points, gt_bboxes_3d, gt_labels_3d]
+        meta_keys: [camera_intrinsics, camera2ego, lidar2ego, lidar2camera, lidar2image, camera2lidar, img_aug_matrix, lidar_aug_matrix]
+      - type: GTDepth  # 加载真实深度信息
+        keyframe_only: true
+  # 验证集配置
+  val:
+    type: NuScenesDataset
+    ann_file: ${dataset_root}/tyjt_infos_val.pkl  # 验证集标注文件
+    dataset_root: ${dataset_root}
+    modality: ${input_modality}
+    object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    box_type_3d: LiDAR  # 3D框坐标系（LiDAR）
+    pipeline:  # 验证数据处理流水线（无增强）
+    - type: LoadMultiViewImageFromFiles
+      to_float32: true
+    - type: LoadPointsFromFile
+      coord_type: LIDAR
+      load_dim: ${load_dim}
+      use_dim: ${use_dim}
+      reduce_beams: ${reduce_beams}
+    - type: LoadPointsFromMultiSweeps
+      load_dim: ${load_dim}
+      use_dim: ${use_dim}
+      sweeps_num: 0
+      pad_empty_sweeps: true
+      remove_close: true
+      reduce_beams: ${reduce_beams}
+    - type: LoadAnnotations3D
+      with_bbox_3d: true
+      with_label_3d: true
+      with_attr_label: false
+    - type: ImageAug3D
+      is_train: false
+      final_dim: ${image_size}
+      resize_lim: [0.48, 0.48]
+      rot_lim: [0.0, 0.0]
+      rand_flip: false
+      bot_pct_lim: [0.0, 0.0]
+    - type: GlobalRotScaleTrans  # xmy临时修改（无增强）
+      is_train: false
+      resize_lim: [1.0, 1.0]
+      rot_lim: [0.0, 0.0]
+      trans_lim: 0.0
+    - type: PointsRangeFilter
+      point_cloud_range: ${point_cloud_range}
+    - type: ImageNormalize
+      mean: [0.485, 0.456, 0.406]
+      std: [0.229, 0.224, 0.225]
+    - type: DefaultFormatBundle3D
+      classes: ${object_classes}
+    - type: Collect3D
+      keys: [img, points, gt_bboxes_3d, gt_labels_3d]
+      meta_keys: [camera_intrinsics, camera2ego, lidar2ego, lidar2camera, lidar2image, camera2lidar, img_aug_matrix, lidar_aug_matrix]
+    - type: GTDepth
+      keyframe_only: true
+  # 测试集配置（与验证集一致）
+  test:
+    type: NuScenesDataset
+    ann_file: ${dataset_root}/tyjt_infos_val.pkl
+    dataset_root: ${dataset_root}
+    modality: ${input_modality}
+    object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    box_type_3d: LiDAR
+    pipeline: ${data.val.pipeline}
+    test_mode: true
+
+# ==================== 评估配置 ====================
+evaluation:
+  interval: 1  # 每1个epoch评估一次
+  pipeline: ${data.val.pipeline}  # 评估流水线（与验证集一致）
+
+# ==================== 模型配置（BEVFusion核心架构） ====================
+model:
+  type: BEVFusion  # 模型类型
+  # LiDAR编码器（点云特征提取）
+  encoders:
+    lidar:
+      voxelize:  # 体素化模块
+        max_num_points: 10  # 每个体素最大点数
+        max_voxels: [120000, 160000]  # 训练/测试最大体素数
+        point_cloud_range: ${point_cloud_range}
+        voxel_size: ${voxel_size}
+      backbone:  # 稀疏卷积编码器
+        type: SparseEncoder
+        in_channels: ${load_dim}
+        sparse_shape: [1440, 1440, 41]  # 稀疏张量形状
+        order: [conv, norm, act]
+        encoder_channels:
+        - [[16, 16], [16, 16], [32, 32]]
+        - [[32, 32], [32, 32], [64, 64]]
+        - [[64, 64], [64, 64], [128, 128]]
+        - [[128, 128], [128, 128]]
+        encoder_paddings:
+        - [[0, 0], [0, 0], [1, 1]]
+        - [[0, 0], [0, 0], [1, 1]]
+        - [[0, 0], [0, 0], [[-1, 1], [-1, 1], [0, 0]]]
+        - [[0, 0], [0, 0]]
+        block_type: basicblock
+        output_channels: 128
+    # Camera编码器（图像特征提取+BEV转换）
+    camera:
+      backbone:  # Swin-Transformer骨干网络
+        type: SwinTransformer
+        embed_dims: 96
+        depths: [2, 2, 6, 2]
+        num_heads: [3, 6, 12, 24]
+        window_size: 7
+        mlp_ratio: 4
+        qkv_bias: true
+        qk_scale: null
+        drop_rate: 0.0
+        attn_drop_rate: 0.0
+        drop_path_rate: 0.2
+        patch_norm: true
+        out_indices: [1, 2, 3]
+        with_cp: false
+        convert_weights: true
+        init_cfg:
+          type: Pretrained
+          checkpoint: ./pretrained/swin_tiny_patch4_window7_224.pth
+      neck:  # FPN颈部网络
+        type: GeneralizedLSSFPN
+        in_channels: [192, 384, 768]
+        out_channels: 256
+        num_outs: 3
+        start_level: 0
+        norm_cfg:
+          type: BN2d
+          requires_grad: true
+        act_cfg:
+          type: ReLU
+          inplace: true
+        upsample_cfg:
+          mode: bilinear
+          align_corners: false
+      vtransform:  # 图像→BEV转换（DepthLSS）
+        type: DepthLSSTransform
+        in_channels: 256
+        out_channels: 80
+        image_size: ${image_size}
+        feature_size: [32, 88]
+        dbound: [1.0, 60.0, 0.5]  # 深度范围[min, max, step]
+        xbound: [-54.0, 54.0, 0.3]  # BEV X轴范围
+        ybound: [-54.0, 54.0, 0.3]  # BEV Y轴范围
+        zbound: [-10.0, 10.0, 20.0]  # BEV Z轴范围
+        downsample: 2
+  # 多模态融合模块
+  fuser:
+    type: ConvFuser
+    in_channels: [80, 256]  # 输入通道（Camera BEV + LiDAR BEV）
+    out_channels: 256  # 融合后输出通道
+  # 解码器（SECOND骨干+FPN颈部）
+  decoder:
+    backbone:
+      type: SECOND
+      in_channels: 256
+      layer_nums: [5, 5]
+      layer_strides: [1, 2]
+      out_channels: [128, 256]
+      conv_cfg:
+        type: Conv2d
+        bias: false
+      norm_cfg:
+        type: BN
+        eps: 0.001
+        momentum: 0.01
+    neck:
+      type: SECONDFPN
+      in_channels: [128, 256]
+      out_channels: [256, 256]
+      upsample_strides: [1, 2]
+      upsample_cfg:
+        type: deconv
+        bias: false
+      use_conv_for_no_stride: true
+      norm_cfg:
+        type: BN
+        eps: 0.001
+        momentum: 0.01
+  # 检测头（TransFusionHead）
+  heads:
+    map: null  # 关闭地图分割头
+    object:
+      type: TransFusionHead
+      num_classes: ${len(object_classes)}  # 类别数（10）
+      in_channels: 512
+      hidden_channel: 128
+      ffn_channel: 256
+      num_heads: 8
+      num_proposals: 200
+      num_decoder_layers: 1
+      dropout: 0.1
+      activation: relu
+      bn_momentum: 0.1
+      auxiliary: true  # 启用辅助损失
+      # 损失函数配置
+      loss_cls:
+        type: FocalLoss
+        use_sigmoid: true
+        gamma: 2.0
+        alpha: 0.25
+        loss_weight: 1.0
+        reduction: mean
+      loss_bbox:
+        type: L1Loss
+        loss_weight: 0.25
+        reduction: mean
+      loss_heatmap:
+        type: GaussianFocalLoss
+        loss_weight: 1.0
+        reduction: mean
+      # 3D框编码器
+      bbox_coder:
+        type: TransFusionBBoxCoder
+        code_size: 10
+        pc_range: ${point_cloud_range}[:2]
+        post_center_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
+        out_size_factor: 8
+        voxel_size: ${voxel_size}[:2]
+        score_threshold: 0.0
+      # 训练配置
+      train_cfg:
+        type: HungarianAssigner3D
+        assigner:
+          cls_cost:
+            type: FocalLossCost
+            gamma: 2.0
+            alpha: 0.25
+            weight: 0.15
+          reg_cost:
+            type: BBoxBEVL1Cost
+            weight: 0.25
+          iou_cost:
+            type: IoU3DCost
+            weight: 0.25
+          iou_calculator:
+            type: BboxOverlaps3D
+            coordinate: lidar
+        code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2]
+        dataset: nuScenes
+        grid_size: [1440, 1440, 41]
+        point_cloud_range: ${point_cloud_range}
+        voxel_size: ${voxel_size}
+        gaussian_overlap: 0.1
+        min_radius: 2
+        pos_weight: -1
+      # 测试配置
+      test_cfg:
+        dataset: nuScenes
+        grid_size: [1440, 1440, 41][:2]
+        pc_range: ${point_cloud_range}[:2]
+        out_size_factor: 8
+        voxel_size: ${voxel_size}[:2]
+        nms_type: null
+
+# ==================== 训练/测试流水线（冗余定义，确保兼容性） ====================
+train_pipeline: ${data.train.dataset.pipeline}
+test_pipeline: ${data.test.pipeline}
+
+# ==================== 雷达相关配置（已移除，保留注释供后续参考） ====================
+# 说明：当前实验禁用雷达（input_modality.use_radar=false），以下为完整雷达配置（参考论文多传感器融合逻辑）
+# 雷达核心功能：提供速度估计、补全稀疏LiDAR点云，尤其提升雨天/夜间场景的目标检测鲁棒性（契合论文多模态融合优势）
+# radar_compensate_velocity: true        # 雷达速度补偿（修正运动目标速度偏差，辅助模型mAVE指标优化）
+# radar_filtering: none                  # 雷达点云过滤方式（none=不过滤，保留原始信号，保证特征完整性）
+# radar_jitter: 0                        # 雷达点云抖动幅度（0=无抖动增强，避免引入额外噪声）
+# radar_max_points: 2500                 # 单帧雷达最大点数限制（避免显存溢出，平衡性能与效率）
+# radar_normalize: false                 # 雷达特征归一化开关（false=使用原始特征，保留雷达信号物理意义）
+# radar_sweeps: 6                        # 雷达采样帧数（时序融合6帧，提升动态目标跟踪稳定性，呼应论文时序融合逻辑）
+# radar_use_dims: [0,1,2,5,8,9,18-39,40-56]  # 雷达使用的特征维度（按功能分组，适配BEVFusion多模态融合需求）
+# 维度细分说明：
+# 0: 雷达坐标系X轴坐标（m）- 核心空间位置维度，匹配LiDAR几何特征
+# 1: 雷达坐标系Y轴坐标（m）- 与X轴配合确定水平投影位置
+# 2: 雷达坐标系Z轴坐标（m）- 补充高度信息，区分不同高度目标（如交通锥、车辆）
+# 5: 径向速度（m/s）- 雷达独有核心维度，直接支撑速度预测任务（优化mAVE指标）
+# 8: 反射强度（归一化值）- 反映目标材质特性，辅助语义分类（如金属车身vs塑料交通锥）
+# 9: 信号质量评分（无单位）- 过滤噪声点，提升融合特征纯度
+# 18-39: 扩展语义/状态维度 - 含目标反射特性细分、信号时间稳定性、加速度估算等，补充相机语义不足
+# 40-56: 多帧时序融合维度 - 整合6帧雷达数据的位置/速度残差与预测值，提升动态目标鲁棒性
+# radar_voxel_size: [0.8, 0.8, 8]        # 雷达体素尺寸（x,y,z）- 适配雷达点云稀疏特性，与LiDAR体素化逻辑一致

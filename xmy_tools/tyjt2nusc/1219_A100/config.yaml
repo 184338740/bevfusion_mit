@@ -1,0 +1,58 @@
+# config.yaml
+mode: "A100"
+tyjt_root: "/cephfsdata/users/lishan/00_Data/00_RawData"
+output_root: "./output-1204-sub/step1/nuscenes_tyjt"
+nusc_version: "v1.0-tyjt"
+
+data_packages:
+  2d3d_20250114:
+    type: "hikvision"
+    calib_root: "calib/2d3d_20250114"
+    group2map_file: "group2map_calib.json"
+    camera2map_file: "camera2map_calib.json"
+    intersections:
+      R9:
+        group_key: "G32050700009M00"
+        cameras:
+          - ["R9_Aw_CamS", "A"]
+          - ["R9_Bn_CamW", "B"]
+          - ["R9_Ce_CamN", "C"]
+          - ["R9_Ds_CamE", "D"]
+  
+  2d3d4d_20250728_weiyuan:
+    type: "all_in_one"
+    calib_root: "calib/G51102400001M00"
+    sensor2map_file: "sensor2map_calib.json"
+    intersections:
+      R01:
+        group_key: "group2map"
+        cameras:
+          - ["SC_1A_CamR", "SC_1A_CamR_new", "A"]
+          - ["SC_1B_CamR", "SC_1B_CamR_new", "B"]
+          - ["SC_1C_CamR", "SC_1C_CamR_new", "C"]
+          - ["SC_1D_CamR", "SC_1D_CamR_new", "D"]
+
+# 相机映射
+camera_mapping:
+  A: "CAM_FRONT"
+  B: "CAM_FRONT_RIGHT"
+  C: "CAM_BACK"
+  D: "CAM_FRONT_LEFT"
+
+# 类别映射
+category_mapping:
+  car: "tyjt.car"
+  truck: "tyjt.truck"
+  construction_truck: "tyjt.construction_truck"
+  van: "tyjt.van"
+  bus: "tyjt.bus"
+  robot: "tyjt.robot"
+  pedestrian: "tyjt.pedestrian"
+  cyclist: "tyjt.cyclist"
+  bicycle: "tyjt.bicycle"
+  tricycle: "tyjt.tricycle"
+  tricyclist: "tyjt.tricyclist"
+  trolley: "tyjt.trolley"
+  cone: "tyjt.cone"
+  barrier: "tyjt.barrier"
+  other: "tyjt.other"

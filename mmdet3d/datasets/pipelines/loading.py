@@ -17,6 +17,69 @@ import torch
 
 from .loading_utils import load_augmented_point_cloud, reduce_LiDAR_beams
 
+Debug = False
+print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/loading.py][data.train_pipelinee] >>> [DataLoader侧] >>> [Debug Mode = {Debug}] ")
+
+if Debug:
+    import time
+    import threading
+    import re
+    import uuid
+
+    global_print_interval = 10
+
+    # 使用线程局部存储来管理计数器
+    _thread_local = threading.local()
+
+
+    def get_worker_info():
+        """获取worker信息，包括ID和计数器"""
+        import threading
+        import os
+        
+        # 初始化线程局部存储
+        if not hasattr(_thread_local, 'worker_id'):
+            thread_id = threading.get_ident()
+            thread_name = threading.current_thread().name
+            
+            # 新方法：结合进程ID和线程ID
+            process_id = os.getpid()
+            
+            # 获取PyTorch DataLoader worker信息
+            try:
+                worker_info = torch.utils.data.get_worker_info()
+                if worker_info is not None:
+                    # 这是DataLoader worker
+                    worker_id = worker_info.id
+                    _thread_local.worker_id = f"DL_Worker{worker_id}"
+                else:
+                    # 不是DataLoader worker
+                    if thread_name == 'MainThread':
+                        _thread_local.worker_id = f"P{process_id}_Main"
+                    else:
+                        _thread_local.worker_id = f"P{process_id}_T{thread_id%1000:03d}"
+            except:
+                # 备选方案
+                _thread_local.worker_id = f"P{process_id}_T{thread_id%1000:03d}"
+            
+            # 打印线程信息（仅第一次）
+            print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/loading.py] >>> [进程初始化] 进程:{process_id}, 线程ID:{thread_id}, "
+                f"名称:'{thread_name}', 分配ID:{_thread_local.worker_id}")
+            
+            # 初始化计数器（counter是单个DataLoader worker处理的样本计数，不是batch计数）（counter统计该worker调用该数据处理类的次数）
+            _thread_local.counter = 0
+            _thread_local.total_time = 0.0
+        
+        return _thread_local.worker_id, _thread_local.counter, _thread_local.total_time
+
+
+    def update_worker_info(duration):
+        """更新worker的统计信息"""
+        if not hasattr(_thread_local, 'counter'):
+            get_worker_info()  # 确保已初始化
+        
+        _thread_local.counter += 1
+        _thread_local.total_time += duration
 
 @PIPELINES.register_module()
 class LoadMultiViewImageFromFiles:
@@ -52,6 +115,9 @@ class LoadMultiViewImageFromFiles:
                 - scale_factor (float): Scale factor.
                 - img_norm_cfg (dict): Normalization configuration of images.
         """
+        if Debug:
+            start = time.time()
+
         filename = results["image_paths"]
         # img is of shape (h, w, c, num_views)
         # modified for waymo
@@ -72,7 +138,28 @@ class LoadMultiViewImageFromFiles:
         # Set initial values for default meta_keys
         results["pad_shape"] = images[0].size
         results["scale_factor"] = 1.0
-        
+
+        if Debug:
+            duration = time.time() - start
+            worker_id, counter, total_time = get_worker_info()
+            update_worker_info(duration)
+            
+            if counter % global_print_interval == 0:
+                # 获取样本ID - 尝试多种可能的键
+                sample_id = 'unknown'
+                for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                    if key in results:
+                        val = results[key]
+                        if isinstance(val, (int, str)):
+                            sample_id = str(val)
+                            break
+                
+                # 简化打印信息
+                current_time = time.time()
+                avg_time = total_time / counter if counter > 0 else duration
+                print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/loading.py] >>> [{current_time:.3f}] 📸 LoadMultiViewImageFromFiles [{worker_id} #{counter}]: "
+                      f"样本={sample_id[:20]}, 相机={len(filename)}, 耗时={duration:.4f}s, 平均={avg_time:.4f}s")
+
         return results
 
     def __repr__(self):
@@ -185,7 +272,6 @@ class LoadPointsFromMultiSweeps:
         points = results["points"]
         points = points[:, self.use_dim]
         # 修复点云维度问题
-	# points.tensor[:, 4] = 0
         if points.tensor.shape[1] >= 5:
             points.tensor[:, 4] = 0
         else:
@@ -406,6 +492,17 @@ class LoadPointsFromFile:
 
                 - points (:obj:`BasePoints`): Point clouds data.
         """
+        if Debug:
+            start = time.time()
+            # 在开始时获取样本ID，确保有值
+            sample_id = 'unknown'
+            for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                if key in results:
+                    val = results[key]
+                    if isinstance(val, (int, str)):
+                        sample_id = str(val)
+                        break
+        
         lidar_path = results["lidar_path"]
         points = self._load_points(lidar_path)
 
@@ -415,15 +512,15 @@ class LoadPointsFromFile:
             total_elements = points.shape[0]
             if total_elements % self.load_dim != 0:
                 raise ValueError(
-                    f">>>[xmy]🔵[loading.py]>>> 点云文件 {lidar_path} 的总元素数 {total_elements} 无法被 "
-                    f">>>[xmy]🔵[loading.py]>>> load_dim={self.load_dim} 整除，无法 reshape。请检查文件格式或 load_dim 设置。"
+                    f">>>[xmy]🟡[loading.py]>>> 点云文件 {lidar_path} 的总元素数 {total_elements} 无法被 "
+                    f">>>[xmy]🟡[loading.py]>>> load_dim={self.load_dim} 整除，无法 reshape。请检查文件格式或 load_dim 设置。"
                 )
         elif points.ndim == 2:
             # 二维数组，检查第二维
             if points.shape[1] != self.load_dim:
                 raise ValueError(
-                    f">>>[xmy]🔵[loading.py]>>> 点云文件 {lidar_path} 的实际维度为 {points.shape[1]}，"
-                    f">>>[xmy]🔵[loading.py]>>> 但配置中的 load_dim 为 {self.load_dim}。请检查数据或配置。"
+                    f">>>[xmy]🟡[loading.py]>>> 点云文件 {lidar_path} 的实际维度为 {points.shape[1]}，"
+                    f">>>[xmy]🟡[loading.py]>>> 但配置中的 load_dim 为 {self.load_dim}。请检查数据或配置。"
                 )
         else:
             raise ValueError(f"点云文件 {lidar_path} 的维度异常: {points.shape}")
@@ -464,6 +561,33 @@ class LoadPointsFromFile:
             points, points_dim=points.shape[-1], attribute_dims=attribute_dims
         )
         results["points"] = points
+
+        if Debug:
+            duration = time.time() - start
+            worker_id, counter, total_time = get_worker_info()
+            update_worker_info(duration)
+            
+            if counter % global_print_interval == 0:
+                # 获取样本ID - 尝试多种可能的键
+                sample_id = 'unknown'
+                for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                    if key in results:
+                        val = results[key]
+                        if isinstance(val, (int, str)):
+                            sample_id = str(val)
+                            break
+                
+                # # 获取点云信息
+                # points_num = 0
+                # if hasattr(points, 'tensor'):
+                #     points_num = points.tensor.shape[0]
+                # elif hasattr(points, '__len__'):
+                #     points_num = len(points)
+                
+                current_time = time.time()
+                avg_time = total_time / counter if counter > 0 else 0
+                print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/loading.py] >>> [{current_time:.3f}] 📦 LoadPointsFromFile [{worker_id} #{counter}]: "
+                      f"样本={sample_id[:20]}, 耗时={duration:.4f}s, 平均={avg_time:.4f}s")
 
         return results
 
@@ -580,6 +704,9 @@ class LoadAnnotations3D(LoadAnnotations):
             dict: The dict containing loaded 3D bounding box, label, mask and
                 semantic segmentation annotations.
         """
+        if Debug:
+            start = time.time()
+
         results = super().__call__(results)
         if self.with_bbox_3d:
             results = self._load_bboxes_3d(results)
@@ -594,7 +721,35 @@ class LoadAnnotations3D(LoadAnnotations):
         if self.with_attr_label:
             results = self._load_attr_labels(results)
 
+        if Debug:
+            duration = time.time() - start
+            worker_id, counter, total_time = get_worker_info()
+            update_worker_info(duration)
+            
+            if counter % global_print_interval == 0:
+                # 获取样本ID
+                sample_id = 'unknown'
+                for key in ['sample_idx', 'sample_id', 'token', 'frame_id']:
+                    if key in results:
+                        val = results[key]
+                        if isinstance(val, (int, str)):
+                            sample_id = str(val)
+                            break
+                
+                # 获取标注统计
+                bboxes_3d = results.get('gt_bboxes_3d', [])
+                labels_3d = results.get('gt_labels_3d', [])
+                bbox_count = len(bboxes_3d) if hasattr(bboxes_3d, '__len__') else 0
+                label_count = len(labels_3d) if hasattr(labels_3d, '__len__') else 0
+                
+                current_time = time.time()
+                avg_time = total_time / counter if counter > 0 else 0
+                print(f">>>[xmy]🟡[mmdet3d/datasets/pipelines/loading.py] >>> [{current_time:.3f}] 🏷️ LoadAnnotations3D [{worker_id} #{counter}]: "
+                      f"样本={sample_id[:20]}, 3D框={bbox_count}, 标签={label_count}, "
+                      f"耗时={duration:.4f}s, 平均={avg_time:.4f}s")
+
         return results
+    
 
 
 @PIPELINES.register_module()

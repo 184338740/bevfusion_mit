@@ -1,0 +1,13 @@
+{
+  "total_timestamps": 118,
+  "complete_samples": 118,
+  "missing_lidar_pcd": 0,
+  "missing_lidar_npy": 0,
+  "missing_labels": 0,
+  "camera_missing_stats": {
+    "SC_R1_Ae_CpcN_CAMR": 0,
+    "SC_R1_Be_CpcN_CAMR": 0,
+    "SC_R1_Ce_CpcN_CAMR": 0,
+    "SC_R1_De_CpcN_CAMR": 0
+  }
+}

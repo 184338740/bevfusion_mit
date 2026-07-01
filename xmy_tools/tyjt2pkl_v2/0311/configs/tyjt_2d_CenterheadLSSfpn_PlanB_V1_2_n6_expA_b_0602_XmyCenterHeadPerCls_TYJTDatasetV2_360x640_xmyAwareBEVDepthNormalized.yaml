@@ -1,0 +1,1409 @@
+# 官网配置：
+# https://github.com/mit-han-lab/bevfusion/blob/main/configs/nuscenes/default.yaml#L121
+# configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/default.yaml  LSSfpn的 model.encoders、model.decoders、optimizer、lr_config、momentum_config、data.samples_per_gpu
+
+# ===============================================
+# BEVFusion 纯视觉3D目标检测配置文件 (tyjt数据集)
+# 配置严格基于官方纯视觉(1)架构，并适配tyjt数据路径与类别
+# 用于在 pretrained/camera-only-det.pth 基础上微调
+# ===============================================
+
+find_unused_parameters: false    # 告诉 DDP 模块允许在反向传播时，允许某些模型参数没有接收到梯度（即未被用于计算损失）。
+xmy_train_depthnet_only: false   # 设为 true 时只训练 vtransform (AwareBEVDepth)‘
+
+# ==================== 1. 基础运行配置 ====================
+max_epochs: 16                          # 总训练轮数(官方:2)
+seed: 0                                 # 随机种子
+deterministic: false                    # 非确定性训练
+cudnn_benchmark: false                  # CUDA基准测试
+
+# 模型checkpoint配置
+checkpoint_config:
+  interval: 1                           # 每1个epoch保存一次checkpoint → 保留
+  max_keep_ckpts: 16                    # 保留最新8个checkpoint（纯视觉模型较小，可多保留几个）
+  # save_last: true                     # 保存最后一个checkpoint → 保留
+  # save_optimizer: true                # 保存优化器状态 → 保留
+
+# 运行器配置
+runner:
+  type: CustomEpochBasedRunner          # 自定义epoch-based训练器（MMDetection3D标准）
+  max_epochs: ${max_epochs}             # 训练总epoch数（引用上面的max_epochs变量）
+
+
+# ==================== 2. 路径与数据集配置 ====================
+# dataset_type: NuScenesDataset
+dataset_type: TYJTDatasetV2             # (官方: dataset_type: NuScenesDataset);  [tyjt] TYJTDatasetV2
+
+# 数据集根路径
+# dataset_root: /data2/xmy/02_tools/output-1204-sub/step1/nuscenes_tyjt
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/xmy_tools/tyjt2nusc/1219_A100/output-1204-sub/step1/nuscenes_tyjt
+
+# v1.0-tyjt: all数据集
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/xmy_tools/tyjt2nusc/1219_A100/output-1226-v9.2.3-all/step1/nuscenes_tyjt
+# # 标注文件路径 & 数据库
+# train_ann_file: ${dataset_root + "/v01/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+# val_ann_file: ${dataset_root + "/v01/tyjt_infos_val.pkl"}        # 验证集pkl文件
+# test_ann_file: ${dataset_root + "/v01/tyjt_infos_val.pkl"}    # 测试集使用验证集（生产环境应使用独立测试集）
+# dbinfo_path: ${dataset_root + "/v01/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+
+# V02-TYJT: all数据集
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/xmy_tools/tyjt2nusc/1219_A100/output-1226-v9.2.3-all/step1/nuscenes_tyjt
+# # dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/xmy_tools/tyjt2nusc/1219_A100/output-v02-tyjt-all66862-0201/step6/v02.1.5-tyjt-trainval
+# # # 标注文件路径 & 数据库
+# train_ann_file: ${dataset_root + "/V02-TYJT/pkl/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+# # val_ann_file: ${dataset_root + "/V02-TYJT/pkl/tyjt_infos_val.pkl"}        # 验证集pkl文件
+# # test_ann_file: ${dataset_root + "/V02-TYJT/pkl/tyjt_infos_val.pkl"}    # 测试集使用验证集（生产环境应使用独立测试集）
+# val_ann_file: ${dataset_root + "/V02-TYJT/pkl_tmp/tyjt_infos_val.pkl"}        # 验证集pkl文件
+# test_ann_file: ${dataset_root + "/V02-TYJT/pkl_tmp/tyjt_infos_val.pkl"}    # 测试集使用验证集（生产环境应使用独立测试集）
+# # val_ann_file: ${dataset_root + "/v01/tyjt_infos_val.pkl"}        # 验证集pkl文件
+# # test_ann_file: ${dataset_root + "/v01/tyjt_infos_val.pkl"}    # 测试集使用验证集（生产环境应使用独立测试集）
+# dbinfo_path: ${dataset_root + "/V02-TYJT/pkl/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+
+
+# ## V02-TYJT: all数据集
+# ## version: v02.1.5-tyjt-trainval (52658: 14204)
+# # dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/xmy_tools/tyjt2nusc/1219_A100/output-1226-v9.2.3-all/step1/nuscenes_tyjt 
+# # (1) 数据 Root
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/xmy_tools/tyjt2nusc/1219_A100/output-v02-tyjt-all66862-0201/step6/v02.1.5-tyjt-trainval 
+# # (2) version: v02.1.5-tyjt-trainval 的数据集,  需要root下再找 meta.version的文件夹
+# # (3) pkl路径
+# train_ann_file: ${dataset_root + "/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+# # all_val
+# # val_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}        # 验证集pkl文件
+# # test_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}    # 测试集使用验证集（生产环境应使用独立测试集）
+# # sub_val
+# val_ann_file: ${dataset_root + "/sub_val/tyjt_infos_val.pkl"}  
+# test_ann_file: ${dataset_root + "/sub_val/tyjt_infos_val.pkl"}  
+# dbinfo_path: ${dataset_root + "/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+
+## V03-TYJT: all数据集（不再转 nusc格式，直接生成tyjt自己的pkl ）
+# ## version: v03-local
+# # (1) 数据 Root
+# dataset_root: /mnt/bevfusion_mit_xmy/tools/tyjt_data_infos_v04
+# # dataset_root: /mnt/bevfusion_mit_xmy/tools/tyjt_data_infos_v0942
+# # (2) pkl路径
+# # train_ann_file: ${dataset_root + "/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+# # val_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}  
+# # test_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}  
+
+# train_ann_file: ${dataset_root + "/tyjt_infos_train_sub10.pkl"}    # 训练集pkl文件（含样本信息）
+# val_ann_file: ${dataset_root + "/tyjt_infos_train_sub10.pkl"}  
+# test_ann_file: ${dataset_root + "/tyjt_infos_train_sub10.pkl"}  
+
+# dbinfo_path: ${dataset_root + "/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+# # --------------------------------------------------------------------------------
+# ## version: A100_V031_sub
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V031_sub/
+# # dataset_root: /mnt/bevfusion_mit_xmy/tools/tyjt_data_infos_v0942
+# train_ann_file: ${dataset_root + "/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+# val_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}  
+# test_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"} 
+# dbinfo_path: ${dataset_root + "/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+# # --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V032_sub 【非隔离】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V032_sub/
+# train_ann_file: ${dataset_root + "/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+# val_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}  
+# test_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"} 
+# dbinfo_path: ${dataset_root + "/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V033_sub
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V033_sub/
+# val_ann_file: ${dataset_root + "../A100_V033_sub/tyjt_infos_val.pkl"}  
+# test_ann_file: ${dataset_root + "../A100_V033_sub/tyjt_infos_val.pkl"} 
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V034_sub
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V034_sub/
+# train_ann_file: ${dataset_root + "/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+# val_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}  
+# test_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"} 
+# dbinfo_path: ${dataset_root + "/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V037_sub【完全隔离】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V037_sub/
+# train_ann_file: ${dataset_root + "/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+# val_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}  
+# test_ann_file: ${val_ann_file} 
+# # test_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"} 
+# dbinfo_path: ${dataset_root + "/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V0310_sub 【非隔离】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V0310_sub/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V0310a_sub 【非隔离】【人工标注】【39242帧】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V0310a_sub/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V0311_sub 【非隔离】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V0311_sub/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V0311a_sub 【非隔离】【人工标注】【全量的海康，但不带一体机】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V0311a_sub/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V032c_sub_0423 【非隔离】【人工标注】【全量的海康，但不带一体机】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V032c_sub_0423/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V032d_sub_0423_shuffle 【非隔离】【人工标注】【R26】【固定验证集】【非路口隔离】【人工标注】【删除问题数据包：2d3d4d_20250117 】【SplitPkgs】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V032d_sub_0423_shuffle/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V032f_sub_0424_shuffle 【非隔离】【人工标注】【R26】【固定验证集】【非路口隔离】【人工标注】【删除问题数据包：2d3d4d_20250117 】【ShuffleSamples】【修正尺寸顺序】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V032f_sub_0424_shuffle/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V032g_sub_0428_SplitPkgs 【非隔离】【人工标注】【R26】【固定验证集】【非路口隔离】【人工标注】【删除问题数据包：2d3d4d_20250117 】【SplitPkgs】【修正尺寸顺序】【删除问题数据包：2d3d4d_20250403 】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V032g_sub_0428_SplitPkgs/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V032h_sub_0428_ShuffleSamples 【非隔离】【人工标注】【R26】【固定验证集】【非路口隔离】【人工标注】【删除问题数据包：2d3d4d_20250117 】【ShuffleSamples】【修正尺寸顺序】【删除问题数据包：2d3d4d_20250403 】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V032h_sub_0428_ShuffleSamples/
+# train_ann_file: ${dataset_root + "/tyjt_infos_train_split.pkl"}  
+# val_ann_file: ${dataset_root + "/tyjt_infos_val_split.pkl"}  
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version:  A100_V0313_a_allHik_SplitPkgs_0430 【非隔离】【人工标注】【R26】【固定验证集】【非路口隔离】【人工标注】【删除问题数据包：2d3d4d_20250117 】【SplitPkgs】【修正尺寸顺序】【删除问题数据包：2d3d4d_20250403 】【海康：R26+R9+R10+R02 】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V0313_a_allHik_SplitPkgs_0430/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+# ## version:  A100_V0313_a_allHik_SplitPkgs_0430 【非隔离】【人工标注】【R26】【固定验证集】【非路口隔离】【人工标注】【删除问题数据包：2d3d4d_20250117 】【SplitPkgs】【修正尺寸顺序】【删除问题数据包：2d3d4d_20250403 】【海康：R26+R9+R10+R02 + 一体机：R01+R02】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V0314_a_all_SplitPkgs_0430/
+# # --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V032_k1_sub_0522_SplitPkgs 【非隔离】【人工标注】【R26】【固定验证集】【非路口隔离】【人工标注】【SplitPkgs】【修正尺寸顺序】【train:2d3d4d_20250218】
+dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V032_k1_sub_0522_SplitPkgs/
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+## version: A100_V032_k3_sub_0522_SplitPkgs 【非隔离】【人工标注】【R26】【固定验证集】【非路口隔离】【人工标注】【SplitPkgs】【修正尺寸顺序】【train:2d3d4d_20250218】
+# dataset_root: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V032_k3_sub_0522_SplitPkgs/
+# --------------------------------------------------------------------------------
+
+
+
+train_ann_file: ${dataset_root + "/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+val_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}  
+# # val_ann_file: /data2/xmy/01_project/bevfusion_mit_xmy_1205/datasets/tyjt2pkl/A100_V0312b_all/tyjt_infos_val_2d3d4d_20250117Clean.pkl
+# # train_ann_file: ${dataset_root + "/tyjt_infos_train_split.pkl"}  
+# # val_ann_file: ${dataset_root + "/tyjt_infos_val_split.pkl"}  
+
+test_ann_file: ${val_ann_file} 
+dbinfo_path: ${dataset_root + "/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+
+
+# ------------------------------------------------------------------------------------
+# ## version: 本地
+# # (1) 数据 Root
+# dataset_root: /mnt/bevfusion_mit_xmy/tools/tyjt_data_infos_v04
+# # dataset_root: /mnt/bevfusion_mit_xmy/tools/tyjt_data_infos_v0942
+# # (2) pkl路径
+# # train_ann_file: ${dataset_root + "/tyjt_infos_train.pkl"}    # 训练集pkl文件（含样本信息）
+# # val_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}  
+# # test_ann_file: ${dataset_root + "/tyjt_infos_val.pkl"}  
+# train_ann_file: ${dataset_root + "/tyjt_infos_train_sub10.pkl"}    # 训练集pkl文件（含样本信息）
+# val_ann_file: ${dataset_root + "/tyjt_infos_train_sub10.pkl"}  
+# test_ann_file: ${dataset_root + "/tyjt_infos_train_sub10.pkl"}  
+# dbinfo_path: ${dataset_root + "/tyjt_dbinfos_train.pkl"}     # 目标粘贴增强时会使用
+# ------------------------------------------------------------------------------------
+
+
+run_dir: ${"runs/deafult_" + str(max_epochs) + "epoch"}  # 训练日志、权重保存目录
+
+
+# ==================== 3. 模型加载与初始化 ====================
+#  恢复训练文件
+resume_from: null
+# resume_from:  runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_i6_l1_A1_e_0526_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_lr_circle/epoch_5.pth
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_i6_l1_b_0525_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_lr_circle/epoch_2.pth
+
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_i6_b_0518_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_lr_circle/epoch_3.pth
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_i7_0507_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_LRcircle_BEVDepth/epoch_2.pth
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_d_res0_0414_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_lr_circle/epoch_7.pth
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_7_c_0407_XmyCenterHeadPerCls_TYJTDatasetV2_360x640/epoch_1.pth
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_planA_01_a_0327_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_A100/epoch_2.pth
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_V1_5_13_a_0204_v02_All66862_48epoch/epoch_2.pth
+# resume_from: null
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_V1_5_12_c_0126_All66862_48epoch/epoch_20.pth
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_V1_5_12_b_0122_All66862_48epoch/epoch_10.pth
+# resume_from: null  # null=从头训练，可设为checkpoint路径继续训练）
+# resume_from: runs/tyjt_1222_2d_CenterheadLSSfpn_demo7000_48epoch_NewFormat_v1.1/epoch_28.pth                
+# resume_from: runs/tyjt_0107_2d_CenterheadLSSfpn_All66862_48epoch_v1_5_7_a/epoch_10.pth
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_V1_5_7_b_0109_All66862_48epoch/epoch_14.pth
+# resume_from: runs/tyjt_2d_CenterheadLSSfpn_V1_5_7_c_0109_All66862_48epoch/epoch_27.pth
+
+
+# load_from: pretrained/camera-only-det.pth  # BEVFusion官方纯视觉预训练权重（在nuScenes上预训练）
+# load_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_i6_l1_A1_h_0527_Stage1_TrainDepthnet_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_lr_circle/latest.pth  # BEVFusion官方纯视觉预训练权重（在nuScenes上预训练）
+# load_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_i6_l1_A1_h_b_0528_Stage2_TrainAll_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_lr_circle/epoch_7.pth
+load_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_h6_d1_0522_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_lr_circle_b/epoch_16.pth    # CamOnly的试验A
+# load_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_m6_expA_a_0528_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_xmyAwareBEVDepthLSSLiteV1/epoch_13.pth  # xmyAwareBEVDepthLSSLiteV1的试验A
+# load_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_h6_d3_0522_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_lr_circle/epoch_10.pth  # 试验C
+
+
+
+# 预训练权重 - 加载官方纯视觉模型进行微调
+# load_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_i7_d_0511_res0_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_LRcircle_BEVDepth/epoch_16.pth  # 首次mergeBEVDepth成功，训练的epoch16.pth
+# load_from: runs/tyjt_2d_CenterheadLSSfpn_PlanB_V1_2_d_res0_0414_XmyCenterHeadPerCls_TYJTDatasetV2_360x640_Car_lr_circle/epoch_8.pth
+
+# 本地
+# load_from: /mnt/dataset/data_for_BEVFusion/BEVFusion_xmy_train/runs/tyjt_2d_CenterheadLSSfpn_V1_5_7_g_0116_All66862_48epoch/epoch_48.pth
+# A100
+# load_from: runs/tyjt_2d_CenterheadLSSfpn_V1_5_12_d_0127_All66862_48epoch/epoch_48.pth
+
+
+# ==================== 4. 传感器模态配置 ====================
+# 启用/禁用不同传感器（纯视觉仅启用相机）
+# ------------------- 官方配置 ------------------- 
+input_modality:
+  use_camera: true                        # [官方] 是否用相机模态（纯视觉必须启用，提供图像特征）
+  use_lidar: true                         # [官方] 是否用LiDAR（纯视觉关键修改，不使用点云数据）[xmy][⚠️]: 官方启用了lidar
+  use_radar: false                        # [官方] 是否用Radar（当前关闭，但配置保留供后续使用）
+  use_map: false                          # [官方] 是否用地图（BEVFusion也支持地图分割，当前专注检测）
+  use_external: false        
+
+# ==================== 5.1 lidar激光配置 ==================== [xmy][⚠️]: 官方启用了lidar
+# # ------------------- 官方配置 ------------------- 
+# load_dim: 5                             # [Nusc] 的原始点云是5维;[x,y,z,intensity,ring,timestamp]
+# use_dim: 5                              # [Nusc] 使用前5维 
+# reduce_beams: 32                        # [Nusc] 点云线束数目: NuScenesDataset 的是32线
+# ------------------- tyjt 点云格式 ------------------- 
+load_dim: 6                               # [tyjt] 的原始点云是6维；  shape（218734,6）】
+use_dim: [0,1,2,3,4]                      # [tyjt] 实际使用的点云维度（纯视觉保留格式兼容性）
+reduce_beams: 32                          # [tyjt] 点云线束数目: 128线
+load_augmented: null                      # 加载增强数据（null表示不加载，用于加载特定增强版本）
+
+
+# ==================== 5.2 Radar雷达配置（完整保留但注释） ====================
+# #  # [xmy][⚠️]: 纯视觉：应该删除 Radar； 官方版本有，但实际应该屏蔽
+# # 说明：以下为完整的雷达配置，当前已注释，需要时取消注释
+# # 雷达在多模态融合中作用：补全稀疏LiDAR点云、提供速度信息、提升恶劣天气鲁棒性
+# # 
+# # 雷达核心参数
+# radar_compensate_velocity: true         # [官方] 速度补偿（修正雷达多普勒速度偏差）
+# radar_filtering: none                   # [官方] 点云过滤方式（none=保留原始点云）
+# radar_jitter: 0                         # [官方] 抖动增强幅度（数据增强，0表示不增强）
+# radar_max_points: 2500                  # [官方] 单帧最大雷达点数（内存优化）
+# radar_normalize: false                  # [官方] 特征归一化开关（false=保持原始雷达特征）
+# radar_sweeps: 6                         # [官方] 时序融合帧数（利用多帧信息提升稳定性）
+# # 雷达特征维度（共57维）- BEVFusion论文设计的丰富特征集
+# radar_use_dims: use_dim: [0, 1, 2, 5, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56]
+#                                         # #   - 0    # x坐标（米）- 雷达坐标系下的x位置
+#                                         # #   - 1    # y坐标（米）- 雷达坐标系下的y位置
+#                                         # #   - 2    # z坐标（米）- 雷达坐标系下的z位置（高度信息）
+#                                         # #   - 5    # 雷达截面（RCS）- 反映目标反射强度
+#                                         # #   - 8    # 径向速度（m/s）- 雷达核心优势，直接测量目标速度
+#                                         # #   - 9    # 速度标准差 - 速度测量的置信度
+#                                         # #   # 反射率特征（18-39）- 22维精细反射特征，区分不同材质
+#                                         # #   - 18; -19; -20; -21; -22; -23; -24; -25; -26; -27
+#                                         # #   - 28; -29; -30; -31; -32; -33; -34; -35; -36; -37
+#                                         # #   - 38; -39
+#                                         # #   # 时序特征（40-56）- 17维多帧时序特征，增强动态目标检测
+#                                         # #   - 40; -41; -42; -43; -44; -45; -46; -47; -48; -49
+#                                         # #   - 50; -51; -52; -53; -54; -55; -56
+#                                         # 雷达体素化（适配雷达点云稀疏特性）
+# radar_voxel_size: [0.8, 0.8, 8]         # [官方] 体素尺寸：x,y方向0.8m，z方向8m（雷达点云更稀疏）
+
+
+# ==================== 6. 目标类别定义 ====================
+# [官方] 官方配置：configs/nuscenes/default.yaml
+# ------------------- 官方配置 ------------------- 
+# # 检测类别配置
+# object_classes:  # 官方配置：configs/nuscenes/default.yaml
+#   - car                                   # car+van
+#   - truck                                 # 卡车 - 大型车辆，尺寸差异大
+#   - construction_vehicle                  # 工程车+robot - 特殊车辆，样本通常较少
+#   - bus                                   # 公交车 - 长宽高比例特殊
+#   - trailer                               # 拖车 - 常与卡车连接，检测需处理连接关系  ==> 但tyjt该管脚是  推车
+#   - barrier                               # 护栏 - 长条形目标，与车辆形态差异大
+#   - motorcycle                            # 摩托车 - 两轮车，姿态变化大  ==> 但tyjt该管脚是 三轮车（有人）
+#   - bicycle                               # 自行车 - 与摩托车相似但速度不同   ==> 但tyjt该管脚是 二轮车（有人）
+#   - pedestrian                            # 行人 - 小目标，检测难度大
+#   - traffic_cone                          # 交通锥 - 小目标，高度固定但位置多变
+
+# 地图类别（当前未使用）- BEVFusion也支持地图分割任务
+map_classes:
+  - drivable_area                         # 可行驶区域（路面）
+  # - drivable_area*
+  - ped_crossing                          # 人行横道
+  - walkway                               # 人行道
+  - stop_line                             # 停止线
+  - carpark_area                          # 停车区
+  # - road_divider
+  # - lane_divider
+  - divider                               # 车道分隔线
+
+# [xmy] 只训练car
+object_classes:
+  - car                                   # car+van
+
+
+# ==================== 7. 输入尺寸与范围配置 ====================
+# image 进入模型的图像尺寸(高度×宽度) 
+# image_size: [256, 704]                  # [官方] 输入模型的图片大小：官方配置； [Nusc] 原图尺寸 (900, 1600)尺寸
+image_size: [360, 640]                    # [tyjt] 图片尺寸 (1080,1920)  (H, W)
+# image_size: [160, 320]       
+
+# Lidar-BEV/点云范围 (单位：米)
+point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]  # 点云/3D空间的范围（单位：米）（官方配置）[x_min, y_min, z_min, x_max, y_max, z_max]  (前，左，上)
+voxel_size_3d: [0.1, 0.1, 0.2]             # 每个体素voxel（3D网格）的尺寸，形式为 [vx, vy, vz]（单位：米）。
+voxel_size_2d: [0.1, 0.1]
+grid_size: [1024, 1024, 1]              # grid_size 根据 point_cloud_range 和 voxel_size 计算而来
+# grid_size的X方向： (51.2 + 51.2) / 0.1 = 1024 个格子
+# grid_size的Y方向： (51.2 + 51.2) / 0.1 = 1024 个格子
+# grid_size的Z方向： 人为设为 1
+
+
+# LSS-BEV 网格范围定义（纯视觉LSSTransform 关键参数）
+# LSSTransform参数 - 严格使用官方值（官方配置） 纯视觉的配置位置：configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/default.yaml
+xbound: [-51.2, 51.2, 0.4]              # X方向：(51.2 - (-51.2)) / 0.4 = 256 个格子
+ybound: [-51.2, 51.2, 0.4]              # Y方向：(51.2 - (-51.2)) / 0.1 = 256 个格子
+zbound: [-10.0, 10.0, 20.0]             # Z方向：(10.0 - (-10.0)) / 20.0 = 1   （压缩为1，因为BEV是2.5D表示）
+dbound: [1.0, 60.0, 0.5]
+downsample: 2                           # BEV 下采样倍数（输出BEV分辨率） [256, 256, 1] ==> [128, 128, xxx] 
+
+
+# ==================== 8. 数据增强配置 ====================
+# 数据增强2D：小样本采样粘贴 配置（Copy-Paste 数据增强，解决类别不平衡）
+gt_paste_stop_epoch: 0             # 第24epoch后停止粘贴
+# -------------------------------------------------------
+# # Exp1（官网）：configs/nuscenes/det/centerhead/lssfpn/camera/default.yaml
+# # 2D图像增强(官方配置) train_pipeline.ImageAug3D 使用
+# augment2d:
+#   gridmask:                             # 网格掩码增强
+#     fixed_prob: true                    # 固定概率模式
+#     prob: 0.0                           # 概率为0，实际不生效（可调为0.5-0.8启用）
+#   resize:                               # 随机缩放（模拟不同距离目标）
+#     - [0.38, 0.55]                      # 范围1：38%-55%（随机选择） 训练train_pipeline使用
+#     - [0.48, 0.48]                      # 范围2：固定48%（特定缩放）  测试test_pipeline使用
+#   rotate: [-5.4, 5.4]                   # 旋转角度：±5.4度（模拟相机轻微旋转）
+
+## 3D点云增强(官方配置)
+augment3d:
+  rotate:  [-0.3925, 0.3925]            # ±22.5度（官方纯视觉配置，原±45度）
+  scale: [0.95, 1.05]                   # 缩放：95%-105%（官方纯视觉使用更保守的缩放）
+  translate: 0                          # 平移：0米（官方纯视觉无平移增强）
+# -------------------------------------------------------
+# -------------------------------------------------------
+## [xmy][tyjt][256x704尺寸] 数据增强2D：Exp2（tyjt，适配 图像1080x1920尺寸， 输入模型尺寸 [256, 704] 的配置） 
+# augment2d: 
+#   resize:                           # 后边会在train 和 val pileline 中索引：随机缩放（模拟不同距离目标）
+#     - [0.37, 0.43]                  # train 用的reszie范围 (官方 原图900x1600 转 256x704 时采用0.48中心Random size 裁剪比例) ；(tyjt 原图1080x1920 转 256x704 时采用0.48中心Random size 裁剪比例, 但resize后的尺寸必须大于256x704否则越界)
+#     - [0.4, 0.4]                    # val   用的resize范围 (官方 原图900x1600 转 256x704 时采用0.48, 部分裁剪比例) ；(tyjt 原图1080x1920 转 256x704 时采用0.4, 保持裁剪比例)
+#   rotate: [-5.4, 5.4]               # 旋转角度：±5.4度（模拟相机轻微旋转）
+#   gridmask:                         # 网格掩码增强（当前关闭）
+#     prob: 0.5                       # 概率为0，实际不生效（可调为0.5-0.8启用）
+#     fixed_prob: true                # 固定概率模式
+# -------------------------------------------------------
+# -------------------------------------------------------
+## [xmy][tyjt][360x640尺寸]  数据增强3D：Exp3（tyjt，适配 图像1080x1920尺寸， 输入模型尺寸 [360, 640] 的配置） 
+augment2d: 
+  resize:                           # 后边会在train 和 val pileline 中索引：随机缩放（模拟不同距离目标）
+    - [0.32, 0.35]                  # train
+    - [0.333, 0.333]                # val                    
+  rotate: [-5.4, 5.4]               # 旋转角度：±5.4度（模拟相机轻微旋转）
+  gridmask:                         # 网格掩码增强（当前关闭）
+    prob: 0.5                       # 概率为0，实际不生效（可调为0.5-0.8启用）
+    fixed_prob: true                # 固定概率模式
+
+
+# ==================== 9. 优化器配置 ====================
+# # ------------------- 官方配置 ------------------- 
+# optimizer:
+#   type: AdamW                           # 优化器类型（Adam with weight decay，Transformer常用）
+#   lr: 0.0002                            # 基础学习率（官方纯视觉：0.0002）
+#   weight_decay: 0.01                    # 权重衰减（L2正则化，防止过拟合）
+
+#   paramwise_cfg:
+#     custom_keys:
+#       absolute_pos_embed:               # 绝对位置编码
+#         decay_mult: 0                   # 权重衰减乘数0（不进行权重衰减）
+#       relative_position_bias_table:     # 相对位置偏置表
+#         decay_mult: 0                   # 权重衰减乘数0
+#       encoders.camera.backbone:         # 相机骨干网络
+#         lr_mult: 0.1                    # 学习率乘数0.1（骨干网络使用更低学习率）
+
+# # 梯度裁剪（防止梯度爆炸，稳定训练）
+# optimizer_config:
+#   grad_clip:                            # 梯度裁剪配置
+#     max_norm: 35                        # 最大梯度范数（官方：35）
+#     norm_type: 2                        # 范数类型（官方：2， L2范数）
+# # ------------------- ----- -------------------
+
+
+# -------------------  因带bevdepth 的纯视觉:发生梯度爆炸，    0511,先缩小学习率和梯度裁剪 -------------------
+optimizer:
+  type: AdamW
+  lr: 0.0002          # 从 0.0002 降低到 5e-5（或 1e-5） ==》 stage1用0.0001
+
+  weight_decay: 0.01
+
+  paramwise_cfg:
+    custom_keys:
+      absolute_pos_embed:
+        decay_mult: 0
+      relative_position_bias_table:
+        decay_mult: 0
+      encoders.camera.backbone:
+        lr_mult: 0.1
+
+optimizer_config:
+  grad_clip:
+    max_norm: 10                    # 从 35 降低到 10（如果还出现 nan，可继续降到 5）
+    norm_type: 2
+# ------------------- ----- -------------------
+
+# ------------------- xmy-配置1 ---------------
+# optimizer:
+#   type: AdamW                   # 优化器类型（Adam with weight decay，Transformer常用）
+#   lr: 0.0002                    # 基础学习率（修改为官方纯视觉的0.0002）
+#   weight_decay: 0.01            # 权重衰减（L2正则化，防止过拟合）
+#   # 参数分组配置（新增，官方纯视觉配置）
+#   paramwise_cfg:
+#     custom_keys:
+#       absolute_pos_embed:       # 绝对位置编码
+#         decay_mult: 0           # 权重衰减乘数0（不进行权重衰减）
+#       relative_position_bias_table:  # 相对位置偏置表
+#         decay_mult: 0           # 权重衰减乘数0
+#       encoders.camera.backbone: # 相机骨干网络
+#         lr_mult: 0.1            # 学习率乘数0.1（骨干网络使用更低学习率）
+
+# # 梯度裁剪（防止梯度爆炸，稳定训练）
+# optimizer_config:
+#   grad_clip:                    # 梯度裁剪配置
+#     max_norm: 8                 # 最大梯度范数（官方：35）； xmy 历史用过8（可能会导致过拟合）
+#     norm_type: 2                # 范数类型（官方：2， L2范数）
+# ------------------- ----- -------------------
+
+
+# ==================== 10. 学习率调度 ====================
+# ------------------- 官方配置 -------------------
+# [纯视觉 Lr是cyclic]
+## 学习率配置
+lr_config:                              # （官方纯视觉配置）
+  policy: cyclic                        # 循环学习率策略（官方纯视觉配置）
+  warmup: linear                        # 线性预热（避免初期学习率过大）
+  warmup_iters: 500                     # 预热迭代数（官方：500）
+  warmup_ratio: 0.33333333              # 预热起始比例（官方：0.33333333 ）
+  target_ratio: 5.0                     # 目标比例（官方：5.0）
+  # cyclic参数：决定每个circle周期的epoch数目
+  # 单个circle周期长度 = max_epoch / cyclic_times = 16 / 1 = 16个epoch是一个circle周期
+  cyclic_times: 1                       # 循环次数（官方：1）
+  # 每个circle周期的上升阶段 = circle周期长度 × step_ratio_up = 16 × 0.4 = 6.4个Epoch
+  # 每个circle周期的下降阶段 = circle周期长度 - 上升阶段 = 16 - 6.4 = 9.6个Epoch
+  step_ratio_up: 0.4                    # 上升阶段比例（官方：0.4） 
+
+# 动量配置（当前为循环动量策略，可优化训练过程）
+momentum_config:                        # （官方纯视觉配置）
+  policy: cyclic                        # 循环动量策略
+  cyclic_times: 1                       # 循环次数
+  step_ratio_up: 0.4                    # 上升阶段比例
+# -------------------------------------------------
+# ------------------- xmy-配置1 -------------------
+## 学习率配置
+# lr_config:
+#   policy: CosineAnnealing             # 余弦退火策略（平滑降低学习率）
+#   warmup: linear                      # 预热：线性预热（避免初期学习率过大）
+#   warmup_iters: 1000                  # 预热：迭代数（1000个iteration后达到初始lr），一般1个epoch内就能完成预热的学习率抬升
+#   warmup_ratio: 0.001                 # 预热：起始比例（起始lr=0.0002×0.1=0.00002）
+#   min_lr_ratio: 0.0005                # 最小学习率比例（最终lr=0.0002×0.001=2e-7）
+
+## 动量配置（当前为循环动量策略，可优化训练过程）
+# momentum_config:                      # （官方纯视觉配置）
+#   policy: cyclic                      # 循环动量策略
+#   cyclic_times: 1                     # 循环次数
+#   step_ratio_up: 0.4                  # 上升阶段比例
+# -------------------------------------------------
+
+
+# ==================== 11. 日志配置 ====================
+log_config:
+  hooks:
+    - type: TextLoggerHook              # 文本日志钩子（输出到控制台和日志文件）
+    - type: TensorboardLoggerHook       # TensorBoard日志钩子（可视化训练过程）
+  interval: 50                           # 日志间隔（每50个iteration打印一次日志）
+
+# ==================== 12. 数据加载配置 ====================
+data:
+  # 批次设置（受GPU内存限制）
+  samples_per_gpu: 3                    # 单GPU batch size（纯视觉内存消耗较小，可保持2）               【占用显存】
+  workers_per_gpu: 6                    # 单GPU数据加载线程数（可增加以加速数据加载）进程过多会消耗CPU      【不占用显存， 只影响 CPU 内存和数据预取】
+  prefetch_factor: 4                    # 添加预取，  尽量减少推理前，拿数据的等待时间                    【不占用显存， 只影响 CPU 内存和数据预取】
+  
+  # ---------- 训练集配置 ---------- 注意：训练时 数据类型 为封装过的 CBGSDataset， 验证和评测时是最原始的 NuScenesDataset
+  train:
+    type: CBGSDataset                   # 训练时是 CBGSDataset。 样本级别的类别平衡采样数据集（Class Balanced Group Sampling）
+    dataset:
+      type: ${dataset_type}             # 数据集类型：NuScenesDataset
+      dataset_root: ${dataset_root}     # 数据集rott目录：data/nuscenes/
+      ann_file: ${train_ann_file}       # 训练集标注文件：data/nuscenes/nuscenes_infos_train.pkl
+      pipeline: ${train_pipeline}       # 训练流水线（引用下面定义的数据增强流水线）
+      object_classes: ${object_classes} # det检测类别配置
+      map_classes: ${map_classes}       # seg分割类别定义
+      modality: ${input_modality}       # 传感器配置
+      test_mode: false                  # 测试、训练模式配置
+      use_valid_flag: true              # valid过滤标记（过滤无效标注）
+      box_type_3d: LiDAR                # 3D框坐标系（LiDAR坐标系，与点云对齐）
+      with_velocity: true               # 是否有速度配置（官网未显式配置，代码层默认是带速度）
+      
+
+  # ---------- 验证集配置 ----------
+  val:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    ann_file: ${val_ann_file}           # 验证集标注文件
+    pipeline: ${test_pipeline}          # val_pipeline = test_pipeline
+    object_classes: ${object_classes}   # det class
+    map_classes: ${map_classes}         # seg class
+    modality: ${input_modality}         # 多元传感器输入配置
+    test_mode: false                    # [xmy][⚠️]:测试模式(true) 和 验证模式(false) ，大概率决定了是否加载 Gt
+    box_type_3d: LiDAR
+    with_velocity: true 
+    
+  # ---------- 测试集配置 ----------
+  test:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    ann_file: ${test_ann_file}          # 测试集，标注文件（当前使用验证集）
+    pipeline: ${test_pipeline}          # 测试流水线
+    object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    test_mode: true                     # [xmy][⚠️]: 测试模式(true) 和 验证模式(false) 
+    box_type_3d: LiDAR
+    with_velocity: true                 # 只能是true，官方版本没有 不带vel的版本
+
+
+# ==================== 13. 评估配置 ====================
+evaluation:
+  interval: 1                           # 评估间隔（修改为每1个epoch在验证集上评估一次）
+  pipeline: ${test_pipeline}            # 评估流水线（使用 test_pipeline）
+
+# ==================== 14. 数据流水线定义 ====================
+# 训练流水线（包含所有增强）- 数据预处理完整流程，严格复制官方(1)结构
+train_pipeline:
+  # 1. 数据加载阶段（完整复制官方(1)结构）
+  - type: LoadMultiViewImageFromFiles   # 加载多视角相机图像（前、后、左、右等）
+    to_float32: true                    # 转换为float32格式（模型输入要求）
+  
+  # [xmy][⚠️]: 
+  # 纯视觉：删除 LoadPointsFromFile
+  # 纯视觉+深度监督：需要打开
+  # # 注意：官方(1)流水线包含点云和雷达加载步骤，但模型不会使用这些数据（因为encoders.lidar: null）
+  # # 这是为了保持接口兼容，请勿删除或添加dummy等参数
+  - type: LoadPointsFromFile            # 加载单帧LiDAR点云
+    load_dim: ${load_dim}               # 加载维度
+    use_dim: ${use_dim}                 # 使用维度
+    reduce_beams: ${reduce_beams}       # 线束数
+    coord_type: LIDAR                   # 坐标系类型（LiDAR坐标系）
+    load_augmented: null                # 不加载增强版本
+
+  # [xmy][⚠️]: 
+  # 纯视觉：删除 LoadPointsFromMultiSweeps
+  # 纯视觉+深度监督：需要打开 
+  - type: LoadPointsFromMultiSweeps     # 加载多帧LiDAR点云（时序融合）
+    load_dim: ${load_dim}
+    use_dim: ${use_dim}
+    reduce_beams: ${reduce_beams}
+    sweeps_num: 0                       # 历史帧数(官方：9)， 但tyjt是0
+    pad_empty_sweeps: true              # 用空帧填充不足的历史帧
+    remove_close: true                  # 移除近处点云（避免传感器自身遮挡）
+    load_augmented: null
+
+  #- type: xmy_PrintLidar2EgoType   # ①
+
+
+  # [xmy][⚠️]: 
+  # Radar雷达加载（官方(1)有但未使用，保留结构）
+  # - type: LoadRadarPointsMultiSweeps
+  # load_dim: 18
+  # sweeps_num: 6
+  # use_dim: [0, 1, 2, 5, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56]
+  # max_num: 2500
+  # compensate_velocity: true
+  # filtering: 'none'
+  # normalize: false
+  
+  - type: LoadAnnotations3D             # 加载3D标注（边界框和类别标签）
+    with_bbox_3d: true                  # 加载3D边界框（中心点、尺寸、朝向）
+    with_label_3d: true                 # 加载3DLabel标签
+    with_attr_label: false              # 不加载属性标签（如车辆颜色、状态等）
+  
+  ## [xmy][⚠️]: 纯视觉：应该删除 ObjectPaste, 只对Lidar点云有用； 官方版本有，但官方未实现2D image的纹理 copy
+  # # 样本unBalance：数据增强阶段（关键提升泛化能力）【但只对Lidar点云有用】
+  # - type: ObjectPaste                   # 目标粘贴增强（Copy-Paste）
+  #   stop_epoch: ${gt_paste_stop_epoch}  # 停止粘贴的epoch
+  #   db_sampler:
+  #     classes: ${object_classes}        # 允许采样的类别列表（与训练类别一致）
+  #     dataset_root: ${dataset_root}     # 数据集根目录，用于拼接数据库文件中的相对路径
+  #     info_path: ${dbinfo_path}         # 数据库索引文件路径（如 tyjt_dbinfos_train.pkl）
+  #     rate: 1.0                         # 每帧进行粘贴增强的概率（1.0 表示每帧都执行）
+  #     prepare:                          # 【滤波器】采样前的过滤配置
+  #       filter_by_difficulty: [-1]      # 按难度过滤（-1 表示接受所有难度）
+  #       filter_by_min_points:           # 按最小点数过滤，只有点数≥阈值的实例才会被采样；只有目标框内点云数量 ≥ 该阈值的实例，才会被数据库采样器视为有效，并用于粘贴增强
+  #         car: 10                       # (0227,从5提升到10)
+  #         # truck: 20                     # (0227)
+  #         bus: 20                       #（0227）
+  #         pedestrian: 5
+  #         motorcycle: 5
+  #         bicycle: 30                   # bicycle 点云集中在 >10，过滤掉低质量
+  #         # construction_vehicle: 15    #
+  #         # trailer: 10                 #（0227）
+  #         # traffic_cone: 15            #（0227）
+  #         # barrier: 40ndle3D         # 3D数据格式化（转换为tensor等格式）
+  #     sample_groups:                    # 【权重balance】类别采样权重，用于平衡不同类别的采样概率
+  #       car: 2                          # 常见类别采样权重较低
+  #       # truck: 4                      # 卡车样本较少，权重较高（0226,从2提升到5）
+  #       bus: 4                          # （0226,从2提升到5）
+  #       pedestrian: 3
+  #       motorcycle: 3                   # 摩托车样本少，权重高（0226,从2提升到5）
+  #       bicycle: 12                     # 自行车 （0226,从5提升到20）
+  #       # construction_vehicle: 5       # （0226,从1提升到5） 
+  #       # trailer: 4                    # （0226,从1提升到5）
+  #       # traffic_cone: 8               # （0226,从1提升到15） 
+  #       # barrier: 6                    # （0226,从1提升到15）     
+  #     points_loader:                    # 点云加载器（用于读取粘贴目标的点云）
+  #       type: LoadPointsFromFile        # 从文件加载点云
+  #       coord_type: LIDAR               # 坐标系类型（LIDAR）
+  #       load_dim: ${load_dim}           # 加载的点云维度fromat（如 5）
+  #       use_dim: ${use_dim}             # 实际使用的维度
+  #       reduce_beams: ${reduce_beams}   # 减少激光线束数（用于兼容不同传感器）
+
+  # # Exp3-0 原版基线（nusc尺寸 900 x1600尺寸）
+  # - type: ImageAug3D                    # 相机图像3D增强
+  #   is_train: true                      # 训练模式
+  #   final_dim: ${image_size}            # 最终图像尺寸
+  #   resize_lim: [0.38, 0.55]            # 缩放范围
+  #   rot_lim: [-5.4, 5.4]                # 旋转范围
+  #   rand_flip: true                     # 随机水平翻转
+  #   bot_pct_lim: [0.0, 0.0]             # 底部裁剪比例（0表示不裁剪）
+  
+  # # Exp3-1 匹配tyjt尺寸(1080,1920)， resize 基线为0.4
+  # - type: ImageAug3D                    # 相机图像3D增强
+  #   final_dim: ${image_size}            # 最终图像尺寸
+  #   resize_lim: ${augment2d.resize[0]}  # 训练阶段的 2D缩放范围
+  #   bot_pct_lim: [0.0, 0.0]             # 底部裁剪比例（0表示不裁剪）
+  #   rot_lim: [-5.4, 5.4]                # 旋转范围
+  #   rand_flip: true                     # 随机水平翻转
+  #   is_train: true                      # 训练模式
+
+  # Exp3-2 匹配tyjt尺寸(1080,1920)， resize 基线为0.4
+  - type: ImageAug3D                      # 相机图像3D增强
+    final_dim: ${image_size}              # 最终图像尺寸
+    resize_lim: ${augment2d.resize[0]}    # 训练阶段的 2D缩放范围
+    bot_pct_lim: [0.0, 0.0]               # 底部裁剪比例（0表示不裁剪）
+    rot_lim: [0.0, 0.0]                   # 旋转范围
+    rand_flip: false                      # 随机水平翻转
+    is_train: true                        # 训练模式
+
+  ## [xmy][⚠️]: 纯视觉，image纹理可能未操作
+  # # --- 官方配置 
+  # - type: GlobalRotScaleTrans           # 全局3D变换（同时影响点云和标注）
+  #   is_train: true
+  #   resize_lim: [0.95, 1.05]            # 3D缩放范围（使用augment3d.scale的值）
+  #   rot_lim: [-0.3925, 0.3925]          # 3D旋转范围（使用augment3d.rotate的值）
+  #   trans_lim: 0                        # 3D平移范围（使用augment3d.translate的值）
+  # # --- xmy-修改，不做transform，防止lidar变但Cam不变的矛盾问题 
+  - type: GlobalRotScaleTrans           # 全局3D变换（同时影响点云和标注）
+    is_train: true
+    resize_lim: [1.0, 1.0]              # 无缩放
+    rot_lim: [0.0, 0.0]                 # 无旋转
+    trans_lim: 0.0                      # 无平移
+
+  ## [xmy][⚠️]: 纯视觉，image纹理可能未操作
+  # - type: RandomFlip3D                  # 3D随机翻转（同时翻转点云和标注）
+
+  - type: PointsRangeFilter               # 点云范围过滤（移除范围外的点云）
+    point_cloud_range: ${point_cloud_range}
+  
+  - type: ObjectRangeFilter               # 目标范围过滤（移除范围外的标注）
+    point_cloud_range: ${point_cloud_range}
+  
+  - type: ObjectNameFilter                # 类别过滤（只保留定义的类别）
+    classes: ${object_classes}
+
+  
+  # 数据归一化（标准化输入）
+  - type: ImageNormalize                # 图像归一化（ImageNet标准）
+    mean: [0.485, 0.456, 0.406]         # ImageNet均值（R,G,B通道）
+    std: [0.229, 0.224, 0.225]          # ImageNet标准差（R,G,B通道）
+
+  # 掩码操作
+  - type: GridMask                      # 网格掩码增强（模拟遮挡）
+    fixed_prob: true
+    prob: 0.0                           # 当前关闭（可设为0.5-0.8启用）
+    mode: 1                             # 网格模式
+    ratio: 0.5                          # 网格比例
+    rotate: 1                           # 随机旋转
+    max_epoch: ${max_epochs}            # 最大epoch数
+    offset: false                       # 不偏移
+    use_h: true                         # 使用高度
+    use_w: true                         # 使用宽度
+  
+  ## [xmy][⚠️]: 纯视觉，image纹理可能未操作
+  # - type: PointShuffle
+
+  #- type: xmy_PrintLidar2EgoType # 5
+
+  # 数据格式化阶段（转换为模型输入格式）
+  - type: DefaultFormatBundle3D         # 3D数据格式化（转换为tensor等格式）
+    classes: ${object_classes}
+
+  ## (官方配置)
+  # - type: Collect3D                     # 收集模型输入数据（整理为batch）
+  #   keys: [img, points, radar, gt_bboxes_3d, gt_labels_3d]  # 收集的键
+  #   meta_keys:                          # 元数据键（相机参数、变换矩阵等）
+  #     - camera_intrinsics               # 相机内参（焦距、主点等）
+  #     - camera2ego                      # 相机到自车坐标系变换
+  #     - lidar2ego                       # LiDAR到自车坐标系变换
+  #     - lidar2camera                    # LiDAR到相机坐标系变换
+  #     - lidar2image                     # LiDAR点到图像像素的映射
+  #     - camera2lidar                    # 相机到LiDAR坐标系变换
+  #     - img_aug_matrix                  # 图像增强变换矩阵
+  #     - lidar_aug_matrix                # LiDAR增强变换矩阵
+      
+  ## (xmy-本地适配: 删除 radar)
+  # - type: Collect3D                     # 收集模型输入数据（整理为batch）
+  #   keys: [img, points, gt_bboxes_3d, gt_labels_3d]  # 收集的键
+  #   meta_keys:                          # 元数据键（相机参数、变换矩阵等）
+  #     - camera_intrinsics               # 相机内参（焦距、主点等）
+  #     - camera2ego                      # 相机到自车坐标系变换
+  #     - lidar2ego                       # LiDAR到自车坐标系变换
+  #     - lidar2camera                    # LiDAR到相机坐标系变换
+  #     - lidar2image                     # LiDAR点到图像像素的映射
+  #     - camera2lidar                    # 相机到LiDAR坐标系变换
+  #     - img_aug_matrix                  # 图像增强变换矩阵
+  #     - lidar_aug_matrix                # LiDAR增强变换矩阵
+
+
+  # - type: DebugPrintImg  # xmy-debug模块
+
+  # - type: Collect3D
+  #   keys: 
+  #     - img
+  #     - points
+  #     - gt_bboxes_3d
+  #     - gt_labels_3d
+  #     - camera_intrinsics
+  #     - camera2ego
+  #     - camera2lidar
+  #     - lidar2ego
+  #     - lidar2camera
+  #     - lidar2image
+  #     - camera2lidar
+  #     - img_aug_matrix
+  #     - lidar_aug_matrix
+  #   # meta_keys:
+  #     # - timestamp
+  #     # - token
+  #     # - lidar_path
+  #     # - image_paths
+  #     # - sample_idx
+  #   meta_lis_keys: ['token', 'image_paths', 'sample_idx', 'timestamp']
+  
+  # # 纯视觉版本（TYJTDatasetV2 类，版本）
+  # - type: Collect3D
+  #   keys: 
+  #     - img
+  #     - points
+  #     - gt_bboxes_3d
+  #     - gt_labels_3d
+  #     - camera_intrinsics
+  #     - camera2ego
+  #     - camera2lidar
+  #     - lidar2ego
+  #     - lidar2camera
+  #     - lidar2image
+  #     - camera2lidar
+  #     - img_aug_matrix
+  #     - lidar_aug_matrix
+  #     - points  # 可视化需要
+  #   # meta_keys:
+  #     # - timestamp
+  #     # - token
+  #     # - lidar_path
+  #     # - image_paths
+  #     # - sample_idx
+  #   # meta_lis_keys: ['token', 'image_paths', 'sample_idx', 'timestamp', 'box_type_3d', 'lidar_path', 'filename']  # lidar_path、filename，可视化工具需要
+  #   meta_lis_keys: 
+  #     - 'token'
+  #     - 'image_paths'
+  #     - 'sample_idx'
+  #     - 'timestamp'
+  #     - 'box_type_3d'
+  #     - 'lidar_path'  # 可视化需要
+  #     - 'filename'  # 可视化需要
+  #     - 'lidar2image'  # 可视化需要
+  #     - 'camera_intrinsics'  # 可视化需要
+  #     - 'camera2ego'  # 可视化需要
+  #     - 'lidar2camera'  # 可视化需要
+  #     - 'camera2lidar'  # 可视化需要
+  #     - 'img_aug_matrix'  # 可视化需要
+  #     - 'lidar_aug_matrix'  # 可视化需要
+
+
+  # # # 纯视觉版本（TYJTDatasetV2 类，版本）0506-修复 lidar2ego 需要是tensor
+  # - type: Collect3D
+  #   keys: 
+  #     - img
+  #     - points
+  #     - gt_bboxes_3d
+  #     - gt_labels_3d
+  #     - depths  # BEVDepth需要
+  #   meta_keys:
+  #     - camera_intrinsics
+  #     - camera2ego
+  #     - lidar2ego
+  #     - lidar2camera
+  #     - lidar2image
+  #     - camera2lidar
+  #     - img_aug_matrix
+  #     - lidar_aug_matrix
+  #   # meta_lis_keys: ['token', 'image_paths', 'sample_idx', 'timestamp', 'box_type_3d', 'lidar_path', 'filename']  # lidar_path、filename，可视化工具需要
+  #   meta_lis_keys: 
+  #     - 'token'
+  #     - 'image_paths'
+  #     - 'sample_idx'
+  #     - 'timestamp'
+  #     - 'box_type_3d'
+  #     - 'lidar_path'  # 可视化需要
+  #     - 'filename'  # 可视化需要
+
+  # 第一次 Collect3D：转换矩阵字段为 DataContainer
+  - type: Collect3D
+    keys:
+      - img
+      - points
+      - gt_bboxes_3d
+      - gt_labels_3d
+    meta_keys:
+      - camera_intrinsics
+      - camera2ego
+      - lidar2ego
+      - lidar2camera
+      - lidar2image
+      - camera2lidar
+      - img_aug_matrix
+      - lidar_aug_matrix
+    # meta_lis_keys: []   # 不收集元信息，避免干扰
+    meta_lis_keys:
+      - token
+      - image_paths
+      - sample_idx
+      - timestamp
+      - box_type_3d
+      - lidar_path
+      - filename
+
+    
+  # [xmy][⚠️]: 
+  # 纯视觉+深度监督：需要打开 
+  - type: GTDepth                       # 加载真实深度信息（用于深度监督）
+    keyframe_only: true                 # 仅关键帧（减少计算量）
+
+  - type: xmyMergeMetasToTop
+
+  # 第二次 Collect3D：收集最终所有字段（直接复制，不转换）
+  - type: Collect3D
+    keys:
+      - img
+      - points
+      - gt_bboxes_3d
+      - gt_labels_3d
+      - depths                     # 由 GTDepth 生成
+      - camera_intrinsics          # 这些已经是 DataContainer，直接复制
+      - camera2ego
+      - lidar2ego
+      - lidar2camera
+      - lidar2image
+      - camera2lidar
+      - img_aug_matrix
+      - lidar_aug_matrix
+    meta_keys: []                  # 关键：避免二次转换报错
+    meta_lis_keys:
+      - token
+      - image_paths
+      - sample_idx
+      - timestamp
+      - box_type_3d
+      - lidar_path
+      - filename
+
+
+# 测试流水线（无增强）- 严格复制官方(1)结构，is_train=false
+test_pipeline:
+  # 数据加载（与训练相同）
+  - type: LoadMultiViewImageFromFiles
+    to_float32: true
+  
+  - type: LoadPointsFromFile  # 可视化需要
+    coord_type: LIDAR
+    load_dim: ${load_dim}
+    use_dim: ${use_dim}
+    reduce_beams: ${reduce_beams}
+    load_augmented: null
+  
+  - type: LoadPointsFromMultiSweeps
+    load_dim: ${load_dim}
+    use_dim: ${use_dim}
+    sweeps_num: 0
+    pad_empty_sweeps: true
+    remove_close: true
+    reduce_beams: ${reduce_beams}
+    load_augmented: null
+
+  # - type: LoadRadarPointsMultiSweeps  #（tyjt配置）
+    # load_dim: 18
+    # sweeps_num: 6
+    # use_dim: [0, 1, 2, 5, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56]
+    # max_num: 2500
+    # compensate_velocity: true
+    # filtering: 'none'
+    # normalize: false
+  
+  - type: LoadAnnotations3D
+    with_attr_label: false
+    with_bbox_3d: true
+    with_label_3d: true
+
+  # # # Exp3-0 nusc尺寸(900,1600) 验证模式预处理（无增强）- is_train=false关闭所有随机性
+  # - type: ImageAug3D
+  #   is_train: false
+  #   final_dim: ${image_size}
+  #   resize_lim: [0.48, 0.48]            # 固定缩放0.48
+  #   rot_lim: [0.0, 0.0]                 # 无旋转
+  #   rand_flip: false                    # 无翻转
+  #   bot_pct_lim: [0.0, 0.0]
+
+  # Exp3-1 匹配tyjt尺寸(1080,1920)， resize 基线为0.4
+  - type: ImageAug3D
+    is_train: false
+    final_dim: ${image_size}
+    resize_lim:  ${augment2d.resize[1]} # 固定缩放0.48
+    rot_lim: [0.0, 0.0]                 # 无旋转
+    rand_flip: false                    # 无翻转
+    bot_pct_lim: [0.0, 0.0]
+
+  ## [xmy][⚠️]: 纯视觉，image纹理可能未操作
+  - type: GlobalRotScaleTrans
+    is_train: false
+    resize_lim: [1.0, 1.0]              # 无缩放
+    rot_lim: [0.0, 0.0]                 # 无旋转
+    trans_lim: 0.0                      # 无平移
+
+  # [xmy][🔴]: test 阶段: 无。 - type: RandomFlip3D (因为可能没有Gt,也不需要增强)
+  # [xmy][⚠️]: 纯视觉,删除; 纯视觉 + 深度监督需要保留)
+  - type: PointsRangeFilter             # 点云范围过滤（移除范围外的点云）
+    point_cloud_range: ${point_cloud_range}
+  # [xmy][🔴]: test 阶段：无。 - type: ObjectRangeFilter (因为可能没有Gt)
+  # [xmy][🔴]: test 阶段：无。 - type: ObjectNameFilter  (因为可能没有Gt)
+  
+  - type: ImageNormalize
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+  # [xmy][🔴]: test 阶段: 无。 - type: PointShuffle （因为可能没有Gt，且 纯视觉image纹理可能未操作）
+  
+  - type: DefaultFormatBundle3D
+    classes: ${object_classes}
+
+  
+  # 纯视觉版本（TYJTDatasetV2 类，版本）
+  - type: Collect3D
+    keys: 
+      - img
+      - points
+      - gt_bboxes_3d
+      - gt_labels_3d
+    meta_keys:
+      - camera_intrinsics
+      - camera2ego
+      - camera2lidar
+      - lidar2ego
+      - lidar2camera
+      - lidar2image
+      - camera2lidar
+      - img_aug_matrix
+      - lidar_aug_matrix
+    meta_lis_keys: 
+      - 'token'
+      - 'image_paths'
+      - 'sample_idx'
+      - 'timestamp'
+      - 'box_type_3d'
+      - 'lidar_path'  # 可视化需要
+      - 'filename'  # 可视化需要
+
+  # - type: GTDepth                  # 深度监督。评测阶段不需要
+  #   keyframe_only: true
+
+# 验证流水线（与验证相同）
+# val_pipeline: ${test_pipeline}
+
+# ==================== 15. 模型架构配置 ====================
+# 纯视觉配置: configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/default.yaml
+model:
+  type: BEVFusion                      # 模型类型：BEVFusion多模态融合架构
+  
+  # ---------- 编码器 ----------
+  encoders:
+    lidar: null                        # Lidar编码器：纯视觉设为null）   
+    camera:                            # Cam编码器： 视图变换（图像->BEV）-Lift-Splat-Shoot方法，使用LSSTransform
+      # ---------- 纯视觉：LSSTransform ----------
+      # vtransform:
+      #   type: LSSTransform              # 修改：使用LSSTransform（官方纯视觉）
+      #   image_size: ${image_size}       # 输入图像尺寸
+      #   xbound: ${xbound}               # BEV X轴范围（引用新增的xbound配置）
+      #   ybound: ${ybound}               # BEV Y轴范围
+      #   zbound: ${zbound}               # BEV Z轴范围
+      #   dbound: ${dbound}               # 深度范围
+      #   in_channels: 256                # 输入通道（FPN输出）
+      #   out_channels: 80                # 输出通道（BEV特征）
+      #   feature_size:  ${[image_size[0] // 8, image_size[1] // 8]}   # [32, 88]  # 特征图尺寸
+      #   downsample: ${downsample}       # 下采样倍数（输出BEV分辨率）
+
+      # # ---------- 纯视觉 + 深度监督BEVDepth ----------
+      # # ---------- 纯视觉 + 深度监督BEVDepth：官方实现版本：AwareBEVDepth ----------
+      # vtransform:
+      #   type: AwareBEVDepth              # 修改：使用LSSTransform（官方纯视觉）
+      #   image_size: ${image_size}       # 输入图像尺寸
+      #   xbound: ${xbound}               # BEV X轴范围（引用新增的xbound配置）
+      #   ybound: ${ybound}               # BEV Y轴范围
+      #   zbound: ${zbound}               # BEV Z轴范围
+      #   dbound: ${dbound}               # 深度范围
+      #   in_channels: 256                # 输入通道（FPN输出）
+      #   out_channels: 80                # 输出通道（BEV特征）
+      #   feature_size:  ${[image_size[0] // 8, image_size[1] // 8]}   # [32, 88]  # 特征图尺寸
+      #   downsample: ${downsample}       # 下采样倍数（输出BEV分辨率）    ====> downsample：控制 LSS 视图变换后 Cam‑BEV 特征图的空间下采样倍数。在融合模型中，该参数用于使 Cam‑BEV 的尺寸与 LiDAR‑BEV 输出尺寸对齐（例如都变为 128×128 或 90×90 等）。
+      #   use_points: 'lidar'             # [xmy][⚠️] 
+      #   # bevdepth_downsample的推导过程 
+      #   # image_size = (H, W)
+      #   # 原始深度真值（depths）:（由 GTDepth 生成）尺寸 [B, N, image_size[0], image_size[1]]。  （由 GTDepth 生成）
+      #   # 预测深度概率图（depth_pred）：（由 AwareBEVDepth.depthnet 切分生成） 尺寸 [B, N, D, image_size[0] // 8, image_size[1] // 8]
+      #   # Gt深度真值（gt_depths）：（由 AwareBEVDepth.get_downsampled_gt_depth生成）下采样后深度真值（gt_depths）：尺寸 [B, N, image_size[0] // bevdepth_downsample, image_size[1] // bevdepth_downsample]。
+      #   # 一致性要求：depth_pred 和 gt_depths 尺寸一致
+      #   # bevdepth_downsample = 8
+      #   bevdepth_downsample: 8          # [xmy][⚠️]  ====> bevdepth_downsample：控制深度真值（gt_depths）的下采样倍数，使得下采样后的 GT 深度图的空间尺寸与深度概率特征图（depth）的空间尺寸一致
+      #   bevdepth_refine: true           # [xmy][⚠️] 
+      #   depth_loss_factor: 0.1          # [xmy][⚠️]
+      # # --------------------------------------------------
+
+      # # ---------- xmy实现简化版本: xmyAwareBEVDepthLSSLiteV1 ----------
+      # vtransform:
+      #   type: xmyAwareBEVDepthLSSLiteV1 # 修改：使用LSSTransform（官方纯视觉）
+      #   image_size: ${image_size}       # 输入图像尺寸
+      #   xbound: ${xbound}               # BEV X轴范围（引用新增的xbound配置）
+      #   ybound: ${ybound}               # BEV Y轴范围
+      #   zbound: ${zbound}               # BEV Z轴范围
+      #   dbound: ${dbound}               # 深度范围
+      #   in_channels: 256                # 输入通道（FPN输出）
+      #   out_channels: 80                # 输出通道（BEV特征）
+      #   feature_size:  ${[image_size[0] // 8, image_size[1] // 8]}   # [32, 88]  # 特征图尺寸
+      #   downsample: ${downsample}       # 下采样倍数（输出BEV分辨率）    ====> downsample：控制 LSS 视图变换后 Cam‑BEV 特征图的空间下采样倍数。在融合模型中，该参数用于使 Cam‑BEV 的尺寸与 LiDAR‑BEV 输出尺寸对齐（例如都变为 128×128 或 90×90 等）。
+      #   use_points: 'lidar'             # [xmy][⚠️] 
+      #   # bevdepth_downsample的推导过程 
+      #   # image_size = (H, W)
+      #   # 原始深度真值（depths）:（由 GTDepth 生成）尺寸 [B, N, image_size[0], image_size[1]]。  （由 GTDepth 生成）
+      #   # 预测深度概率图（depth_pred）：（由 AwareBEVDepth.depthnet 切分生成） 尺寸 [B, N, D, image_size[0] // 8, image_size[1] // 8]
+      #   # Gt深度真值（gt_depths）：（由 AwareBEVDepth.get_downsampled_gt_depth生成）下采样后深度真值（gt_depths）：尺寸 [B, N, image_size[0] // bevdepth_downsample, image_size[1] // bevdepth_downsample]。
+      #   # 一致性要求：depth_pred 和 gt_depths 尺寸一致
+      #   # bevdepth_downsample = 8
+      #   bevdepth_downsample: 8          # [xmy][⚠️]  ====> bevdepth_downsample：控制深度真值（gt_depths）的下采样倍数，使得下采样后的 GT 深度图的空间尺寸与深度概率特征图（depth）的空间尺寸一致
+      #   depth_loss_factor: 0.2          # [xmy][⚠️] 
+      # # --------------------------------------------------
+
+     # --------------------------------------------------
+      # ---------- 纯视觉 + 深度监督BEVDepth ----------
+      vtransform:
+        type: xmyAwareBEVDepthNormalized              # 修改：使用LSSTransform（官方纯视觉）
+        image_size: ${image_size}       # 输入图像尺寸
+        xbound: ${xbound}               # BEV X轴范围（引用新增的xbound配置）
+        ybound: ${ybound}               # BEV Y轴范围
+        zbound: ${zbound}               # BEV Z轴范围
+        dbound: ${dbound}               # 深度范围
+        in_channels: 256                # 输入通道（FPN输出）
+        out_channels: 80                # 输出通道（BEV特征）
+        feature_size:  ${[image_size[0] // 8, image_size[1] // 8]}   # [32, 88]  # 特征图尺寸
+        downsample: ${downsample}       # 下采样倍数（输出BEV分辨率）    ====> downsample：控制 LSS 视图变换后 Cam‑BEV 特征图的空间下采样倍数。在融合模型中，该参数用于使 Cam‑BEV 的尺寸与 LiDAR‑BEV 输出尺寸对齐（例如都变为 128×128 或 90×90 等）。
+        use_points: 'lidar'             # [xmy][⚠️] 
+        # bevdepth_downsample的推导过程 
+        # image_size = (H, W)
+        # 原始深度真值（depths）:（由 GTDepth 生成）尺寸 [B, N, image_size[0], image_size[1]]。  （由 GTDepth 生成）
+        # 预测深度概率图（depth_pred）：（由 AwareBEVDepth.depthnet 切分生成） 尺寸 [B, N, D, image_size[0] // 8, image_size[1] // 8]
+        # Gt深度真值（gt_depths）：（由 AwareBEVDepth.get_downsampled_gt_depth生成）下采样后深度真值（gt_depths）：尺寸 [B, N, image_size[0] // bevdepth_downsample, image_size[1] // bevdepth_downsample]。
+        # 一致性要求：depth_pred 和 gt_depths 尺寸一致
+        # bevdepth_downsample = 8
+        bevdepth_downsample: 8          # [xmy][⚠️]  ====> bevdepth_downsample：控制深度真值（gt_depths）的下采样倍数，使得下采样后的 GT 深度图的空间尺寸与深度概率特征图（depth）的空间尺寸一致
+        bevdepth_refine: true           # [xmy][⚠️] 
+        depth_loss_factor: 0.5          # [xmy][⚠️] 
+      # --------------------------------------------------
+
+
+
+      # Swin Transformer骨干（视觉Transformer，提取多尺度图像特征）
+      backbone:
+        type: SwinTransformer
+        embed_dims: 96                  # 嵌入维度
+        depths: [2, 2, 6, 2]            # 各阶段(共4个阶段)深度（层数）：→ 决定每个 Stage 的 Block 重复数量
+        # strides: [4, 2, 2, 2]         # 各阶段(共4个阶段)步长 → 决定下采样倍数：4倍 → 8倍 → 16倍 → 32倍。
+        num_heads: [3, 6, 12, 24]       # 各阶段注意力头数
+        window_size: 7                  # 窗口大小（局部注意力范围）
+        mlp_ratio: 4                    # MLP扩展比例
+        qkv_bias: true                  # QKV线性层使用偏置
+        qk_scale: null                  # 使用默认的qk缩放
+        drop_rate: 0.0                  # 随机丢弃率（防止过拟合）
+        attn_drop_rate: 0.0             # 注意力丢弃率
+        drop_path_rate: 0.2             # 随机深度丢弃率（Stochastic Depth）
+        patch_norm: true                # 使用patch归一化
+        out_indices: [1, 2, 3]          # 输出特征图索引（多尺度特征）
+        with_cp: false                  # 不使用checkpointing（节省内存但慢）
+        convert_weights: true           # 转换预训练权重（ImageNet预训练）
+
+        # 初始化配置：使用nuImages预训练，必须指定
+        # init_cfg: null
+        init_cfg: 
+          type: Pretrained
+          checkpoint: pretrained/swint-nuimages-pretrained.pth  # 注意：只初始化，model.encoders.camera.backbone.的权重，而且如果 load_from时，可能不重新赋值
+      
+      # FPN颈部（特征金字塔网络，融合多尺度特征）
+      neck:
+        type: GeneralizedLSSFPN
+        in_channels: [192, 384, 768]    # 输入通道（Swin输出特征）
+        out_channels: 256               # 输出通道
+        num_outs: 3                     # 输出特征图数量
+        start_level: 0                  # 起始层级
+        norm_cfg:                       # 归一化配置
+          type: BN2d                    # 2D Batch Normalization
+          requires_grad: true           # BN层可训练
+        act_cfg:                        # 激活函数配置
+          type: ReLU
+          inplace: true                 # 原地操作，节省内存
+        upsample_cfg:                   # 上采样配置
+          mode: bilinear                # 双线性插值
+          align_corners: false          # 不对齐角点（保持特征对齐）
+  
+  # ---------- 多模态融合 ----------（纯视觉设为null）
+  fuser: null                          # 修改：设为null（纯视觉关键修改，不需要融合器）
+  
+  # ---------- 解码器 ----------（使用官方纯视觉的GeneralizedResNet + LSSFPN）
+  decoder:
+    # GeneralizedResNet骨干（官方纯视觉配置）
+    backbone:
+      type: GeneralizedResNet
+      in_channels: 80                  # 输入通道（Camera BEV特征通道数）
+      blocks: [[2, 128, 2], [2, 256, 2], [2, 512, 1]]  # 块配置：[重复次数, 输出通道, 步长]
+    
+    # LSSFPN颈部（官方纯视觉配置）
+    neck:
+      type: LSSFPN
+      in_indices: [-1, 0]              # 输入索引：[-1表示最后一个块，0表示第一个块]
+      in_channels: [512, 128]          # 输入通道：[最后一个块的通道数, 第一个块的通道数]
+      out_channels: 256                # 输出通道
+      scale_factor: 2                  # 缩放因子
+  
+  # ---------- 检测头 ----------（使用CenterHead，官方纯视觉配置）
+  heads:
+    map: null                           # 无地图分割（专注3D检测任务）
+    
+    object:
+      # # # 配置(1) 官方 CenterHead 版本
+      # type: CenterHead                # 修改：使用CenterHead（官方纯视觉）
+      # in_channels: 256                  # 输入通道（解码器输出）
+      # # 配置(1) 官方 CenterHead 版本
+      # # 训练配置（结合官方(1)架构与(2)的tyjt范围参数）
+      # train_cfg:
+      #   point_cloud_range: ${point_cloud_range}  # 使用tyjt范围
+      #   grid_size: ${grid_size}        # 使用基于tyjt范围计算的尺寸
+      #   voxel_size: ${voxel_size_3d}   # 使用tyjt体素尺寸[0.075, 0.075, 0.2]
+      #   out_size_factor: 8             # 输出下采样倍数
+      #   dense_reg: 1                   # 密集回归标志
+      #   gaussian_overlap: 0.05         # 高斯重叠阈值         # 从0.1下调至0.05，热图更集中
+      #   max_objs: 500                  # 最大目标数
+      #   min_radius: 3                  # 最小半径（小目标处理）# 训练模式train_cfg的min_radius 的用途是 高斯半径 radius； mmdet3d/models/heads/bbox/centerpoint.py  get_targets_single()
+      #   官方 CenterHead 定义：     mmdet3d/models/heads/bbox/centerpoint.py
+      #   自定义 XmyCenterHeadPerCls定义： mmdet3d/models/heads/bbox/xmy_centerhead_percls.py
+      #   code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2]  # 各回归维度的权重，不是分类别。  [dx, dy, dz, dl, dw, dh, yaw_sin, yaw_cos, Vx, Vy]  # 10个回归维度
+      
+      # # 测试配置（结合官方(1)架构与(2)的tyjt范围参数）
+      # test_cfg:
+      #   post_center_limit_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]  # 缩小检测范围（匹配point_cloud_range）
+      #   max_per_img: 200                # 每张图像最大检测数
+      #   max_pool_nms: false             # 最大池化NMS
+      #   min_radius: [4, 12, 10, 1, 0.85, 0.175]  # 各任务最小半径
+      #   score_threshold: 0.3            # 分数阈值 从0.1上调至0.3（过滤低置信度框）
+      #   out_size_factor: 8              # 输出下采样倍数
+      #   voxel_size: ${voxel_size_2d}    # 注意：只取前两维，与train_cfg一致
+      #   nms_type: ['circle', 'rotate', 'rotate', 'circle', 'rotate', 'rotate']  # 各任务NMS类型
+      #   pre_max_size: 500              # 预NMS最大数量
+      #   post_max_size: 50              # 后NMS最大数量
+      #   nms_thr: 0.10                    # NMS阈值
+      #   nms_scale: [[1.0], [1.0, 1.0], [1.0, 1.0], [1.2], [1.0, 1.0], [2.5, 4.0]]  # 各任务NMS尺度 # task3的nms_scale从1.0→1.2，强化过滤
+
+
+
+
+      # # 配置(2) 自定义 XmyCenterHeadPerCls 版本
+      ###！！！！！（per_class_loss_weight 实际无用： 因为只对分类做了处理，但回归loss依旧在回传）
+      type: XmyCenterHeadPerCls         # 修改：使用CenterHead（官方纯视觉）==》XmyCenterHeadPerCls(支持： 不同类别阈值、不同类别nms)
+      in_channels: 256                  # 输入通道（解码器输出）
+      train_cfg:
+        point_cloud_range: ${point_cloud_range}  # 使用tyjt范围
+        per_class_loss_weight:
+          car: 1.0
+          truck: 1.0
+          construction_vehicle: 0.0   # 
+          bus: 1.0
+          trailer: 0.0
+          bicycle: 1.0
+          motorcycle: 1.0
+          barrier: 0.0
+          pedestrian: 1.0
+          traffic_cone: 0.0
+        grid_size: ${grid_size}        # 使用基于tyjt范围计算的尺寸
+        voxel_size: ${voxel_size_3d}   # 使用tyjt体素尺寸[0.075, 0.075, 0.2]
+        out_size_factor: 8             # 输出下采样倍数
+        dense_reg: 1                   # 密集回归标志
+        gaussian_overlap: 0.1          # 高斯重叠阈值         # 从0.1下调至0.05，热图更集中
+        max_objs: 500                  # 最大目标数
+        min_radius: 2                  # 训练模式train_cfg的min_radius 的用途是 高斯半径 radius； /mnt/bevfusion_mit_xmy/mmdet3d/models/heads/bbox/centerpoint.py  get_targets_single()
+        # 官方 CenterHead 定义：     mmdet3d/models/heads/bbox/centerpoint.py
+        # XmyCenterHeadPerCls定义： mmdet3d/models/heads/bbox/xmy_centerhead_percls.py
+        code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0]  # 各回归维度的权重，不是分类别。  [dx, dy, dz, dl, dw, dh, yaw_sin, yaw_cos, Vx, Vy]  # 10个回归维度
+      
+      # 测试配置（结合官方(1)架构与(2)的tyjt范围参数）
+      test_cfg:
+        post_center_limit_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]  # 缩小检测范围（匹配point_cloud_range）
+        max_per_img: 200                # 每张图像最大检测数
+        max_pool_nms: false             # 最大池化NMS
+        min_radius: [4, 12, 10, 1, 0.85, 0.175]  # 训练模式train_cfg的min_radius 的用途是，nms各任务最小半径 【注意：仅对 nms_type = circle 的 task有效 】
+        score_threshold: 0.3            # 【注意：仅对 nms_type = ‘rotate’ 的 task有效 】置信度：0.1to0.3.过滤低置信度框。  这是nms自己的二次置信度过滤，circle不支持，rotate支持
+        per_class_score_threshold:      # 【注意：仅对 nms_type = ‘rotate’ 的 task有效 】[xmy] XmyCenterHeadPerCls， 不同类别采用不同的 score分数阈值，修改score_threshold通用数值
+          car: 0.7
+          truck: 0.2
+          construction_vehicle: 0.3
+          bus: 0.2
+          trailer: 0.2
+          bicycle: 0.2
+          motorcycle: 0.3
+          barrier: 0.2
+          pedestrian: 0.3
+          traffic_cone: 0.2
+        out_size_factor: 8              # 输出下采样倍数
+        voxel_size: ${voxel_size_2d}    # 注意：只取前两维，与train_cfg一致
+        # 各任务NMS类型
+        nms_type: ['circle', 'rotate', 'rotate', 'circle', 'rotate', 'rotate']  # 官方: configs/nuscenes/det/centerhead/lssfpn/camera/default.yaml
+        # nms_type: ['rotate', 'rotate', 'rotate', 'rotate', 'rotate', 'rotate']  # 各任务NMS类型
+
+
+        pre_max_size: 500              # 预NMS最大数量
+        post_max_size: 50              # 后NMS最大数量
+
+        nms_thr: 0.2                    # NMS的 IOU 阈值  # 【注意：仅对 nms_type = ‘rotate’ 的 task有效 】
+        per_class_nms_thr:              # 针对【nms_type = rotate】 [xmy] 特定类型的 NMS 阈值 定制化；  
+          # car: 0.3                    # nms_type = circle，实际没什么作用
+          pedestrian: 0.2
+        nms_scale: [[1.0], [1.0, 1.0], [1.0, 1.0], [1.2], [1.0, 1.0], [2.5, 4.0]]  # 各任务NMS尺度 # task3的nms_scale从1.0→1.2，强化过滤
+
+
+
+
+      # # 任务分组（官方）configs/nuscenes/det/centerhead/default.yaml
+      # tasks:
+      #   - ['car']                            # 任务1：轿车单独一组
+      #   - ['truck', 'construction_vehicle']  # 任务2：卡车和工程车
+      #   - ['bus', 'trailer']                 # 任务3：公交车和拖车
+      #   - ['barrier']                        # 任务4：护栏单独一组
+      #   - ['motorcycle', 'bicycle']          # 任务5：摩托车和自行车   ===》tyjt 实际代表 三轮车(有人)、二轮车(有人)
+      #   - ['pedestrian', 'traffic_cone']     # 任务6：行人和交通锥
+
+      # # 只训练car
+      tasks:
+        - ['car']                            # 任务1：轿车单独一组
+        # - ['truck', 'bus']                   # 任务2：卡车 和 公交车
+
+      # # 任务分组（xmy-bicycle单独训练）
+      # tasks:
+        # - ['car']                       # 任务1：轿车单独一组
+        # - ['truck', 'construction_vehicle']  # 任务2：卡车和工程车
+        # - ['bus', 'trailer']            # 任务3：公交车和拖车
+        # - ['bicycle']                   # 任务4：二轮车（无人）
+        # - ['motorcycle', 'barrier']     # 任务5：二轮车（有人）和护栏
+        # - ['pedestrian', 'traffic_cone']  # 任务6：行人和交通锥
+
+      # 共享预测头
+      common_heads:
+        reg: [2, 2]                     # 中心点回归：2个输出，2层
+        height: [1, 2]                  # 高度回归：1个输出，2层
+        dim: [3, 2]                     # 尺寸回归：3个输出（w,l,h），2层
+        rot: [2, 2]                     # 旋转回归：2个输出（sin,cos），2层
+        vel: [2, 2]                     # 速度回归：2个输出（vx,vy），2层
+      
+      share_conv_channel: 64            # 共享卷积通道数
+      
+      # 边界框编码器
+      bbox_coder:
+        type: CenterPointBBoxCoder
+        pc_range: ${point_cloud_range}  # 点云范围
+        post_center_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]  # 后处理范围
+        max_num: 500                    # 最大检测数
+        score_threshold: 0.1            # 分数阈值
+        out_size_factor: 8              # 输出下采样倍数
+        voxel_size: ${voxel_size_2d}    # BEV网格大小
+        code_size: 9                    # 编码尺寸  CenterPointBBoxCoder 是9 
+      
+      # 分离头
+      separate_head:
+        type: SeparateHead
+        init_bias: -2.19                # 初始化偏置
+        final_kernel: 3                 # 最终卷积核大小
+
+      # 提升分类损失权重，让模型更关注“是否是bicycle”而非“框位置”
+      # 损失函数
+      loss_cls:
+        type: GaussianFocalLoss         # 高斯Focal Loss
+        reduction: 'mean'               # 归约方式
+        loss_weight: 1.0                #  (BEVDepth 和 BEVFusion 的官网，都是 1.0)
+      
+      loss_bbox:
+        type: L1Loss                    # L1损失
+        reduction: 'mean'               # 归约方式
+        loss_weight: 0.25              # 损失权重
+      
+      norm_bbox: true                   # 归一化边界框
+
+# ==================== 16. 混合精度训练 ====================
+# # ------------------ 官网配置 ------------------
+# fp16:
+#   loss_scale:
+#     growth_interval: 2000   
+# ---------------------------------------------
+
+# # # 静态模式
+fp16:
+  loss_scale: 512.0
+
+# 动态模式，初值可能会很大
+# fp16:
+#   loss_scale: dynamic                    # 动态 loss scale
+
+# # 动态模式，老版本pytorch可能有支持问题
+# fp16:
+#   loss_scale:
+#     init_scale: 512.0  
+#     growth_interval: 2000
+
+
+
+# ==================== 17. 训练命令参考 ====================
+# 使用此配置进行微调训练的命令：
+# torchpack dist-run -np 4 python tools/train.py \
+#     xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_1218_2d_CenterheadLSSfpn_demo7000_48epoch_NewFormat.yaml \
+#     --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth
+# 
+# 注意：配置文件已设置 load_from: pretrained/camera-only-det.pth，
+# 因此无需在命令行重复指定 --load_from

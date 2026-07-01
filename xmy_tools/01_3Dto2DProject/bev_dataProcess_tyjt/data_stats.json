@@ -1,0 +1,18 @@
+{
+    "total_matched_frames": 236,
+    "camera_count": {
+        "SC_1A_CamR": 236,
+        "SC_1B_CamR": 236,
+        "SC_1C_CamR": 236,
+        "SC_1D_CamR": 236
+    },
+    "label_classes": {
+        "unknown": 10598
+    },
+    "label_sizes": {},
+    "time_span": [
+        1753701446899737835,
+        1753701506399725437
+    ],
+    "frame_interval": 253191436.60425532
+}

@@ -6,6 +6,11 @@ from torch import nn
 
 from mmdet3d.ops import bev_pool
 
+Debug = False
+DebugWarning = False
+print(f">>>[xmy]🟢[mmdet3d/models/vtransforms/base.py] >>> Debug = {Debug}; DebugWarning = {DebugWarning}")
+
+
 __all__ = ["BaseTransform", "BaseDepthTransform"]
 
 def boolmask2idx(mask):
@@ -62,7 +67,7 @@ class BaseTransform(nn.Module):
 
         self.C = out_channels
         self.frustum = self.create_frustum()
-        self.D = self.frustum.shape[0]
+        self.D = self.frustum.shape[0]  # 当dbound: [1.0, 60.0, 0.5]时，D = (60.0 - 1.0) / 0.5 + 1 = 119
         self.fp16_enabled = False
 
     @force_fp32()
@@ -168,13 +173,27 @@ class BaseTransform(nn.Module):
             & (geom_feats[:, 2] >= 0)
             & (geom_feats[:, 2] < self.nx[2])
         )
+        if Debug: print(f">>>[xmy]🟢[mmdet3d/models/vtransforms/base.py] >>> [DEBUG] bev_pool: B={B}, N={N}, D={D}, H={H}, W={W}, C={C}")
+        if Debug: print(f">>>[xmy]🟢[mmdet3d/models/vtransforms/base.py] >>> [DEBUG] bev_pool: Nprime={Nprime}, kept sum={kept.sum().item() if isinstance(kept, torch.Tensor) else len(kept)}")
+
         x = x[kept]
         geom_feats = geom_feats[kept]
 
         x = bev_pool(x, geom_feats, B, self.nx[2], self.nx[0], self.nx[1])
+        if Debug: print(f">>>[xmy]🟢[mmdet3d/models/vtransforms/base.py] >>> [DEBUG] bev_pool output shape before cat: {x.shape}")
 
         # collapse Z
-        final = torch.cat(x.unbind(dim=2), 1)
+        # [B, C, D, H, W] ==> [B, C×D, H, W] 目的:将深度信息,合并到通道层上, 这样 conv2D就能处理3D信息了
+        final = torch.cat(x.unbind(dim=2), 1)  # 沿着第2维拆分,再沿着1维cancat
+        if Debug: print(f">>>[xmy]🟢[mmdet3d/models/vtransforms/base.py] >>> [DEBUG] final shape after cat: {final.shape}")
+        # if DebugWarning:
+        #     import os, threading
+        #     pid = os.getpid()
+        #     tid = threading.get_ident()
+        #     print(f">>>[xmy]🟢[base.py] >>> class BaseTransform:: bev_pool() >>> [PID {pid} TID {tid}]  >>> [NaN Check] bev_pool output: min={final.min():.4f}, max={final.max():.4f}, has_nan={torch.isnan(final).any()}")
+        #     if torch.isnan(final).any():
+        #         print(f">>>[xmy]🟢[base.py] >>> class BaseTransform:: bev_pool() >>> [PID {pid} TID {tid}]  >>>  [⚠️ Warning]NaN in bev_pool output")
+        #         print(f">>>[xmy]🟢[base.py] >>> class BaseTransform:: bev_pool() >>> [PID {pid} TID {tid}]  >>> [⚠️ Warning]final stats: min={final.min()}, max={final.max()}")
 
         return final
 
@@ -194,6 +213,8 @@ class BaseTransform(nn.Module):
         lidar_aug_matrix,
         **kwargs,
     ):
+        # if Debug:
+        #     print(f">>>[xmy]🟢 base.py >>> BaseTransform.forward 被调用！！！ ")
         rots = camera2ego[..., :3, :3]
         trans = camera2ego[..., :3, 3]
         intrins = camera_intrinsics[..., :3, :3]
@@ -222,6 +243,13 @@ class BaseTransform(nn.Module):
             'bda_mat': lidar_aug_matrix,
             'sensor2ego_mats': camera2ego, 
         }
+        if DebugWarning:
+            import os, threading
+            pid = os.getpid()
+            tid = threading.get_ident()
+            print(f">>>[xmy]🟢[base.py] >>> 【{pid}:{tid}】【①-3】[LSS-Input] 几何变换矩阵 geom: min={geom.min().item():.4f}, max={geom.max().item():.4f}, "
+                f"has_nan={torch.isnan(geom).any()}, has_inf={torch.isinf(geom).any()}")
+            
         x = self.get_cam_feats(img, mats_dict)
 
         use_depth = False
@@ -256,6 +284,8 @@ class BaseDepthTransform(BaseTransform):
         metas,
         **kwargs,
     ):
+        if Debug:
+            print(f">>>[xmy]🟢 base.py >>> BaseDepthTransform.forward 被调用！！！ ")
         rots = sensor2ego[..., :3, :3]
         trans = sensor2ego[..., :3, 3]
         intrins = cam_intrinsic[..., :3, :3]
@@ -281,10 +311,19 @@ class BaseDepthTransform(BaseTransform):
             depth_in_channels += points[0].shape[1]
 
         depth = torch.zeros(batch_size, img.shape[1], depth_in_channels, *self.image_size, device=points[0].device)
+        # print(f">>>[xmy]🟢🟢🟢🟢 base.py >>> BaseDepthTransform.forward 被调用！！！ ")
 
+        # if not self.training:   # 仅在验证/测试时打印
+        #     print(f">>>[xmy]🟢 base.py >>> [Val/Test] points[0] shape: {points[0].shape}")
+        #     print(f">>>[xmy]🟢 base.py >>> [Val/Test] points[0] non-zero elements: {(points[0] != 0).sum().item()}")
+        # else:
+        #     print(f">>>[xmy]🟢 base.py >>> [Tran] points[0] shape: {points[0].shape}")
+        #     print(f">>>[xmy]🟢 base.py >>> [Tran] points[0] non-zero elements: {(points[0] != 0).sum().item()}") 
 
         for b in range(batch_size):
             # 获取： 当前 batch 的点云坐标 (x,y,z)
+            # BEVFusion融合模型：
+            # 1. 取真实激光雷达点 points xyz
             cur_coords = points[b][:, :3]
             cur_img_aug_matrix = img_aug_matrix[b]
             cur_lidar_aug_matrix = lidar_aug_matrix[b]
@@ -297,10 +336,12 @@ class BaseDepthTransform(BaseTransform):
                 cur_coords.transpose(1, 0)
             )
 
-            # # lidar2image 投影
+            # 2. lidar2image 投影 （P_cam = R*P_lidar + t）
             # lidar2image
-            cur_coords = cur_lidar2image[:, :3, :3].matmul(cur_coords)
-            cur_coords += cur_lidar2image[:, :3, 3].reshape(-1, 3, 1)
+            cur_coords = cur_lidar2image[:, :3, :3].matmul(cur_coords)  # R操作： P_ = R * P_lidar
+            cur_coords += cur_lidar2image[:, :3, 3].reshape(-1, 3, 1)   # t操作： P_cam = P_ + t
+
+            # 3. 取出相机坐标系下深度 Z (dist)
             # get 2d coords
             dist = cur_coords[:, 2, :]   # 提取深度 (z 方向距离)
             cur_coords[:, 2, :] = torch.clamp(cur_coords[:, 2, :], 1e-5, 1e5)
@@ -344,6 +385,8 @@ class BaseDepthTransform(BaseTransform):
 
         extra_rots = lidar_aug_matrix[..., :3, :3]
         extra_trans = lidar_aug_matrix[..., :3, 3]
+        
+        # Step1.2: Lift阶段 的 分支1：纯几何的视锥坐标计算
         geom = self.get_geometry(
             camera2lidar_rots,
             camera2lidar_trans,
@@ -360,14 +403,23 @@ class BaseDepthTransform(BaseTransform):
             'bda_mat': lidar_aug_matrix,
             'sensor2ego_mats': sensor2ego, 
         }
+        # Step1.1: Lift阶段 的 分支2, 图像特征提取 -->depthnet --> [depth: x] --> 加权外积
         # depth 是基于激光雷达点云生成的：  在 BaseDepthTransform.forward 中，通过将点云坐标变换到图像坐标系，筛选出落在图像内的点，并将它们的距离值填充到深度张量 depth 
+        # 在 BaseDepthTransform.forward 中，geom = self.get_geometry(...) 之后
+        # if DebugWarning:
+        #     import os, threading
+        #     pid = os.getpid()
+        #     tid = threading.get_ident()
+        #     print(f">>>[xmy]🟢[base.py] >>> 【{pid}:{tid}】【①-3】[LSS-Input] 几何变换矩阵 geom: min={geom.min().item():.4f}, max={geom.max().item():.4f}, "
+        #         f"has_nan={torch.isnan(geom).any()}, has_inf={torch.isinf(geom).any()}")
         x = self.get_cam_feats(img, depth, mats_dict)    # 将生成的 depth 作为第二个参数传入
 
         use_depth = False
         if type(x) == tuple:
             x, depth = x 
             use_depth = True
-        
+
+        # Step2: Splat 做 pooling
         x = self.bev_pool(geom, x)
 
         if use_depth:

@@ -22,6 +22,11 @@ from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
 
 
+# torch.autograd.set_detect_anomaly(True)  # detect_anomaly() 会启用异常检测模式，一旦发现异常，立即抛出 RuntimeError，并附带堆栈跟踪
+# ========== 梯度监控开关（直接写在代码中，不依赖配置文件） ==========
+DEBUG_GRADIENT = False   # 需要监控时改为 True，不需要时改为 False
+
+
 def main():
     dist.init()
 
@@ -72,6 +77,28 @@ def main():
     # 构建模型
     model = build_model(cfg.model)
     model.init_weights()
+
+    # ========== 新增：梯度监控 Hook（可选，通过配置开关） ==========
+    if DEBUG_GRADIENT:
+        # import torch.distributed
+        def register_gradient_hooks(model):
+            def make_hook(param_name):
+                def hook(grad):
+                    if torch.isinf(grad).any() or torch.isnan(grad).any():
+                        if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
+                            return
+                        print(f"\n🚨 Gradient exploded at parameter: {param_name}")
+                        print(f"   grad min: {grad.min().item():.6f}, max: {grad.max().item():.6f}")
+                        print(f"   has_inf: {torch.isinf(grad).any()}, has_nan: {torch.isnan(grad).any()}")
+                        # 可选：保存模型状态或抛出异常
+                return hook
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    param.register_hook(make_hook(name))
+        register_gradient_hooks(model)
+        logger.info("Gradient monitoring hooks registered (DEBUG_GRADIENT=True).")
+    # ============================================================
+
     if cfg.get("sync_bn", None):
         if not isinstance(cfg["sync_bn"], dict):
             cfg["sync_bn"] = dict(exclude=[])

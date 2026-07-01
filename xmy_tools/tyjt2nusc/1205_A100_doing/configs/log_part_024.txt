@@ -1,0 +1,1000 @@
+base.py 中：
+BaseTransform的 forward 调用get_cam_feats(img, mats_dict)（传 2 个参数）；
+BaseDepthTransform（继承 BaseTransform）的 forward 调用get_cam_feats(img, depth, mats_dict)（传 3 个参数）；
+这是因为BaseDepthTransform是深度相关的子类，需要传 depth 参数，而你的DepthLSS继承了这个类，但重写的 get_cam_feats 没适配这个参数，导致了不匹配。
+最终结论
+这个问题是源码继承设计的小漏洞，不是你手动修改的问题；按上面的方法给 depth_lss.py 的 get_cam_feats 加mats_dict=None参数，就能 100% 解决所有报错，训练会立刻进入正常迭代流程！🚀
+至此，所有环境、编译、依赖、源码继承的问题都已彻底解决，你可以专注于模型训练和调参了。
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+after_run:
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+2025-12-10 22:05:35,126 - mmdet3d - INFO - workflow: [('train', 1)], max: 1 epochs
+2025-12-10 22:05:35,126 - mmdet3d - INFO - Checkpoints will be saved to /data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01 by HardDiskBackend.
+/data2/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/models/heads/bbox/transfusion.py:273: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  top_proposals_class = top_proposals // heatmap.shape[-1]
+/data2/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/models/heads/bbox/transfusion.py:535: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  grid_size[:2] // self.train_cfg["out_size_factor"]
+2025-12-10 22:05:39,989 - mmcv - INFO - Reducer buckets have been rebuilt in this iteration.
+🔥 终极好消息：训练已经 100% 成功启动！
+所有之前的环境冲突、扩展编译失败、依赖不兼容、源码参数不匹配等问题都已彻底解决，现在日志里的每一行都是训练正常运行的标志，逐一解读如下：
+1. 核心正常日志（训练框架初始化完成）
+plaintext
+2025-12-10 22:05:35,126 - mmdet3d - INFO - workflow: [('train', 1)], max: 1 epochs
+2025-12-10 22:05:35,126 - mmdet3d - INFO - Checkpoints will be saved to /data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01 by HardDiskBackend.
+→ 说明：训练流程（workflow）、最大 epoch、模型保存路径都已正确加载，框架层面无任何问题。
+2. 可忽略的语法警告（不影响训练）
+plaintext
+UserWarning: __floordiv__ is deprecated...
+→ 原因：PyTorch 版本更新后，// 运算符被标记为弃用（建议用torch.div(..., rounding_mode='trunc')替代）；→ 处理：完全不用管，只是语法提示，不影响模型训练、收敛、精度；如果想消除警告，可修改transfusion.py里的//为torch.div(a, b, rounding_mode='trunc')，但没必要。
+3. 分布式训练正常初始化（单卡也会有）
+plaintext
+2025-12-10 22:05:39,989 - mmcv - INFO - Reducer buckets have been rebuilt in this iteration.
+→ 说明：mmcv 的分布式训练组件初始化完成，即使单卡运行，这个日志也是正常的，代表 GPU/CPU 资源调度正常。
+🎯 后续只需要关注 2 件事（训练中）
+观察核心训练指标：接下来日志会打印类似这样的内容（正常迭代标志）：
+plaintext
+2025-12-10 22:06:00 - mmdet3d - INFO - Epoch [1][50/1000]  lr: 0.0010  loss: 2.567  loss_cls: 1.234  loss_bbox: 1.333  time: 0.123s/iter
+→ 看到loss、lr、iter等指标，说明模型在正常前向 / 反向传播。
+确认 GPU 资源使用（避免 CPU 训练）：新开终端执行：
+bash
+运行
+nvidia-smi
+→ 看到 Python 进程占用 GPU 显存（通常几 G 到十几 G），说明模型在 GPU 上运行，训练效率正常。
+🎉 最终总结
+从环境搭建、扩展编译、依赖适配，到源码参数匹配，所有坑都已踩平，你的 BEVFusion 终于进入正常训练阶段！接下来只需要：
+监控训练 loss 收敛情况；
+按需求调整学习率、batch size、epoch 等超参；
+等待训练完成后验证模型精度。
+至此，所有技术问题都已彻底解决，祝你训练顺利、模型精度达标！🚀
+如何后台运行
+要让 BEVFusion 训练脚本后台持续运行（即使断开 SSH 连接也不中断），推荐 3 种常用方式，按「易用性 + 稳定性」排序，优先选nohup（最简单）：
+方法 1：nohup（最推荐，零配置，适合长期后台运行）
+步骤 1：切换到训练目录（必做）
+bash
+运行
+cd /data2/xmy/01_project/bevfusion_mit_xmy_1205
+步骤 2：执行后台运行命令（复制即用）
+bash
+运行
+nohup torchpack dist-run -np 1 python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01 > train.log 2>&1 &
+命令拆解（理解每个部分）：
+nohup：忽略终端断开的挂起信号，保证进程后台持续运行；
+> train.log：将训练日志（标准输出）写入train.log文件；
+2>&1：将错误日志（标准错误）也写入train.log（避免日志分散）；
+&：将进程放到后台运行。
+步骤 3：关键操作（查看 / 停止训练）
+① 实时查看训练日志（最常用）
+bash
+运行
+tail -f train.log  # 实时刷新日志，按 Ctrl+C 退出查看
+② 查看全部日志
+bash
+运行
+cat train.log  # 查看完整日志
+# 或筛选loss相关内容（快速看训练情况）
+grep "loss" train.log
+③ 停止后台训练进程
+bash
+运行
+# 第一步：找到进程号
+ps aux | grep "tools/train.py"  # 输出中第二列是进程号（PID）
+# 第二步：杀死进程（替换PID为实际数字）
+kill -9 PID
+进阶：自定义日志路径（推荐）
+如果想把日志放到指定目录（比如 runs 目录），避免混乱：
+bash
+运行
+nohup torchpack dist-run -np 1 python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01 > runs/v8.1-1210-01/train_$(date +%Y%m%d_%H%M%S).log 2>&1 &
+→ 日志文件会命名为train_20251210_221000.log（带时间戳，避免覆盖）。
+方法 2：screen（适合需要「随时恢复终端会话」的场景）
+如果需要偶尔连接到训练的终端界面（比如临时调整参数），用screen：
+步骤 1：创建新的 screen 会话
+bash
+运行
+screen -S bevfusion_train  # -S 指定会话名（方便识别）
+步骤 2：在 screen 里执行训练命令
+bash
+运行
+cd /data2/xmy/01_project/bevfusion_mit_xmy_1205
+torchpack dist-run -np 1 python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01
+步骤 3：脱离 screen 会话（后台运行）
+按快捷键：Ctrl+A → 松开 → 按D（detach，脱离会话，进程继续运行）。
+步骤 4：恢复 screen 会话（查看 / 操作训练）
+bash
+运行
+screen -r bevfusion_train  # 重新连接会话
+# 如果会话异常，用：screen -d -r bevfusion_train
+步骤 5：停止 screen 和训练
+恢复会话后，按Ctrl+C停止训练，再输入exit关闭 screen；
+或直接杀死 screen 进程：screen -S bevfusion_train -X quit。
+方法 3：tmux（功能更强的 screen 替代，适合多会话管理）
+tmux和screen逻辑类似，但功能更全（支持分屏、会话共享等），步骤如下：
+步骤 1：安装 tmux（如果没装）
+bash
+运行
+apt install tmux -y  # Ubuntu/Debian
+# 或 yum install tmux -y  # CentOS
+步骤 2：创建 tmux 会话
+bash
+运行
+tmux new -s bevfusion_train
+步骤 3：执行训练命令（同 screen）
+bash
+运行
+cd /data2/xmy/01_project/bevfusion_mit_xmy_1205
+torchpack dist-run -np 1 python tools/train.py ./xmy_tools/tyjt2nusc/1205_A100_doing/configs/tyjt_convfuser_tmp_1205_V8.1.yaml --run-dir runs/v8.1-1210-01
+步骤 4：脱离 tmux 会话
+按快捷键：Ctrl+B → 松开 → 按D。
+步骤 5：恢复 tmux 会话
+bash
+运行
+tmux attach -t bevfusion_train
+关键注意事项
+后台运行前必做：确保之前的训练进程已停止（用ps aux | grep train.py检查），避免 GPU / 资源冲突；
+日志备份：重要训练的日志文件建议定期备份（比如复制到本地），避免误删；
+GPU 监控：后台运行时，可定时查看 GPU 使用情况：
+bash
+运行
+# 每10秒刷新一次GPU状态
+watch -n 10 nvidia-smi
+避免权限问题：确保日志文件 / 模型保存目录有写入权限（比如runs/v8.1-1210-01）。
+总结
+只想「后台跑 + 看日志」：选nohup（最简单，零学习成本）；
+需要「随时恢复终端操作」：选screen/tmux（tmux 功能更强，screen 更轻量）。
+按方法 1 的nohup命令执行后，即使关闭 SSH 连接，训练也会在后台持续运行，日志实时写入train.log，随时可以查看进度！
+) DistEvalHook                       
+(LOW         ) IterTimerHook                      
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+after_train_epoch:
+(NORMAL      ) CheckpointHook                     
+(NORMAL      ) DistEvalHook                       
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+before_val_epoch:
+(NORMAL      ) DistSamplerSeedHook                
+(LOW         ) IterTimerHook                      
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+before_val_iter:
+(LOW         ) IterTimerHook                      
+ -------------------- 
+after_val_iter:
+(LOW         ) IterTimerHook                      
+ -------------------- 
+after_val_epoch:
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+after_run:
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+2025-12-10 22:08:56,904 - mmdet3d - INFO - workflow: [('train', 1)], max: 1 epochs
+2025-12-10 22:08:56,904 - mmdet3d - INFO - Checkpoints will be saved to /data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01 by HardDiskBackend.
+/data2/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/models/heads/bbox/transfusion.py:273: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  top_proposals_class = top_proposals // heatmap.shape[-1]
+/data2/xmy/01_project/bevfusion_mit_xmy_1205/mmdet3d/models/heads/bbox/transfusion.py:535: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  grid_size[:2] // self.train_cfg["out_size_factor"]
+2025-12-10 22:09:01,759 - mmcv - INFO - Reducer buckets have been rebuilt in this iteration.
+2025-12-10 22:10:31,031 - mmdet3d - INFO - Epoch [1][50/23496]  lr: 7.973e-05, eta: 12:15:16, time: 1.882, data_time: 0.062, memory: 5765, loss/object/loss_heatmap: 3.3393, loss/object/layer_-1_loss_cls: 0.4063, loss/object/layer_-1_loss_bbox: 5.6429, stats/object/matched_ious: 0.0812, loss: 9.3885, grad_norm: 79.4980
+2025-12-10 22:12:02,001 - mmdet3d - INFO - Epoch [1][100/23496] lr: 9.307e-05, eta: 12:01:34, time: 1.819, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 2.1836, loss/object/layer_-1_loss_cls: 0.2350, loss/object/layer_-1_loss_bbox: 3.1504, stats/object/matched_ious: 0.1120, loss: 5.5690, grad_norm: 40.3123
+2025-12-10 22:13:32,764 - mmdet3d - INFO - Epoch [1][150/23496] lr: 1.064e-04, eta: 11:55:27, time: 1.815, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.9337, loss/object/layer_-1_loss_cls: 0.2094, loss/object/layer_-1_loss_bbox: 2.8657, stats/object/matched_ious: 0.1373, loss: 5.0088, grad_norm: 35.5213
+2025-12-10 22:15:04,197 - mmdet3d - INFO - Epoch [1][200/23496] lr: 1.197e-04, eta: 11:52:56, time: 1.829, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.7792, loss/object/layer_-1_loss_cls: 0.1904, loss/object/layer_-1_loss_bbox: 2.6179, stats/object/matched_ious: 0.1575, loss: 4.5876, grad_norm: 28.3887
+2025-12-10 22:16:35,031 - mmdet3d - INFO - Epoch [1][250/23496] lr: 1.331e-04, eta: 11:49:53, time: 1.817, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.8008, loss/object/layer_-1_loss_cls: 0.1779, loss/object/layer_-1_loss_bbox: 2.5388, stats/object/matched_ious: 0.1523, loss: 4.5175, grad_norm: 27.2913
+2025-12-10 22:18:06,062 - mmdet3d - INFO - Epoch [1][300/23496] lr: 1.464e-04, eta: 11:47:37, time: 1.821, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.6612, loss/object/layer_-1_loss_cls: 0.1685, loss/object/layer_-1_loss_bbox: 2.4252, stats/object/matched_ious: 0.1830, loss: 4.2549, grad_norm: 16.1920
+2025-12-10 22:19:36,499 - mmdet3d - INFO - Epoch [1][350/23496] lr: 1.597e-04, eta: 11:44:54, time: 1.809, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.6830, loss/object/layer_-1_loss_cls: 0.1695, loss/object/layer_-1_loss_bbox: 2.3014, stats/object/matched_ious: 0.1648, loss: 4.1539, grad_norm: 13.7649
+2025-12-10 22:21:08,140 - mmdet3d - INFO - Epoch [1][400/23496] lr: 1.731e-04, eta: 11:43:38, time: 1.833, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.6202, loss/object/layer_-1_loss_cls: 0.1594, loss/object/layer_-1_loss_bbox: 2.0297, stats/object/matched_ious: 0.1934, loss: 3.8093, grad_norm: 11.5738
+2025-12-10 22:22:38,869 - mmdet3d - INFO - Epoch [1][450/23496] lr: 1.864e-04, eta: 11:41:32, time: 1.815, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.5887, loss/object/layer_-1_loss_cls: 0.1463, loss/object/layer_-1_loss_bbox: 2.1946, stats/object/matched_ious: 0.1876, loss: 3.9296, grad_norm: 10.4796
+2025-12-10 22:24:09,827 - mmdet3d - INFO - Epoch [1][500/23496] lr: 1.997e-04, eta: 11:39:44, time: 1.819, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.5597, loss/object/layer_-1_loss_cls: 0.1540, loss/object/layer_-1_loss_bbox: 1.9559, stats/object/matched_ious: 0.1952, loss: 3.6697, grad_norm: 9.5100
+2025-12-10 22:25:40,552 - mmdet3d - INFO - Epoch [1][550/23496] lr: 2.000e-04, eta: 11:37:50, time: 1.814, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.5161, loss/object/layer_-1_loss_cls: 0.1489, loss/object/layer_-1_loss_bbox: 1.7806, stats/object/matched_ious: 0.2115, loss: 3.4456, grad_norm: 9.4133
+2025-12-10 22:27:11,682 - mmdet3d - INFO - Epoch [1][600/23496] lr: 2.000e-04, eta: 11:36:14, time: 1.823, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.4832, loss/object/layer_-1_loss_cls: 0.1517, loss/object/layer_-1_loss_bbox: 1.8685, stats/object/matched_ious: 0.2277, loss: 3.5033, grad_norm: 9.2264
+2025-12-10 22:28:43,060 - mmdet3d - INFO - Epoch [1][650/23496] lr: 2.000e-04, eta: 11:34:48, time: 1.828, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.4138, loss/object/layer_-1_loss_cls: 0.1391, loss/object/layer_-1_loss_bbox: 1.7641, stats/object/matched_ious: 0.2344, loss: 3.3170, grad_norm: 8.5788
+2025-12-10 22:30:13,937 - mmdet3d - INFO - Epoch [1][700/23496] lr: 2.000e-04, eta: 11:33:05, time: 1.818, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.4597, loss/object/layer_-1_loss_cls: 0.1371, loss/object/layer_-1_loss_bbox: 1.8702, stats/object/matched_ious: 0.2180, loss: 3.4670, grad_norm: 7.2695
+2025-12-10 22:31:44,228 - mmdet3d - INFO - Epoch [1][750/23496] lr: 2.000e-04, eta: 11:31:06, time: 1.806, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.5567, loss/object/layer_-1_loss_cls: 0.1414, loss/object/layer_-1_loss_bbox: 1.9244, stats/object/matched_ious: 0.2121, loss: 3.6225, grad_norm: 5.7851
+2025-12-10 22:33:14,879 - mmdet3d - INFO - Epoch [1][800/23496] lr: 2.000e-04, eta: 11:29:21, time: 1.813, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.4228, loss/object/layer_-1_loss_cls: 0.1311, loss/object/layer_-1_loss_bbox: 1.7740, stats/object/matched_ious: 0.2529, loss: 3.3279, grad_norm: 6.6728
+2025-12-10 22:34:45,520 - mmdet3d - INFO - Epoch [1][850/23496] lr: 2.000e-04, eta: 11:27:37, time: 1.813, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.4217, loss/object/layer_-1_loss_cls: 0.1424, loss/object/layer_-1_loss_bbox: 1.6952, stats/object/matched_ious: 0.2405, loss: 3.2593, grad_norm: 6.6917
+2025-12-10 22:36:16,587 - mmdet3d - INFO - Epoch [1][900/23496] lr: 2.000e-04, eta: 11:26:05, time: 1.821, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.4026, loss/object/layer_-1_loss_cls: 0.1314, loss/object/layer_-1_loss_bbox: 1.7562, stats/object/matched_ious: 0.2311, loss: 3.2902, grad_norm: 7.8024
+2025-12-10 22:37:47,326 - mmdet3d - INFO - Epoch [1][950/23496] lr: 2.000e-04, eta: 11:24:26, time: 1.815, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.4396, loss/object/layer_-1_loss_cls: 0.1401, loss/object/layer_-1_loss_bbox: 1.9091, stats/object/matched_ious: 0.2182, loss: 3.4888, grad_norm: 7.7373
+2025-12-10 22:39:18,151 - mmdet3d - INFO - Epoch [1][1000/23496]        lr: 2.000e-04, eta: 11:22:49, time: 1.817, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.4465, loss/object/layer_-1_loss_cls: 0.1354, loss/object/layer_-1_loss_bbox: 1.6141, stats/object/matched_ious: 0.2277, loss: 3.1960, grad_norm: 6.2013
+2025-12-10 22:40:48,995 - mmdet3d - INFO - Epoch [1][1050/23496]        lr: 2.000e-04, eta: 11:21:13, time: 1.817, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3525, loss/object/layer_-1_loss_cls: 0.1264, loss/object/layer_-1_loss_bbox: 1.6411, stats/object/matched_ious: 0.2521, loss: 3.1200, grad_norm: 5.9299
+2025-12-10 22:42:19,966 - mmdet3d - INFO - Epoch [1][1100/23496]        lr: 2.000e-04, eta: 11:19:41, time: 1.819, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3903, loss/object/layer_-1_loss_cls: 0.1288, loss/object/layer_-1_loss_bbox: 1.7205, stats/object/matched_ious: 0.2613, loss: 3.2396, grad_norm: 5.7871
+2025-12-10 22:43:50,315 - mmdet3d - INFO - Epoch [1][1150/23496]        lr: 2.000e-04, eta: 11:17:56, time: 1.807, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.4038, loss/object/layer_-1_loss_cls: 0.1281, loss/object/layer_-1_loss_bbox: 1.7045, stats/object/matched_ious: 0.2365, loss: 3.2363, grad_norm: 6.5835
+2025-12-10 22:45:20,342 - mmdet3d - INFO - Epoch [1][1200/23496]        lr: 2.000e-04, eta: 11:16:07, time: 1.801, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3060, loss/object/layer_-1_loss_cls: 0.1238, loss/object/layer_-1_loss_bbox: 1.5056, stats/object/matched_ious: 0.2774, loss: 2.9354, grad_norm: 5.5664
+2025-12-10 22:46:51,215 - mmdet3d - INFO - Epoch [1][1250/23496]        lr: 2.000e-04, eta: 11:14:34, time: 1.817, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.4632, loss/object/layer_-1_loss_cls: 0.1192, loss/object/layer_-1_loss_bbox: 1.7725, stats/object/matched_ious: 0.2533, loss: 3.3550, grad_norm: 5.3769
+2025-12-10 22:48:21,677 - mmdet3d - INFO - Epoch [1][1300/23496]        lr: 2.000e-04, eta: 11:12:54, time: 1.809, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3907, loss/object/layer_-1_loss_cls: 0.1200, loss/object/layer_-1_loss_bbox: 1.8254, stats/object/matched_ious: 0.2416, loss: 3.3361, grad_norm: 5.8040
+2025-12-10 22:49:51,929 - mmdet3d - INFO - Epoch [1][1350/23496]        lr: 2.000e-04, eta: 11:11:12, time: 1.805, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3275, loss/object/layer_-1_loss_cls: 0.1206, loss/object/layer_-1_loss_bbox: 1.6702, stats/object/matched_ious: 0.2664, loss: 3.1183, grad_norm: 5.0254
+2025-12-10 22:51:22,767 - mmdet3d - INFO - Epoch [1][1400/23496]        lr: 2.000e-04, eta: 11:09:40, time: 1.817, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3571, loss/object/layer_-1_loss_cls: 0.1276, loss/object/layer_-1_loss_bbox: 1.6202, stats/object/matched_ious: 0.2587, loss: 3.1048, grad_norm: 4.7494
+2025-12-10 22:52:52,814 - mmdet3d - INFO - Epoch [1][1450/23496]        lr: 2.000e-04, eta: 11:07:55, time: 1.801, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3136, loss/object/layer_-1_loss_cls: 0.1253, loss/object/layer_-1_loss_bbox: 1.5619, stats/object/matched_ious: 0.2759, loss: 3.0008, grad_norm: 4.4674
+2025-12-10 22:54:23,175 - mmdet3d - INFO - Epoch [1][1500/23496]        lr: 2.000e-04, eta: 11:06:17, time: 1.807, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2699, loss/object/layer_-1_loss_cls: 0.1192, loss/object/layer_-1_loss_bbox: 1.5183, stats/object/matched_ious: 0.2837, loss: 2.9074, grad_norm: 4.4106
+2025-12-10 22:55:53,591 - mmdet3d - INFO - Epoch [1][1550/23496]        lr: 2.000e-04, eta: 11:04:39, time: 1.808, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3158, loss/object/layer_-1_loss_cls: 0.1207, loss/object/layer_-1_loss_bbox: 1.5174, stats/object/matched_ious: 0.2691, loss: 2.9539, grad_norm: 4.6925
+2025-12-10 22:57:23,649 - mmdet3d - INFO - Epoch [1][1600/23496]        lr: 2.000e-04, eta: 11:02:58, time: 1.801, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3332, loss/object/layer_-1_loss_cls: 0.1189, loss/object/layer_-1_loss_bbox: 1.4996, stats/object/matched_ious: 0.2697, loss: 2.9517, grad_norm: 5.5376
+2025-12-10 22:58:54,973 - mmdet3d - INFO - Epoch [1][1650/23496]        lr: 2.000e-04, eta: 11:01:33, time: 1.826, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3243, loss/object/layer_-1_loss_cls: 0.1204, loss/object/layer_-1_loss_bbox: 1.6956, stats/object/matched_ious: 0.2740, loss: 3.1404, grad_norm: 5.7275
+2025-12-10 23:00:25,811 - mmdet3d - INFO - Epoch [1][1700/23496]        lr: 2.000e-04, eta: 11:00:02, time: 1.817, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3788, loss/object/layer_-1_loss_cls: 0.1223, loss/object/layer_-1_loss_bbox: 1.5010, stats/object/matched_ious: 0.2707, loss: 3.0021, grad_norm: 4.4159
+2025-12-10 23:01:56,093 - mmdet3d - INFO - Epoch [1][1750/23496]        lr: 2.000e-04, eta: 10:58:24, time: 1.806, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2639, loss/object/layer_-1_loss_cls: 0.1202, loss/object/layer_-1_loss_bbox: 1.5167, stats/object/matched_ious: 0.2935, loss: 2.9008, grad_norm: 4.6478
+2025-12-10 23:03:26,890 - mmdet3d - INFO - Epoch [1][1800/23496]        lr: 2.000e-04, eta: 10:56:53, time: 1.816, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2732, loss/object/layer_-1_loss_cls: 0.1216, loss/object/layer_-1_loss_bbox: 1.4384, stats/object/matched_ious: 0.2932, loss: 2.8332, grad_norm: 4.4093
+2025-12-10 23:04:57,896 - mmdet3d - INFO - Epoch [1][1850/23496]        lr: 2.000e-04, eta: 10:55:24, time: 1.820, data_time: 0.007, memory: 5779, loss/object/loss_heatmap: 1.2775, loss/object/layer_-1_loss_cls: 0.1195, loss/object/layer_-1_loss_bbox: 1.5113, stats/object/matched_ious: 0.2791, loss: 2.9083, grad_norm: 4.4191
+2025-12-10 23:06:28,876 - mmdet3d - INFO - Epoch [1][1900/23496]        lr: 2.000e-04, eta: 10:53:55, time: 1.820, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2260, loss/object/layer_-1_loss_cls: 0.1208, loss/object/layer_-1_loss_bbox: 1.4053, stats/object/matched_ious: 0.2997, loss: 2.7521, grad_norm: 4.0333
+2025-12-10 23:07:59,390 - mmdet3d - INFO - Epoch [1][1950/23496]        lr: 2.000e-04, eta: 10:52:21, time: 1.810, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2561, loss/object/layer_-1_loss_cls: 0.1189, loss/object/layer_-1_loss_bbox: 1.5762, stats/object/matched_ious: 0.2794, loss: 2.9512, grad_norm: 5.4588
+2025-12-10 23:09:29,528 - mmdet3d - INFO - Epoch [1][2000/23496]        lr: 2.000e-04, eta: 10:50:42, time: 1.803, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2831, loss/object/layer_-1_loss_cls: 0.1205, loss/object/layer_-1_loss_bbox: 1.4450, stats/object/matched_ious: 0.3007, loss: 2.8486, grad_norm: 4.1386
+2025-12-10 23:11:00,875 - mmdet3d - INFO - Epoch [1][2050/23496]        lr: 2.000e-04, eta: 10:49:17, time: 1.827, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2220, loss/object/layer_-1_loss_cls: 0.1185, loss/object/layer_-1_loss_bbox: 1.5069, stats/object/matched_ious: 0.3126, loss: 2.8475, grad_norm: 4.2301
+2025-12-10 23:12:32,339 - mmdet3d - INFO - Epoch [1][2100/23496]        lr: 2.000e-04, eta: 10:47:53, time: 1.829, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.3579, loss/object/layer_-1_loss_cls: 0.1272, loss/object/layer_-1_loss_bbox: 1.6313, stats/object/matched_ious: 0.2711, loss: 3.1165, grad_norm: 3.9653
+2025-12-10 23:14:02,274 - mmdet3d - INFO - Epoch [1][2150/23496]        lr: 2.000e-04, eta: 10:46:13, time: 1.799, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2414, loss/object/layer_-1_loss_cls: 0.1215, loss/object/layer_-1_loss_bbox: 1.3743, stats/object/matched_ious: 0.3129, loss: 2.7372, grad_norm: 4.3230
+2025-12-10 23:15:32,767 - mmdet3d - INFO - Epoch [1][2200/23496]        lr: 2.000e-04, eta: 10:44:39, time: 1.810, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2503, loss/object/layer_-1_loss_cls: 0.1126, loss/object/layer_-1_loss_bbox: 1.3975, stats/object/matched_ious: 0.2947, loss: 2.7604, grad_norm: 3.6976
+2025-12-10 23:17:03,714 - mmdet3d - INFO - Epoch [1][2250/23496]        lr: 2.000e-04, eta: 10:43:09, time: 1.819, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2216, loss/object/layer_-1_loss_cls: 0.1051, loss/object/layer_-1_loss_bbox: 1.3943, stats/object/matched_ious: 0.2918, loss: 2.7210, grad_norm: 3.8595
+2025-12-10 23:18:34,562 - mmdet3d - INFO - Epoch [1][2300/23496]        lr: 2.000e-04, eta: 10:41:39, time: 1.817, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.2345, loss/object/layer_-1_loss_cls: 0.1118, loss/object/layer_-1_loss_bbox: 1.4711, stats/object/matched_ious: 0.2890, loss: 2.8174, grad_norm: 3.9027
+2025-12-10 23:20:04,756 - mmdet3d - INFO - Epoch [1][2350/23496]        lr: 2.000e-04, eta: 10:40:02, time: 1.804, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.1948, loss/object/layer_-1_loss_cls: 0.1153, loss/object/layer_-1_loss_bbox: 1.5118, stats/object/matched_ious: 0.2914, loss: 2.8219, grad_norm: 4.3245
+2025-12-10 23:21:35,905 - mmdet3d - INFO - Epoch [1][2400/23496]        lr: 2.000e-04, eta: 10:38:35, time: 1.823, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2332, loss/object/layer_-1_loss_cls: 0.1142, loss/object/layer_-1_loss_bbox: 1.4220, stats/object/matched_ious: 0.3036, loss: 2.7693, grad_norm: 4.2408
+2025-12-10 23:23:06,298 - mmdet3d - INFO - Epoch [1][2450/23496]        lr: 2.000e-04, eta: 10:37:00, time: 1.808, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2152, loss/object/layer_-1_loss_cls: 0.1158, loss/object/layer_-1_loss_bbox: 1.3063, stats/object/matched_ious: 0.3114, loss: 2.6373, grad_norm: 3.6959
+2025-12-10 23:24:37,491 - mmdet3d - INFO - Epoch [1][2500/23496]        lr: 2.000e-04, eta: 10:35:33, time: 1.824, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.2303, loss/object/layer_-1_loss_cls: 0.1111, loss/object/layer_-1_loss_bbox: 1.3200, stats/object/matched_ious: 0.3046, loss: 2.6614, grad_norm: 3.7907
+2025-12-10 23:26:08,080 - mmdet3d - INFO - Epoch [1][2550/23496]        lr: 2.000e-04, eta: 10:34:00, time: 1.812, data_time: 0.006, memory: 5779, loss/object/loss_heatmap: 1.1792, loss/object/layer_-1_loss_cls: 0.1111, loss/object/layer_-1_loss_bbox: 1.4772, stats/object/matched_ious: 0.3001, loss: 2.7674, grad_norm: 4.1256
+2025-12-10 23:27:38,979 - mmdet3d - INFO - Epoch [1][2600/23496]        lr: 2.000e-04, eta: 10:32:30, time: 1.818, data_time: 0.005, memory: 5779, loss/object/loss_heatmap: 1.2202, loss/object/layer_-1_loss_cls: 0.1154, loss/object/layer_-1_loss_bbox: 1.2910, stats/object/matched_ious: 0.3149, loss: 2.6266, grad_norm: 4.1753
+2025-12-10 23:29:09,771 - mmdet3d - INFO - Epoch [1][2650/23496]        lr: 2.000e-04, eta: 10:30:59, time: 1.816, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.2724, loss/object/layer_-1_loss_cls: 0.1175, loss/object/layer_-1_loss_bbox: 1.3932, stats/object/matched_ious: 0.3076, loss: 2.7831, grad_norm: 3.6630
+2025-12-10 23:30:40,831 - mmdet3d - INFO - Epoch [1][2700/23496]        lr: 2.000e-04, eta: 10:29:30, time: 1.821, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.1655, loss/object/layer_-1_loss_cls: 0.1143, loss/object/layer_-1_loss_bbox: 1.3608, stats/object/matched_ious: 0.3141, loss: 2.6407, grad_norm: 3.5368
+2025-12-10 23:32:11,518 - mmdet3d - INFO - Epoch [1][2750/23496]        lr: 2.000e-04, eta: 10:27:58, time: 1.814, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.1534, loss/object/layer_-1_loss_cls: 0.1159, loss/object/layer_-1_loss_bbox: 1.2946, stats/object/matched_ious: 0.3148, loss: 2.5639, grad_norm: 3.8904
+2025-12-10 23:33:42,430 - mmdet3d - INFO - Epoch [1][2800/23496]        lr: 2.000e-04, eta: 10:26:28, time: 1.818, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.2230, loss/object/layer_-1_loss_cls: 0.1102, loss/object/layer_-1_loss_bbox: 1.3591, stats/object/matched_ious: 0.3012, loss: 2.6922, grad_norm: 3.7055
+2025-12-10 23:35:13,071 - mmdet3d - INFO - Epoch [1][2850/23496]        lr: 2.000e-04, eta: 10:24:56, time: 1.813, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.2404, loss/object/layer_-1_loss_cls: 0.1132, loss/object/layer_-1_loss_bbox: 1.3513, stats/object/matched_ious: 0.3048, loss: 2.7049, grad_norm: 3.6589
+2025-12-10 23:36:43,974 - mmdet3d - INFO - Epoch [1][2900/23496]        lr: 2.000e-04, eta: 10:23:26, time: 1.818, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.2020, loss/object/layer_-1_loss_cls: 0.1113, loss/object/layer_-1_loss_bbox: 1.4493, stats/object/matched_ious: 0.3049, loss: 2.7626, grad_norm: 3.5822
+2025-12-10 23:38:14,673 - mmdet3d - INFO - Epoch [1][2950/23496]        lr: 2.000e-04, eta: 10:21:55, time: 1.814, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.1813, loss/object/layer_-1_loss_cls: 0.1137, loss/object/layer_-1_loss_bbox: 1.2790, stats/object/matched_ious: 0.3162, loss: 2.5740, grad_norm: 3.8861
+2025-12-10 23:39:45,723 - mmdet3d - INFO - Epoch [1][3000/23496]        lr: 2.000e-04, eta: 10:20:25, time: 1.821, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.1382, loss/object/layer_-1_loss_cls: 0.1075, loss/object/layer_-1_loss_bbox: 1.3514, stats/object/matched_ious: 0.3088, loss: 2.5970, grad_norm: 3.6456
+2025-12-10 23:41:16,620 - mmdet3d - INFO - Epoch [1][3050/23496]        lr: 2.000e-04, eta: 10:18:55, time: 1.818, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.2353, loss/object/layer_-1_loss_cls: 0.1072, loss/object/layer_-1_loss_bbox: 1.4354, stats/object/matched_ious: 0.2978, loss: 2.7779, grad_norm: 3.5823
+2025-12-10 23:42:47,929 - mmdet3d - INFO - Epoch [1][3100/23496]        lr: 2.000e-04, eta: 10:17:28, time: 1.826, data_time: 0.005, memory: 5781, loss/object/loss_heatmap: 1.1930, loss/object/layer_-1_loss_cls: 0.1110, loss/object/layer_-1_loss_bbox: 1.3266, stats/object/matched_ious: 0.3182, loss: 2.6306, grad_norm: 3.4596
+2025-12-10 23:44:18,874 - mmdet3d - INFO - Epoch [1][3150/23496]        lr: 2.000e-04, eta: 10:15:58, time: 1.819, data_time: 0.005, memory: 5781, loss/object/loss_heatmap: 1.1948, loss/object/layer_-1_loss_cls: 0.1132, loss/object/layer_-1_loss_bbox: 1.3433, stats/object/matched_ious: 0.3167, loss: 2.6514, grad_norm: 3.8722
+2025-12-10 23:45:49,083 - mmdet3d - INFO - Epoch [1][3200/23496]        lr: 2.000e-04, eta: 10:14:23, time: 1.804, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.2046, loss/object/layer_-1_loss_cls: 0.1089, loss/object/layer_-1_loss_bbox: 1.3759, stats/object/matched_ious: 0.3098, loss: 2.6894, grad_norm: 3.6854
+2025-12-10 23:47:19,916 - mmdet3d - INFO - Epoch [1][3250/23496]        lr: 2.000e-04, eta: 10:12:52, time: 1.817, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.1758, loss/object/layer_-1_loss_cls: 0.1155, loss/object/layer_-1_loss_bbox: 1.3183, stats/object/matched_ious: 0.3234, loss: 2.6097, grad_norm: 3.8149
+2025-12-10 23:48:50,153 - mmdet3d - INFO - Epoch [1][3300/23496]        lr: 2.000e-04, eta: 10:11:18, time: 1.805, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.2596, loss/object/layer_-1_loss_cls: 0.1104, loss/object/layer_-1_loss_bbox: 1.3316, stats/object/matched_ious: 0.2963, loss: 2.7016, grad_norm: 3.6942
+2025-12-10 23:50:20,903 - mmdet3d - INFO - Epoch [1][3350/23496]        lr: 2.000e-04, eta: 10:09:47, time: 1.815, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.2186, loss/object/layer_-1_loss_cls: 0.1158, loss/object/layer_-1_loss_bbox: 1.3276, stats/object/matched_ious: 0.2965, loss: 2.6620, grad_norm: 3.5211
+2025-12-10 23:51:51,608 - mmdet3d - INFO - Epoch [1][3400/23496]        lr: 2.000e-04, eta: 10:08:15, time: 1.814, data_time: 0.006, memory: 5781, loss/object/loss_heatmap: 1.1680, loss/object/layer_-1_loss_cls: 0.1069, loss/object/layer_-1_loss_bbox: 1.2598, stats/object/matched_ious: 0.3009, loss: 2.5348, grad_norm: 3.3526
+2025-12-10 23:53:22,350 - mmdet3d - INFO - Epoch [1][3450/23496]        lr: 2.000e-04, eta: 10:06:44, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1910, loss/object/layer_-1_loss_cls: 0.1127, loss/object/layer_-1_loss_bbox: 1.2341, stats/object/matched_ious: 0.3141, loss: 2.5378, grad_norm: 3.2830
+2025-12-10 23:54:53,151 - mmdet3d - INFO - Epoch [1][3500/23496]        lr: 2.000e-04, eta: 10:05:13, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1757, loss/object/layer_-1_loss_cls: 0.1093, loss/object/layer_-1_loss_bbox: 1.3595, stats/object/matched_ious: 0.3070, loss: 2.6445, grad_norm: 3.6816
+2025-12-10 23:56:23,869 - mmdet3d - INFO - Epoch [1][3550/23496]        lr: 2.000e-04, eta: 10:03:42, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1581, loss/object/layer_-1_loss_cls: 0.1118, loss/object/layer_-1_loss_bbox: 1.2565, stats/object/matched_ious: 0.3179, loss: 2.5264, grad_norm: 3.5172
+2025-12-10 23:57:53,905 - mmdet3d - INFO - Epoch [1][3600/23496]        lr: 2.000e-04, eta: 10:02:07, time: 1.801, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1563, loss/object/layer_-1_loss_cls: 0.1093, loss/object/layer_-1_loss_bbox: 1.2595, stats/object/matched_ious: 0.3305, loss: 2.5251, grad_norm: 3.4808
+2025-12-10 23:59:24,826 - mmdet3d - INFO - Epoch [1][3650/23496]        lr: 2.000e-04, eta: 10:00:37, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1549, loss/object/layer_-1_loss_cls: 0.1118, loss/object/layer_-1_loss_bbox: 1.2452, stats/object/matched_ious: 0.3237, loss: 2.5119, grad_norm: 3.5937
+2025-12-11 00:00:54,805 - mmdet3d - INFO - Epoch [1][3700/23496]        lr: 2.000e-04, eta: 9:59:02, time: 1.800, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.2356, loss/object/layer_-1_loss_cls: 0.1190, loss/object/layer_-1_loss_bbox: 1.3111, stats/object/matched_ious: 0.3158, loss: 2.6658, grad_norm: 3.5572
+2025-12-11 00:02:25,240 - mmdet3d - INFO - Epoch [1][3750/23496]        lr: 2.000e-04, eta: 9:57:29, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1697, loss/object/layer_-1_loss_cls: 0.1052, loss/object/layer_-1_loss_bbox: 1.2963, stats/object/matched_ious: 0.3124, loss: 2.5712, grad_norm: 3.3457
+2025-12-11 00:03:55,512 - mmdet3d - INFO - Epoch [1][3800/23496]        lr: 2.000e-04, eta: 9:55:56, time: 1.805, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0681, loss/object/layer_-1_loss_cls: 0.1038, loss/object/layer_-1_loss_bbox: 1.1624, stats/object/matched_ious: 0.3357, loss: 2.3343, grad_norm: 3.2298
+2025-12-11 00:05:26,337 - mmdet3d - INFO - Epoch [1][3850/23496]        lr: 2.000e-04, eta: 9:54:25, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1340, loss/object/layer_-1_loss_cls: 0.1130, loss/object/layer_-1_loss_bbox: 1.2056, stats/object/matched_ious: 0.3182, loss: 2.4527, grad_norm: 3.3202
+2025-12-11 00:06:57,048 - mmdet3d - INFO - Epoch [1][3900/23496]        lr: 2.000e-04, eta: 9:52:54, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1620, loss/object/layer_-1_loss_cls: 0.1125, loss/object/layer_-1_loss_bbox: 1.2402, stats/object/matched_ious: 0.3232, loss: 2.5146, grad_norm: 3.1721
+2025-12-11 00:08:27,571 - mmdet3d - INFO - Epoch [1][3950/23496]        lr: 2.000e-04, eta: 9:51:22, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1526, loss/object/layer_-1_loss_cls: 0.1052, loss/object/layer_-1_loss_bbox: 1.1646, stats/object/matched_ious: 0.3390, loss: 2.4224, grad_norm: 3.3380
+2025-12-11 00:09:58,720 - mmdet3d - INFO - Epoch [1][4000/23496]        lr: 2.000e-04, eta: 9:49:53, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1393, loss/object/layer_-1_loss_cls: 0.1094, loss/object/layer_-1_loss_bbox: 1.3044, stats/object/matched_ious: 0.3211, loss: 2.5531, grad_norm: 3.1510
+2025-12-11 00:11:29,438 - mmdet3d - INFO - Epoch [1][4050/23496]        lr: 2.000e-04, eta: 9:48:22, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1384, loss/object/layer_-1_loss_cls: 0.1064, loss/object/layer_-1_loss_bbox: 1.2969, stats/object/matched_ious: 0.3180, loss: 2.5418, grad_norm: 3.3039
+2025-12-11 00:13:00,033 - mmdet3d - INFO - Epoch [1][4100/23496]        lr: 2.000e-04, eta: 9:46:51, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1397, loss/object/layer_-1_loss_cls: 0.1022, loss/object/layer_-1_loss_bbox: 1.2529, stats/object/matched_ious: 0.3286, loss: 2.4948, grad_norm: 3.3950
+2025-12-11 00:14:30,636 - mmdet3d - INFO - Epoch [1][4150/23496]        lr: 2.000e-04, eta: 9:45:19, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1009, loss/object/layer_-1_loss_cls: 0.1113, loss/object/layer_-1_loss_bbox: 1.2396, stats/object/matched_ious: 0.3395, loss: 2.4518, grad_norm: 3.5700
+2025-12-11 00:16:01,216 - mmdet3d - INFO - Epoch [1][4200/23496]        lr: 2.000e-04, eta: 9:43:47, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.2000, loss/object/layer_-1_loss_cls: 0.1109, loss/object/layer_-1_loss_bbox: 1.4108, stats/object/matched_ious: 0.3234, loss: 2.7216, grad_norm: 3.1845
+2025-12-11 00:17:32,380 - mmdet3d - INFO - Epoch [1][4250/23496]        lr: 2.000e-04, eta: 9:42:19, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0614, loss/object/layer_-1_loss_cls: 0.1056, loss/object/layer_-1_loss_bbox: 1.1699, stats/object/matched_ious: 0.3446, loss: 2.3369, grad_norm: 3.2785
+2025-12-11 00:19:02,313 - mmdet3d - INFO - Epoch [1][4300/23496]        lr: 2.000e-04, eta: 9:40:44, time: 1.799, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1871, loss/object/layer_-1_loss_cls: 0.1032, loss/object/layer_-1_loss_bbox: 1.3041, stats/object/matched_ious: 0.3157, loss: 2.5944, grad_norm: 3.2276
+2025-12-11 00:20:33,280 - mmdet3d - INFO - Epoch [1][4350/23496]        lr: 2.000e-04, eta: 9:39:14, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1533, loss/object/layer_-1_loss_cls: 0.1055, loss/object/layer_-1_loss_bbox: 1.2001, stats/object/matched_ious: 0.3297, loss: 2.4589, grad_norm: 3.2741
+2025-12-11 00:22:04,040 - mmdet3d - INFO - Epoch [1][4400/23496]        lr: 2.000e-04, eta: 9:37:43, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1096, loss/object/layer_-1_loss_cls: 0.1090, loss/object/layer_-1_loss_bbox: 1.3375, stats/object/matched_ious: 0.3295, loss: 2.5561, grad_norm: 3.4771
+2025-12-11 00:23:35,108 - mmdet3d - INFO - Epoch [1][4450/23496]        lr: 2.000e-04, eta: 9:36:14, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1494, loss/object/layer_-1_loss_cls: 0.1034, loss/object/layer_-1_loss_bbox: 1.2446, stats/object/matched_ious: 0.3173, loss: 2.4974, grad_norm: 3.3213
+2025-12-11 00:25:05,785 - mmdet3d - INFO - Epoch [1][4500/23496]        lr: 2.000e-04, eta: 9:34:43, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0958, loss/object/layer_-1_loss_cls: 0.1090, loss/object/layer_-1_loss_bbox: 1.1612, stats/object/matched_ious: 0.3380, loss: 2.3660, grad_norm: 3.2968
+2025-12-11 00:26:36,951 - mmdet3d - INFO - Epoch [1][4550/23496]        lr: 2.000e-04, eta: 9:33:14, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1957, loss/object/layer_-1_loss_cls: 0.1055, loss/object/layer_-1_loss_bbox: 1.3818, stats/object/matched_ious: 0.3028, loss: 2.6830, grad_norm: 3.2154
+2025-12-11 00:28:07,864 - mmdet3d - INFO - Epoch [1][4600/23496]        lr: 2.000e-04, eta: 9:31:44, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1734, loss/object/layer_-1_loss_cls: 0.1022, loss/object/layer_-1_loss_bbox: 1.3021, stats/object/matched_ious: 0.3262, loss: 2.5777, grad_norm: 2.9258
+2025-12-11 00:29:38,453 - mmdet3d - INFO - Epoch [1][4650/23496]        lr: 2.000e-04, eta: 9:30:12, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1455, loss/object/layer_-1_loss_cls: 0.1112, loss/object/layer_-1_loss_bbox: 1.2869, stats/object/matched_ious: 0.3171, loss: 2.5437, grad_norm: 4.2658
+2025-12-11 00:31:09,324 - mmdet3d - INFO - Epoch [1][4700/23496]        lr: 2.000e-04, eta: 9:28:42, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1442, loss/object/layer_-1_loss_cls: 0.1033, loss/object/layer_-1_loss_bbox: 1.2331, stats/object/matched_ious: 0.3285, loss: 2.4806, grad_norm: 3.1029
+2025-12-11 00:32:39,809 - mmdet3d - INFO - Epoch [1][4750/23496]        lr: 2.000e-04, eta: 9:27:10, time: 1.810, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 1.1253, loss/object/layer_-1_loss_cls: 0.1031, loss/object/layer_-1_loss_bbox: 1.2230, stats/object/matched_ious: 0.3264, loss: 2.4514, grad_norm: 3.1081
+2025-12-11 00:34:11,105 - mmdet3d - INFO - Epoch [1][4800/23496]        lr: 2.000e-04, eta: 9:25:41, time: 1.826, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1094, loss/object/layer_-1_loss_cls: 0.1035, loss/object/layer_-1_loss_bbox: 1.2502, stats/object/matched_ious: 0.3312, loss: 2.4631, grad_norm: 3.1290
+2025-12-11 00:35:41,942 - mmdet3d - INFO - Epoch [1][4850/23496]        lr: 2.000e-04, eta: 9:24:11, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1494, loss/object/layer_-1_loss_cls: 0.1015, loss/object/layer_-1_loss_bbox: 1.2953, stats/object/matched_ious: 0.3223, loss: 2.5462, grad_norm: 3.0827
+2025-12-11 00:37:12,514 - mmdet3d - INFO - Epoch [1][4900/23496]        lr: 2.000e-04, eta: 9:22:39, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.2012, loss/object/layer_-1_loss_cls: 0.1070, loss/object/layer_-1_loss_bbox: 1.2985, stats/object/matched_ious: 0.3267, loss: 2.6067, grad_norm: 3.1460
+2025-12-11 00:38:44,773 - mmdet3d - INFO - Epoch [1][4950/23496]        lr: 2.000e-04, eta: 9:21:14, time: 1.845, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0987, loss/object/layer_-1_loss_cls: 0.1038, loss/object/layer_-1_loss_bbox: 1.1888, stats/object/matched_ious: 0.3378, loss: 2.3913, grad_norm: 2.8918
+2025-12-11 00:40:15,463 - mmdet3d - INFO - Epoch [1][5000/23496]        lr: 2.000e-04, eta: 9:19:43, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1772, loss/object/layer_-1_loss_cls: 0.1048, loss/object/layer_-1_loss_bbox: 1.2073, stats/object/matched_ious: 0.3268, loss: 2.4893, grad_norm: 3.0403
+2025-12-11 00:41:46,580 - mmdet3d - INFO - Epoch [1][5050/23496]        lr: 2.000e-04, eta: 9:18:13, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1027, loss/object/layer_-1_loss_cls: 0.0983, loss/object/layer_-1_loss_bbox: 1.3225, stats/object/matched_ious: 0.3255, loss: 2.5235, grad_norm: 3.0163
+2025-12-11 00:43:17,686 - mmdet3d - INFO - Epoch [1][5100/23496]        lr: 2.000e-04, eta: 9:16:43, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1271, loss/object/layer_-1_loss_cls: 0.1154, loss/object/layer_-1_loss_bbox: 1.2998, stats/object/matched_ious: 0.3175, loss: 2.5423, grad_norm: 3.7367
+2025-12-11 00:44:48,814 - mmdet3d - INFO - Epoch [1][5150/23496]        lr: 2.000e-04, eta: 9:15:14, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0638, loss/object/layer_-1_loss_cls: 0.1027, loss/object/layer_-1_loss_bbox: 1.1587, stats/object/matched_ious: 0.3380, loss: 2.3252, grad_norm: 2.9398
+2025-12-11 00:46:20,220 - mmdet3d - INFO - Epoch [1][5200/23496]        lr: 2.000e-04, eta: 9:13:45, time: 1.828, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1600, loss/object/layer_-1_loss_cls: 0.1021, loss/object/layer_-1_loss_bbox: 1.1833, stats/object/matched_ious: 0.3197, loss: 2.4453, grad_norm: 3.0538
+2025-12-11 00:47:50,859 - mmdet3d - INFO - Epoch [1][5250/23496]        lr: 2.000e-04, eta: 9:12:14, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1741, loss/object/layer_-1_loss_cls: 0.1029, loss/object/layer_-1_loss_bbox: 1.2232, stats/object/matched_ious: 0.3150, loss: 2.5002, grad_norm: 3.0594
+2025-12-11 00:49:22,139 - mmdet3d - INFO - Epoch [1][5300/23496]        lr: 2.000e-04, eta: 9:10:45, time: 1.826, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1242, loss/object/layer_-1_loss_cls: 0.1082, loss/object/layer_-1_loss_bbox: 1.2091, stats/object/matched_ious: 0.3393, loss: 2.4415, grad_norm: 3.5898
+2025-12-11 00:50:53,554 - mmdet3d - INFO - Epoch [1][5350/23496]        lr: 2.000e-04, eta: 9:09:16, time: 1.828, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1110, loss/object/layer_-1_loss_cls: 0.0982, loss/object/layer_-1_loss_bbox: 1.2786, stats/object/matched_ious: 0.3302, loss: 2.4877, grad_norm: 2.8619
+2025-12-11 00:52:24,508 - mmdet3d - INFO - Epoch [1][5400/23496]        lr: 2.000e-04, eta: 9:07:46, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1157, loss/object/layer_-1_loss_cls: 0.0993, loss/object/layer_-1_loss_bbox: 1.0935, stats/object/matched_ious: 0.3413, loss: 2.3085, grad_norm: 2.9790
+2025-12-11 00:53:55,264 - mmdet3d - INFO - Epoch [1][5450/23496]        lr: 2.000e-04, eta: 9:06:15, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1085, loss/object/layer_-1_loss_cls: 0.1014, loss/object/layer_-1_loss_bbox: 1.0670, stats/object/matched_ious: 0.3409, loss: 2.2769, grad_norm: 3.0505
+2025-12-11 00:55:26,124 - mmdet3d - INFO - Epoch [1][5500/23496]        lr: 2.000e-04, eta: 9:04:44, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1596, loss/object/layer_-1_loss_cls: 0.1096, loss/object/layer_-1_loss_bbox: 1.2288, stats/object/matched_ious: 0.3112, loss: 2.4979, grad_norm: 3.0030
+2025-12-11 00:56:56,882 - mmdet3d - INFO - Epoch [1][5550/23496]        lr: 2.000e-04, eta: 9:03:13, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0651, loss/object/layer_-1_loss_cls: 0.1047, loss/object/layer_-1_loss_bbox: 1.1580, stats/object/matched_ious: 0.3501, loss: 2.3277, grad_norm: 2.9430
+2025-12-11 00:58:27,666 - mmdet3d - INFO - Epoch [1][5600/23496]        lr: 2.000e-04, eta: 9:01:42, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0900, loss/object/layer_-1_loss_cls: 0.0994, loss/object/layer_-1_loss_bbox: 1.2107, stats/object/matched_ious: 0.3202, loss: 2.4001, grad_norm: 3.0336
+2025-12-11 00:59:57,259 - mmdet3d - INFO - Epoch [1][5650/23496]        lr: 2.000e-04, eta: 9:00:07, time: 1.792, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1506, loss/object/layer_-1_loss_cls: 0.1103, loss/object/layer_-1_loss_bbox: 1.1481, stats/object/matched_ious: 0.3243, loss: 2.4089, grad_norm: 3.0434
+2025-12-11 01:01:28,446 - mmdet3d - INFO - Epoch [1][5700/23496]        lr: 2.000e-04, eta: 8:58:38, time: 1.824, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0792, loss/object/layer_-1_loss_cls: 0.1017, loss/object/layer_-1_loss_bbox: 1.1617, stats/object/matched_ious: 0.3561, loss: 2.3427, grad_norm: 2.9874
+2025-12-11 01:02:59,121 - mmdet3d - INFO - Epoch [1][5750/23496]        lr: 2.000e-04, eta: 8:57:07, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0997, loss/object/layer_-1_loss_cls: 0.1011, loss/object/layer_-1_loss_bbox: 1.1203, stats/object/matched_ious: 0.3367, loss: 2.3211, grad_norm: 3.0536
+2025-12-11 01:04:29,833 - mmdet3d - INFO - Epoch [1][5800/23496]        lr: 2.000e-04, eta: 8:55:36, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0542, loss/object/layer_-1_loss_cls: 0.0989, loss/object/layer_-1_loss_bbox: 1.1029, stats/object/matched_ious: 0.3595, loss: 2.2561, grad_norm: 2.8947
+2025-12-11 01:06:01,051 - mmdet3d - INFO - Epoch [1][5850/23496]        lr: 2.000e-04, eta: 8:54:06, time: 1.824, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1038, loss/object/layer_-1_loss_cls: 0.1006, loss/object/layer_-1_loss_bbox: 1.0702, stats/object/matched_ious: 0.3477, loss: 2.2746, grad_norm: 2.9400
+2025-12-11 01:07:31,000 - mmdet3d - INFO - Epoch [1][5900/23496]        lr: 2.000e-04, eta: 8:52:33, time: 1.799, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1523, loss/object/layer_-1_loss_cls: 0.1010, loss/object/layer_-1_loss_bbox: 1.1351, stats/object/matched_ious: 0.3412, loss: 2.3884, grad_norm: 2.9045
+2025-12-11 01:09:01,369 - mmdet3d - INFO - Epoch [1][5950/23496]        lr: 2.000e-04, eta: 8:51:01, time: 1.807, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0407, loss/object/layer_-1_loss_cls: 0.0976, loss/object/layer_-1_loss_bbox: 1.0874, stats/object/matched_ious: 0.3456, loss: 2.2257, grad_norm: 3.1021
+2025-12-11 01:10:31,892 - mmdet3d - INFO - Epoch [1][6000/23496]        lr: 2.000e-04, eta: 8:49:29, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1174, loss/object/layer_-1_loss_cls: 0.1018, loss/object/layer_-1_loss_bbox: 1.1184, stats/object/matched_ious: 0.3400, loss: 2.3377, grad_norm: 3.0202
+2025-12-11 01:12:02,960 - mmdet3d - INFO - Epoch [1][6050/23496]        lr: 2.000e-04, eta: 8:47:59, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0584, loss/object/layer_-1_loss_cls: 0.1042, loss/object/layer_-1_loss_bbox: 1.0773, stats/object/matched_ious: 0.3635, loss: 2.2399, grad_norm: 2.8145
+2025-12-11 01:13:33,143 - mmdet3d - INFO - Epoch [1][6100/23496]        lr: 2.000e-04, eta: 8:46:27, time: 1.804, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0883, loss/object/layer_-1_loss_cls: 0.0986, loss/object/layer_-1_loss_bbox: 1.1188, stats/object/matched_ious: 0.3392, loss: 2.3056, grad_norm: 2.9394
+2025-12-11 01:15:03,741 - mmdet3d - INFO - Epoch [1][6150/23496]        lr: 2.000e-04, eta: 8:44:55, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0933, loss/object/layer_-1_loss_cls: 0.0967, loss/object/layer_-1_loss_bbox: 1.1127, stats/object/matched_ious: 0.3421, loss: 2.3027, grad_norm: 2.7795
+2025-12-11 01:16:34,519 - mmdet3d - INFO - Epoch [1][6200/23496]        lr: 2.000e-04, eta: 8:43:24, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0861, loss/object/layer_-1_loss_cls: 0.0951, loss/object/layer_-1_loss_bbox: 1.0756, stats/object/matched_ious: 0.3493, loss: 2.2569, grad_norm: 2.8102
+2025-12-11 01:18:05,573 - mmdet3d - INFO - Epoch [1][6250/23496]        lr: 2.000e-04, eta: 8:41:54, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0304, loss/object/layer_-1_loss_cls: 0.0991, loss/object/layer_-1_loss_bbox: 1.1646, stats/object/matched_ious: 0.3428, loss: 2.2942, grad_norm: 3.0093
+2025-12-11 01:19:36,631 - mmdet3d - INFO - Epoch [1][6300/23496]        lr: 2.000e-04, eta: 8:40:24, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0826, loss/object/layer_-1_loss_cls: 0.1030, loss/object/layer_-1_loss_bbox: 1.0890, stats/object/matched_ious: 0.3354, loss: 2.2746, grad_norm: 2.9389
+2025-12-11 01:21:07,434 - mmdet3d - INFO - Epoch [1][6350/23496]        lr: 2.000e-04, eta: 8:38:54, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1017, loss/object/layer_-1_loss_cls: 0.0996, loss/object/layer_-1_loss_bbox: 1.1080, stats/object/matched_ious: 0.3476, loss: 2.3093, grad_norm: 2.8514
+2025-12-11 01:22:37,609 - mmdet3d - INFO - Epoch [1][6400/23496]        lr: 2.000e-04, eta: 8:37:21, time: 1.803, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0437, loss/object/layer_-1_loss_cls: 0.1003, loss/object/layer_-1_loss_bbox: 1.0716, stats/object/matched_ious: 0.3467, loss: 2.2156, grad_norm: 2.9014
+2025-12-11 01:24:08,332 - mmdet3d - INFO - Epoch [1][6450/23496]        lr: 2.000e-04, eta: 8:35:50, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0116, loss/object/layer_-1_loss_cls: 0.0974, loss/object/layer_-1_loss_bbox: 1.0523, stats/object/matched_ious: 0.3674, loss: 2.1613, grad_norm: 2.7270
+2025-12-11 01:25:39,120 - mmdet3d - INFO - Epoch [1][6500/23496]        lr: 2.000e-04, eta: 8:34:19, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0911, loss/object/layer_-1_loss_cls: 0.0959, loss/object/layer_-1_loss_bbox: 1.1136, stats/object/matched_ious: 0.3510, loss: 2.3006, grad_norm: 2.7822
+2025-12-11 01:27:09,842 - mmdet3d - INFO - Epoch [1][6550/23496]        lr: 2.000e-04, eta: 8:32:48, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0684, loss/object/layer_-1_loss_cls: 0.1052, loss/object/layer_-1_loss_bbox: 1.0415, stats/object/matched_ious: 0.3431, loss: 2.2150, grad_norm: 2.8715
+2025-12-11 01:28:40,677 - mmdet3d - INFO - Epoch [1][6600/23496]        lr: 2.000e-04, eta: 8:31:18, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0265, loss/object/layer_-1_loss_cls: 0.0973, loss/object/layer_-1_loss_bbox: 1.1105, stats/object/matched_ious: 0.3585, loss: 2.2342, grad_norm: 2.8230
+2025-12-11 01:30:11,883 - mmdet3d - INFO - Epoch [1][6650/23496]        lr: 2.000e-04, eta: 8:29:48, time: 1.824, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1059, loss/object/layer_-1_loss_cls: 0.0967, loss/object/layer_-1_loss_bbox: 1.0902, stats/object/matched_ious: 0.3407, loss: 2.2928, grad_norm: 2.7655
+2025-12-11 01:31:42,596 - mmdet3d - INFO - Epoch [1][6700/23496]        lr: 2.000e-04, eta: 8:28:17, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0891, loss/object/layer_-1_loss_cls: 0.1073, loss/object/layer_-1_loss_bbox: 1.0942, stats/object/matched_ious: 0.3397, loss: 2.2905, grad_norm: 2.9495
+2025-12-11 01:33:13,423 - mmdet3d - INFO - Epoch [1][6750/23496]        lr: 2.000e-04, eta: 8:26:46, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1034, loss/object/layer_-1_loss_cls: 0.0976, loss/object/layer_-1_loss_bbox: 1.1061, stats/object/matched_ious: 0.3298, loss: 2.3070, grad_norm: 2.9025
+2025-12-11 01:34:44,220 - mmdet3d - INFO - Epoch [1][6800/23496]        lr: 2.000e-04, eta: 8:25:16, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0733, loss/object/layer_-1_loss_cls: 0.1030, loss/object/layer_-1_loss_bbox: 1.0803, stats/object/matched_ious: 0.3468, loss: 2.2566, grad_norm: 2.8406
+2025-12-11 01:36:15,162 - mmdet3d - INFO - Epoch [1][6850/23496]        lr: 2.000e-04, eta: 8:23:45, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0612, loss/object/layer_-1_loss_cls: 0.0963, loss/object/layer_-1_loss_bbox: 1.0833, stats/object/matched_ious: 0.3463, loss: 2.2408, grad_norm: 2.6299
+2025-12-11 01:37:45,823 - mmdet3d - INFO - Epoch [1][6900/23496]        lr: 2.000e-04, eta: 8:22:14, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1175, loss/object/layer_-1_loss_cls: 0.0971, loss/object/layer_-1_loss_bbox: 1.1457, stats/object/matched_ious: 0.3468, loss: 2.3603, grad_norm: 2.8113
+2025-12-11 01:39:16,743 - mmdet3d - INFO - Epoch [1][6950/23496]        lr: 2.000e-04, eta: 8:20:44, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1300, loss/object/layer_-1_loss_cls: 0.0988, loss/object/layer_-1_loss_bbox: 1.1668, stats/object/matched_ious: 0.3327, loss: 2.3957, grad_norm: 2.8629
+2025-12-11 01:40:47,693 - mmdet3d - INFO - Epoch [1][7000/23496]        lr: 2.000e-04, eta: 8:19:13, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0800, loss/object/layer_-1_loss_cls: 0.0950, loss/object/layer_-1_loss_bbox: 1.0838, stats/object/matched_ious: 0.3446, loss: 2.2587, grad_norm: 2.7802
+2025-12-11 01:42:18,338 - mmdet3d - INFO - Epoch [1][7050/23496]        lr: 2.000e-04, eta: 8:17:42, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1019, loss/object/layer_-1_loss_cls: 0.1004, loss/object/layer_-1_loss_bbox: 1.2266, stats/object/matched_ious: 0.3414, loss: 2.4289, grad_norm: 2.9045
+2025-12-11 01:43:48,427 - mmdet3d - INFO - Epoch [1][7100/23496]        lr: 2.000e-04, eta: 8:16:10, time: 1.802, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0223, loss/object/layer_-1_loss_cls: 0.0989, loss/object/layer_-1_loss_bbox: 1.0397, stats/object/matched_ious: 0.3535, loss: 2.1609, grad_norm: 2.8861
+2025-12-11 01:45:19,652 - mmdet3d - INFO - Epoch [1][7150/23496]        lr: 2.000e-04, eta: 8:14:40, time: 1.825, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0861, loss/object/layer_-1_loss_cls: 0.0954, loss/object/layer_-1_loss_bbox: 1.0458, stats/object/matched_ious: 0.3461, loss: 2.2274, grad_norm: 2.7664
+2025-12-11 01:46:50,276 - mmdet3d - INFO - Epoch [1][7200/23496]        lr: 2.000e-04, eta: 8:13:09, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0394, loss/object/layer_-1_loss_cls: 0.1003, loss/object/layer_-1_loss_bbox: 1.1229, stats/object/matched_ious: 0.3493, loss: 2.2625, grad_norm: 2.7330
+2025-12-11 01:48:20,996 - mmdet3d - INFO - Epoch [1][7250/23496]        lr: 2.000e-04, eta: 8:11:38, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0825, loss/object/layer_-1_loss_cls: 0.0931, loss/object/layer_-1_loss_bbox: 1.1367, stats/object/matched_ious: 0.3328, loss: 2.3123, grad_norm: 2.7522
+2025-12-11 01:49:51,859 - mmdet3d - INFO - Epoch [1][7300/23496]        lr: 2.000e-04, eta: 8:10:07, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0481, loss/object/layer_-1_loss_cls: 0.0966, loss/object/layer_-1_loss_bbox: 1.0001, stats/object/matched_ious: 0.3607, loss: 2.1449, grad_norm: 2.8505
+2025-12-11 01:51:22,331 - mmdet3d - INFO - Epoch [1][7350/23496]        lr: 2.000e-04, eta: 8:08:36, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0486, loss/object/layer_-1_loss_cls: 0.0979, loss/object/layer_-1_loss_bbox: 1.0971, stats/object/matched_ious: 0.3585, loss: 2.2436, grad_norm: 2.8577
+2025-12-11 01:52:53,052 - mmdet3d - INFO - Epoch [1][7400/23496]        lr: 2.000e-04, eta: 8:07:05, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1229, loss/object/layer_-1_loss_cls: 0.1010, loss/object/layer_-1_loss_bbox: 1.1814, stats/object/matched_ious: 0.3338, loss: 2.4053, grad_norm: 2.8257
+2025-12-11 01:54:24,368 - mmdet3d - INFO - Epoch [1][7450/23496]        lr: 2.000e-04, eta: 8:05:35, time: 1.826, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0047, loss/object/layer_-1_loss_cls: 0.0902, loss/object/layer_-1_loss_bbox: 1.0285, stats/object/matched_ious: 0.3693, loss: 2.1234, grad_norm: 2.6046
+2025-12-11 01:55:55,313 - mmdet3d - INFO - Epoch [1][7500/23496]        lr: 2.000e-04, eta: 8:04:05, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0869, loss/object/layer_-1_loss_cls: 0.0935, loss/object/layer_-1_loss_bbox: 1.0451, stats/object/matched_ious: 0.3516, loss: 2.2256, grad_norm: 2.6928
+2025-12-11 01:57:25,665 - mmdet3d - INFO - Epoch [1][7550/23496]        lr: 2.000e-04, eta: 8:02:33, time: 1.807, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0261, loss/object/layer_-1_loss_cls: 0.0937, loss/object/layer_-1_loss_bbox: 1.0630, stats/object/matched_ious: 0.3502, loss: 2.1829, grad_norm: 2.6424
+2025-12-11 01:58:57,075 - mmdet3d - INFO - Epoch [1][7600/23496]        lr: 2.000e-04, eta: 8:01:03, time: 1.828, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0352, loss/object/layer_-1_loss_cls: 0.0979, loss/object/layer_-1_loss_bbox: 0.9797, stats/object/matched_ious: 0.3661, loss: 2.1128, grad_norm: 2.6654
+2025-12-11 02:00:28,111 - mmdet3d - INFO - Epoch [1][7650/23496]        lr: 2.000e-04, eta: 7:59:33, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0899, loss/object/layer_-1_loss_cls: 0.0954, loss/object/layer_-1_loss_bbox: 1.0201, stats/object/matched_ious: 0.3499, loss: 2.2054, grad_norm: 2.6341
+2025-12-11 02:01:58,263 - mmdet3d - INFO - Epoch [1][7700/23496]        lr: 2.000e-04, eta: 7:58:01, time: 1.803, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0496, loss/object/layer_-1_loss_cls: 0.0973, loss/object/layer_-1_loss_bbox: 1.0370, stats/object/matched_ious: 0.3565, loss: 2.1839, grad_norm: 2.9526
+2025-12-11 02:03:28,769 - mmdet3d - INFO - Epoch [1][7750/23496]        lr: 2.000e-04, eta: 7:56:30, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0739, loss/object/layer_-1_loss_cls: 0.0929, loss/object/layer_-1_loss_bbox: 1.0965, stats/object/matched_ious: 0.3468, loss: 2.2633, grad_norm: 2.7120
+2025-12-11 02:04:59,262 - mmdet3d - INFO - Epoch [1][7800/23496]        lr: 2.000e-04, eta: 7:54:58, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0985, loss/object/layer_-1_loss_cls: 0.0988, loss/object/layer_-1_loss_bbox: 1.1262, stats/object/matched_ious: 0.3442, loss: 2.3236, grad_norm: 2.6052
+2025-12-11 02:06:29,982 - mmdet3d - INFO - Epoch [1][7850/23496]        lr: 2.000e-04, eta: 7:53:27, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0481, loss/object/layer_-1_loss_cls: 0.0898, loss/object/layer_-1_loss_bbox: 1.0296, stats/object/matched_ious: 0.3449, loss: 2.1675, grad_norm: 2.9065
+2025-12-11 02:08:01,304 - mmdet3d - INFO - Epoch [1][7900/23496]        lr: 2.000e-04, eta: 7:51:58, time: 1.826, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0248, loss/object/layer_-1_loss_cls: 0.0970, loss/object/layer_-1_loss_bbox: 1.1152, stats/object/matched_ious: 0.3456, loss: 2.2371, grad_norm: 2.9880
+2025-12-11 02:09:32,127 - mmdet3d - INFO - Epoch [1][7950/23496]        lr: 2.000e-04, eta: 7:50:27, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0774, loss/object/layer_-1_loss_cls: 0.0986, loss/object/layer_-1_loss_bbox: 1.0952, stats/object/matched_ious: 0.3491, loss: 2.2713, grad_norm: 2.6475
+2025-12-11 02:11:02,826 - mmdet3d - INFO - Epoch [1][8000/23496]        lr: 2.000e-04, eta: 7:48:56, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0740, loss/object/layer_-1_loss_cls: 0.0989, loss/object/layer_-1_loss_bbox: 1.0635, stats/object/matched_ious: 0.3491, loss: 2.2365, grad_norm: 2.7021
+2025-12-11 02:12:32,970 - mmdet3d - INFO - Epoch [1][8050/23496]        lr: 2.000e-04, eta: 7:47:24, time: 1.803, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0251, loss/object/layer_-1_loss_cls: 0.0986, loss/object/layer_-1_loss_bbox: 1.0203, stats/object/matched_ious: 0.3649, loss: 2.1440, grad_norm: 2.6292
+2025-12-11 02:14:03,970 - mmdet3d - INFO - Epoch [1][8100/23496]        lr: 2.000e-04, eta: 7:45:54, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1144, loss/object/layer_-1_loss_cls: 0.0929, loss/object/layer_-1_loss_bbox: 1.1599, stats/object/matched_ious: 0.3447, loss: 2.3672, grad_norm: 2.6911
+2025-12-11 02:15:34,244 - mmdet3d - INFO - Epoch [1][8150/23496]        lr: 2.000e-04, eta: 7:44:22, time: 1.805, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0467, loss/object/layer_-1_loss_cls: 0.1015, loss/object/layer_-1_loss_bbox: 1.0127, stats/object/matched_ious: 0.3647, loss: 2.1608, grad_norm: 2.6649
+2025-12-11 02:17:05,295 - mmdet3d - INFO - Epoch [1][8200/23496]        lr: 2.000e-04, eta: 7:42:52, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9889, loss/object/layer_-1_loss_cls: 0.0947, loss/object/layer_-1_loss_bbox: 1.1028, stats/object/matched_ious: 0.3621, loss: 2.1864, grad_norm: 2.5776
+2025-12-11 02:18:35,638 - mmdet3d - INFO - Epoch [1][8250/23496]        lr: 2.000e-04, eta: 7:41:20, time: 1.807, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0770, loss/object/layer_-1_loss_cls: 0.0935, loss/object/layer_-1_loss_bbox: 1.0334, stats/object/matched_ious: 0.3474, loss: 2.2038, grad_norm: 2.7484
+2025-12-11 02:20:06,689 - mmdet3d - INFO - Epoch [1][8300/23496]        lr: 2.000e-04, eta: 7:39:50, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0811, loss/object/layer_-1_loss_cls: 0.1055, loss/object/layer_-1_loss_bbox: 1.1920, stats/object/matched_ious: 0.3306, loss: 2.3787, grad_norm: 3.9500
+2025-12-11 02:21:37,435 - mmdet3d - INFO - Epoch [1][8350/23496]        lr: 2.000e-04, eta: 7:38:19, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0478, loss/object/layer_-1_loss_cls: 0.0965, loss/object/layer_-1_loss_bbox: 0.9927, stats/object/matched_ious: 0.3658, loss: 2.1370, grad_norm: 2.8234
+2025-12-11 02:23:07,852 - mmdet3d - INFO - Epoch [1][8400/23496]        lr: 2.000e-04, eta: 7:36:47, time: 1.808, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9922, loss/object/layer_-1_loss_cls: 0.0931, loss/object/layer_-1_loss_bbox: 1.0084, stats/object/matched_ious: 0.3754, loss: 2.0938, grad_norm: 2.7586
+2025-12-11 02:24:38,807 - mmdet3d - INFO - Epoch [1][8450/23496]        lr: 2.000e-04, eta: 7:35:17, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0334, loss/object/layer_-1_loss_cls: 0.0972, loss/object/layer_-1_loss_bbox: 1.0141, stats/object/matched_ious: 0.3662, loss: 2.1446, grad_norm: 3.1415
+2025-12-11 02:26:09,320 - mmdet3d - INFO - Epoch [1][8500/23496]        lr: 2.000e-04, eta: 7:33:46, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0122, loss/object/layer_-1_loss_cls: 0.0893, loss/object/layer_-1_loss_bbox: 1.0191, stats/object/matched_ious: 0.3752, loss: 2.1207, grad_norm: 2.5680
+2025-12-11 02:27:40,418 - mmdet3d - INFO - Epoch [1][8550/23496]        lr: 2.000e-04, eta: 7:32:16, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0218, loss/object/layer_-1_loss_cls: 0.0930, loss/object/layer_-1_loss_bbox: 0.9434, stats/object/matched_ious: 0.3615, loss: 2.0582, grad_norm: 2.6316
+2025-12-11 02:29:11,530 - mmdet3d - INFO - Epoch [1][8600/23496]        lr: 2.000e-04, eta: 7:30:45, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0917, loss/object/layer_-1_loss_cls: 0.0956, loss/object/layer_-1_loss_bbox: 1.1326, stats/object/matched_ious: 0.3452, loss: 2.3198, grad_norm: 2.6326
+2025-12-11 02:30:42,171 - mmdet3d - INFO - Epoch [1][8650/23496]        lr: 2.000e-04, eta: 7:29:14, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9865, loss/object/layer_-1_loss_cls: 0.0914, loss/object/layer_-1_loss_bbox: 1.0113, stats/object/matched_ious: 0.3688, loss: 2.0892, grad_norm: 2.5405
+2025-12-11 02:32:12,732 - mmdet3d - INFO - Epoch [1][8700/23496]        lr: 2.000e-04, eta: 7:27:43, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0216, loss/object/layer_-1_loss_cls: 0.0868, loss/object/layer_-1_loss_bbox: 0.9683, stats/object/matched_ious: 0.3679, loss: 2.0767, grad_norm: 2.5554
+2025-12-11 02:33:43,495 - mmdet3d - INFO - Epoch [1][8750/23496]        lr: 2.000e-04, eta: 7:26:12, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0111, loss/object/layer_-1_loss_cls: 0.0900, loss/object/layer_-1_loss_bbox: 1.0341, stats/object/matched_ious: 0.3682, loss: 2.1352, grad_norm: 2.5503
+2025-12-11 02:35:14,479 - mmdet3d - INFO - Epoch [1][8800/23496]        lr: 2.000e-04, eta: 7:24:42, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9659, loss/object/layer_-1_loss_cls: 0.0952, loss/object/layer_-1_loss_bbox: 1.0260, stats/object/matched_ious: 0.3748, loss: 2.0871, grad_norm: 2.6628
+2025-12-11 02:36:45,038 - mmdet3d - INFO - Epoch [1][8850/23496]        lr: 2.000e-04, eta: 7:23:11, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9782, loss/object/layer_-1_loss_cls: 0.0990, loss/object/layer_-1_loss_bbox: 1.0228, stats/object/matched_ious: 0.3863, loss: 2.0999, grad_norm: 2.6760
+2025-12-11 02:38:15,581 - mmdet3d - INFO - Epoch [1][8900/23496]        lr: 2.000e-04, eta: 7:21:40, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9627, loss/object/layer_-1_loss_cls: 0.0927, loss/object/layer_-1_loss_bbox: 0.9626, stats/object/matched_ious: 0.3724, loss: 2.0180, grad_norm: 2.6668
+2025-12-11 02:39:45,713 - mmdet3d - INFO - Epoch [1][8950/23496]        lr: 2.000e-04, eta: 7:20:08, time: 1.803, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9934, loss/object/layer_-1_loss_cls: 0.0931, loss/object/layer_-1_loss_bbox: 0.9435, stats/object/matched_ious: 0.3816, loss: 2.0301, grad_norm: 2.8649
+2025-12-11 02:41:15,599 - mmdet3d - INFO - Epoch [1][9000/23496]        lr: 2.000e-04, eta: 7:18:36, time: 1.798, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1108, loss/object/layer_-1_loss_cls: 0.1021, loss/object/layer_-1_loss_bbox: 1.0500, stats/object/matched_ious: 0.3400, loss: 2.2629, grad_norm: 3.3028
+2025-12-11 02:42:46,352 - mmdet3d - INFO - Epoch [1][9050/23496]        lr: 2.000e-04, eta: 7:17:05, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0397, loss/object/layer_-1_loss_cls: 0.0963, loss/object/layer_-1_loss_bbox: 1.1220, stats/object/matched_ious: 0.3528, loss: 2.2580, grad_norm: 3.2248
+2025-12-11 02:44:17,693 - mmdet3d - INFO - Epoch [1][9100/23496]        lr: 2.000e-04, eta: 7:15:35, time: 1.827, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9914, loss/object/layer_-1_loss_cls: 0.0941, loss/object/layer_-1_loss_bbox: 1.0278, stats/object/matched_ious: 0.3552, loss: 2.1134, grad_norm: 2.6564
+2025-12-11 02:45:48,345 - mmdet3d - INFO - Epoch [1][9150/23496]        lr: 2.000e-04, eta: 7:14:04, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0257, loss/object/layer_-1_loss_cls: 0.0947, loss/object/layer_-1_loss_bbox: 1.1229, stats/object/matched_ious: 0.3547, loss: 2.2433, grad_norm: 2.7560
+2025-12-11 02:47:18,286 - mmdet3d - INFO - Epoch [1][9200/23496]        lr: 2.000e-04, eta: 7:12:32, time: 1.799, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 1.1030, loss/object/layer_-1_loss_cls: 0.0990, loss/object/layer_-1_loss_bbox: 1.1094, stats/object/matched_ious: 0.3453, loss: 2.3114, grad_norm: 2.5185
+2025-12-11 02:48:48,634 - mmdet3d - INFO - Epoch [1][9250/23496]        lr: 2.000e-04, eta: 7:11:00, time: 1.807, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 1.0408, loss/object/layer_-1_loss_cls: 0.0964, loss/object/layer_-1_loss_bbox: 1.0569, stats/object/matched_ious: 0.3559, loss: 2.1941, grad_norm: 2.9277
+2025-12-11 02:50:19,672 - mmdet3d - INFO - Epoch [1][9300/23496]        lr: 2.000e-04, eta: 7:09:30, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9460, loss/object/layer_-1_loss_cls: 0.0916, loss/object/layer_-1_loss_bbox: 0.9342, stats/object/matched_ious: 0.3805, loss: 1.9718, grad_norm: 2.4512
+2025-12-11 02:51:50,627 - mmdet3d - INFO - Epoch [1][9350/23496]        lr: 2.000e-04, eta: 7:08:00, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0432, loss/object/layer_-1_loss_cls: 0.0943, loss/object/layer_-1_loss_bbox: 1.0887, stats/object/matched_ious: 0.3586, loss: 2.2262, grad_norm: 2.8558
+2025-12-11 02:53:20,894 - mmdet3d - INFO - Epoch [1][9400/23496]        lr: 2.000e-04, eta: 7:06:28, time: 1.805, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0758, loss/object/layer_-1_loss_cls: 0.0941, loss/object/layer_-1_loss_bbox: 1.0299, stats/object/matched_ious: 0.3618, loss: 2.1998, grad_norm: 2.6444
+2025-12-11 02:54:51,756 - mmdet3d - INFO - Epoch [1][9450/23496]        lr: 2.000e-04, eta: 7:04:57, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0036, loss/object/layer_-1_loss_cls: 0.0916, loss/object/layer_-1_loss_bbox: 0.9457, stats/object/matched_ious: 0.3676, loss: 2.0408, grad_norm: 2.5479
+2025-12-11 02:56:22,772 - mmdet3d - INFO - Epoch [1][9500/23496]        lr: 2.000e-04, eta: 7:03:27, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0262, loss/object/layer_-1_loss_cls: 0.0929, loss/object/layer_-1_loss_bbox: 0.9644, stats/object/matched_ious: 0.3590, loss: 2.0834, grad_norm: 2.5761
+2025-12-11 02:57:54,134 - mmdet3d - INFO - Epoch [1][9550/23496]        lr: 2.000e-04, eta: 7:01:57, time: 1.827, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0166, loss/object/layer_-1_loss_cls: 0.0893, loss/object/layer_-1_loss_bbox: 0.9614, stats/object/matched_ious: 0.3598, loss: 2.0672, grad_norm: 2.4448
+2025-12-11 02:59:24,520 - mmdet3d - INFO - Epoch [1][9600/23496]        lr: 2.000e-04, eta: 7:00:26, time: 1.808, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0800, loss/object/layer_-1_loss_cls: 0.0989, loss/object/layer_-1_loss_bbox: 1.0296, stats/object/matched_ious: 0.3402, loss: 2.2085, grad_norm: 2.6808
+2025-12-11 03:00:55,315 - mmdet3d - INFO - Epoch [1][9650/23496]        lr: 2.000e-04, eta: 6:58:55, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0134, loss/object/layer_-1_loss_cls: 0.0916, loss/object/layer_-1_loss_bbox: 1.0415, stats/object/matched_ious: 0.3556, loss: 2.1465, grad_norm: 2.6824
+2025-12-11 03:02:25,985 - mmdet3d - INFO - Epoch [1][9700/23496]        lr: 2.000e-04, eta: 6:57:24, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9601, loss/object/layer_-1_loss_cls: 0.0911, loss/object/layer_-1_loss_bbox: 1.0035, stats/object/matched_ious: 0.3750, loss: 2.0547, grad_norm: 2.4404
+2025-12-11 03:03:56,306 - mmdet3d - INFO - Epoch [1][9750/23496]        lr: 2.000e-04, eta: 6:55:53, time: 1.806, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0486, loss/object/layer_-1_loss_cls: 0.0948, loss/object/layer_-1_loss_bbox: 1.0633, stats/object/matched_ious: 0.3554, loss: 2.2067, grad_norm: 2.7067
+2025-12-11 03:05:26,984 - mmdet3d - INFO - Epoch [1][9800/23496]        lr: 2.000e-04, eta: 6:54:22, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0118, loss/object/layer_-1_loss_cls: 0.0946, loss/object/layer_-1_loss_bbox: 0.9850, stats/object/matched_ious: 0.3661, loss: 2.0913, grad_norm: 2.6240
+2025-12-11 03:06:58,213 - mmdet3d - INFO - Epoch [1][9850/23496]        lr: 2.000e-04, eta: 6:52:52, time: 1.825, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0731, loss/object/layer_-1_loss_cls: 0.0947, loss/object/layer_-1_loss_bbox: 1.1462, stats/object/matched_ious: 0.3517, loss: 2.3140, grad_norm: 2.7275
+2025-12-11 03:08:29,311 - mmdet3d - INFO - Epoch [1][9900/23496]        lr: 2.000e-04, eta: 6:51:21, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0556, loss/object/layer_-1_loss_cls: 0.0933, loss/object/layer_-1_loss_bbox: 1.0633, stats/object/matched_ious: 0.3588, loss: 2.2122, grad_norm: 2.5567
+2025-12-11 03:10:00,031 - mmdet3d - INFO - Epoch [1][9950/23496]        lr: 2.000e-04, eta: 6:49:51, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0607, loss/object/layer_-1_loss_cls: 0.0916, loss/object/layer_-1_loss_bbox: 1.1038, stats/object/matched_ious: 0.3498, loss: 2.2561, grad_norm: 2.4881
+2025-12-11 03:11:31,155 - mmdet3d - INFO - Epoch [1][10000/23496]       lr: 2.000e-04, eta: 6:48:20, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0531, loss/object/layer_-1_loss_cls: 0.0951, loss/object/layer_-1_loss_bbox: 1.0997, stats/object/matched_ious: 0.3571, loss: 2.2479, grad_norm: 2.5178
+2025-12-11 03:13:01,597 - mmdet3d - INFO - Epoch [1][10050/23496]       lr: 2.000e-04, eta: 6:46:49, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0499, loss/object/layer_-1_loss_cls: 0.0949, loss/object/layer_-1_loss_bbox: 0.9861, stats/object/matched_ious: 0.3673, loss: 2.1309, grad_norm: 2.5948
+2025-12-11 03:14:32,504 - mmdet3d - INFO - Epoch [1][10100/23496]       lr: 2.000e-04, eta: 6:45:19, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0372, loss/object/layer_-1_loss_cls: 0.0891, loss/object/layer_-1_loss_bbox: 0.9723, stats/object/matched_ious: 0.3457, loss: 2.0986, grad_norm: 2.6394
+2025-12-11 03:16:03,435 - mmdet3d - INFO - Epoch [1][10150/23496]       lr: 2.000e-04, eta: 6:43:48, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0098, loss/object/layer_-1_loss_cls: 0.0892, loss/object/layer_-1_loss_bbox: 1.0472, stats/object/matched_ious: 0.3581, loss: 2.1462, grad_norm: 2.5548
+2025-12-11 03:17:34,068 - mmdet3d - INFO - Epoch [1][10200/23496]       lr: 2.000e-04, eta: 6:42:17, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9861, loss/object/layer_-1_loss_cls: 0.0899, loss/object/layer_-1_loss_bbox: 0.9378, stats/object/matched_ious: 0.3839, loss: 2.0138, grad_norm: 2.6225
+2025-12-11 03:19:04,665 - mmdet3d - INFO - Epoch [1][10250/23496]       lr: 2.000e-04, eta: 6:40:46, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0610, loss/object/layer_-1_loss_cls: 0.0998, loss/object/layer_-1_loss_bbox: 1.0843, stats/object/matched_ious: 0.3530, loss: 2.2451, grad_norm: 2.9101
+2025-12-11 03:20:35,635 - mmdet3d - INFO - Epoch [1][10300/23496]       lr: 2.000e-04, eta: 6:39:16, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9384, loss/object/layer_-1_loss_cls: 0.0899, loss/object/layer_-1_loss_bbox: 0.9499, stats/object/matched_ious: 0.3773, loss: 1.9782, grad_norm: 2.5842
+2025-12-11 03:22:06,044 - mmdet3d - INFO - Epoch [1][10350/23496]       lr: 2.000e-04, eta: 6:37:44, time: 1.808, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0032, loss/object/layer_-1_loss_cls: 0.0888, loss/object/layer_-1_loss_bbox: 0.9752, stats/object/matched_ious: 0.3806, loss: 2.0672, grad_norm: 2.7193
+2025-12-11 03:23:36,836 - mmdet3d - INFO - Epoch [1][10400/23496]       lr: 2.000e-04, eta: 6:36:14, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0200, loss/object/layer_-1_loss_cls: 0.0918, loss/object/layer_-1_loss_bbox: 0.9818, stats/object/matched_ious: 0.3673, loss: 2.0936, grad_norm: 2.5129
+2025-12-11 03:25:07,298 - mmdet3d - INFO - Epoch [1][10450/23496]       lr: 2.000e-04, eta: 6:34:42, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9096, loss/object/layer_-1_loss_cls: 0.0821, loss/object/layer_-1_loss_bbox: 0.9394, stats/object/matched_ious: 0.3803, loss: 1.9311, grad_norm: 2.4971
+2025-12-11 03:26:37,436 - mmdet3d - INFO - Epoch [1][10500/23496]       lr: 2.000e-04, eta: 6:33:11, time: 1.803, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9925, loss/object/layer_-1_loss_cls: 0.0877, loss/object/layer_-1_loss_bbox: 1.0494, stats/object/matched_ious: 0.3692, loss: 2.1296, grad_norm: 2.6565
+2025-12-11 03:28:08,235 - mmdet3d - INFO - Epoch [1][10550/23496]       lr: 2.000e-04, eta: 6:31:40, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0004, loss/object/layer_-1_loss_cls: 0.0925, loss/object/layer_-1_loss_bbox: 0.9726, stats/object/matched_ious: 0.3701, loss: 2.0655, grad_norm: 2.5520
+2025-12-11 03:29:39,653 - mmdet3d - INFO - Epoch [1][10600/23496]       lr: 2.000e-04, eta: 6:30:10, time: 1.828, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0466, loss/object/layer_-1_loss_cls: 0.0942, loss/object/layer_-1_loss_bbox: 1.0320, stats/object/matched_ious: 0.3534, loss: 2.1728, grad_norm: 2.5278
+2025-12-11 03:31:10,537 - mmdet3d - INFO - Epoch [1][10650/23496]       lr: 2.000e-04, eta: 6:28:40, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0756, loss/object/layer_-1_loss_cls: 0.0901, loss/object/layer_-1_loss_bbox: 0.9980, stats/object/matched_ious: 0.3544, loss: 2.1637, grad_norm: 2.4475
+2025-12-11 03:32:41,063 - mmdet3d - INFO - Epoch [1][10700/23496]       lr: 2.000e-04, eta: 6:27:09, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0567, loss/object/layer_-1_loss_cls: 0.0913, loss/object/layer_-1_loss_bbox: 1.0861, stats/object/matched_ious: 0.3520, loss: 2.2340, grad_norm: 2.5477
+2025-12-11 03:34:12,312 - mmdet3d - INFO - Epoch [1][10750/23496]       lr: 2.000e-04, eta: 6:25:38, time: 1.825, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0257, loss/object/layer_-1_loss_cls: 0.0926, loss/object/layer_-1_loss_bbox: 1.0149, stats/object/matched_ious: 0.3771, loss: 2.1333, grad_norm: 2.4881
+2025-12-11 03:35:43,385 - mmdet3d - INFO - Epoch [1][10800/23496]       lr: 2.000e-04, eta: 6:24:08, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0732, loss/object/layer_-1_loss_cls: 0.0949, loss/object/layer_-1_loss_bbox: 1.0787, stats/object/matched_ious: 0.3459, loss: 2.2468, grad_norm: 2.4880
+2025-12-11 03:37:14,716 - mmdet3d - INFO - Epoch [1][10850/23496]       lr: 2.000e-04, eta: 6:22:38, time: 1.827, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0230, loss/object/layer_-1_loss_cls: 0.0906, loss/object/layer_-1_loss_bbox: 1.0300, stats/object/matched_ious: 0.3589, loss: 2.1436, grad_norm: 2.3895
+2025-12-11 03:38:45,691 - mmdet3d - INFO - Epoch [1][10900/23496]       lr: 2.000e-04, eta: 6:21:07, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0406, loss/object/layer_-1_loss_cls: 0.0941, loss/object/layer_-1_loss_bbox: 1.0440, stats/object/matched_ious: 0.3772, loss: 2.1787, grad_norm: 2.7927
+2025-12-11 03:40:16,946 - mmdet3d - INFO - Epoch [1][10950/23496]       lr: 2.000e-04, eta: 6:19:37, time: 1.825, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9424, loss/object/layer_-1_loss_cls: 0.0846, loss/object/layer_-1_loss_bbox: 0.8979, stats/object/matched_ious: 0.3836, loss: 1.9249, grad_norm: 2.4857
+2025-12-11 03:41:47,381 - mmdet3d - INFO - Epoch [1][11000/23496]       lr: 2.000e-04, eta: 6:18:06, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0169, loss/object/layer_-1_loss_cls: 0.0981, loss/object/layer_-1_loss_bbox: 0.9922, stats/object/matched_ious: 0.3682, loss: 2.1072, grad_norm: 2.5706
+2025-12-11 03:43:18,176 - mmdet3d - INFO - Epoch [1][11050/23496]       lr: 2.000e-04, eta: 6:16:35, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0585, loss/object/layer_-1_loss_cls: 0.0987, loss/object/layer_-1_loss_bbox: 1.0858, stats/object/matched_ious: 0.3552, loss: 2.2429, grad_norm: 2.8494
+2025-12-11 03:44:48,892 - mmdet3d - INFO - Epoch [1][11100/23496]       lr: 2.000e-04, eta: 6:15:04, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9839, loss/object/layer_-1_loss_cls: 0.0939, loss/object/layer_-1_loss_bbox: 0.9611, stats/object/matched_ious: 0.3884, loss: 2.0390, grad_norm: 2.4818
+2025-12-11 03:46:20,056 - mmdet3d - INFO - Epoch [1][11150/23496]       lr: 2.000e-04, eta: 6:13:34, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0049, loss/object/layer_-1_loss_cls: 0.0968, loss/object/layer_-1_loss_bbox: 0.9899, stats/object/matched_ious: 0.3703, loss: 2.0916, grad_norm: 2.5831
+2025-12-11 03:47:51,015 - mmdet3d - INFO - Epoch [1][11200/23496]       lr: 2.000e-04, eta: 6:12:03, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9505, loss/object/layer_-1_loss_cls: 0.0939, loss/object/layer_-1_loss_bbox: 0.9642, stats/object/matched_ious: 0.3863, loss: 2.0086, grad_norm: 2.6524
+2025-12-11 03:49:22,023 - mmdet3d - INFO - Epoch [1][11250/23496]       lr: 2.000e-04, eta: 6:10:33, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0031, loss/object/layer_-1_loss_cls: 0.0929, loss/object/layer_-1_loss_bbox: 1.0995, stats/object/matched_ious: 0.3632, loss: 2.1955, grad_norm: 2.9283
+2025-12-11 03:50:53,296 - mmdet3d - INFO - Epoch [1][11300/23496]       lr: 2.000e-04, eta: 6:09:03, time: 1.825, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0558, loss/object/layer_-1_loss_cls: 0.0957, loss/object/layer_-1_loss_bbox: 1.0953, stats/object/matched_ious: 0.3565, loss: 2.2468, grad_norm: 2.7638
+2025-12-11 03:52:23,762 - mmdet3d - INFO - Epoch [1][11350/23496]       lr: 2.000e-04, eta: 6:07:31, time: 1.809, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 0.9702, loss/object/layer_-1_loss_cls: 0.0935, loss/object/layer_-1_loss_bbox: 0.9730, stats/object/matched_ious: 0.3811, loss: 2.0368, grad_norm: 2.5046
+2025-12-11 03:53:53,765 - mmdet3d - INFO - Epoch [1][11400/23496]       lr: 2.000e-04, eta: 6:06:00, time: 1.800, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 1.1016, loss/object/layer_-1_loss_cls: 0.0883, loss/object/layer_-1_loss_bbox: 1.1317, stats/object/matched_ious: 0.3329, loss: 2.3216, grad_norm: 2.5162
+2025-12-11 03:55:24,137 - mmdet3d - INFO - Epoch [1][11450/23496]       lr: 2.000e-04, eta: 6:04:29, time: 1.807, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0046, loss/object/layer_-1_loss_cls: 0.0842, loss/object/layer_-1_loss_bbox: 1.0106, stats/object/matched_ious: 0.3561, loss: 2.0993, grad_norm: 2.3939
+2025-12-11 03:56:54,754 - mmdet3d - INFO - Epoch [1][11500/23496]       lr: 2.000e-04, eta: 6:02:58, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0012, loss/object/layer_-1_loss_cls: 0.0898, loss/object/layer_-1_loss_bbox: 1.0904, stats/object/matched_ious: 0.3605, loss: 2.1814, grad_norm: 2.4234
+2025-12-11 03:58:24,728 - mmdet3d - INFO - Epoch [1][11550/23496]       lr: 2.000e-04, eta: 6:01:26, time: 1.799, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0209, loss/object/layer_-1_loss_cls: 0.0918, loss/object/layer_-1_loss_bbox: 1.1501, stats/object/matched_ious: 0.3663, loss: 2.2627, grad_norm: 2.9945
+2025-12-11 03:59:55,070 - mmdet3d - INFO - Epoch [1][11600/23496]       lr: 2.000e-04, eta: 5:59:55, time: 1.807, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0415, loss/object/layer_-1_loss_cls: 0.0961, loss/object/layer_-1_loss_bbox: 1.0047, stats/object/matched_ious: 0.3662, loss: 2.1424, grad_norm: 2.6621
+2025-12-11 04:01:26,356 - mmdet3d - INFO - Epoch [1][11650/23496]       lr: 2.000e-04, eta: 5:58:25, time: 1.826, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9693, loss/object/layer_-1_loss_cls: 0.0911, loss/object/layer_-1_loss_bbox: 0.9438, stats/object/matched_ious: 0.3637, loss: 2.0042, grad_norm: 2.5203
+2025-12-11 04:02:57,023 - mmdet3d - INFO - Epoch [1][11700/23496]       lr: 2.000e-04, eta: 5:56:54, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9283, loss/object/layer_-1_loss_cls: 0.0899, loss/object/layer_-1_loss_bbox: 0.9346, stats/object/matched_ious: 0.3852, loss: 1.9528, grad_norm: 2.2740
+2025-12-11 04:04:27,878 - mmdet3d - INFO - Epoch [1][11750/23496]       lr: 2.000e-04, eta: 5:55:23, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0567, loss/object/layer_-1_loss_cls: 0.0931, loss/object/layer_-1_loss_bbox: 1.0673, stats/object/matched_ious: 0.3702, loss: 2.2172, grad_norm: 2.5315
+2025-12-11 04:05:58,777 - mmdet3d - INFO - Epoch [1][11800/23496]       lr: 2.000e-04, eta: 5:53:52, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0214, loss/object/layer_-1_loss_cls: 0.0882, loss/object/layer_-1_loss_bbox: 1.0553, stats/object/matched_ious: 0.3614, loss: 2.1649, grad_norm: 2.5237
+2025-12-11 04:07:29,968 - mmdet3d - INFO - Epoch [1][11850/23496]       lr: 2.000e-04, eta: 5:52:22, time: 1.824, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9619, loss/object/layer_-1_loss_cls: 0.0827, loss/object/layer_-1_loss_bbox: 0.9297, stats/object/matched_ious: 0.3871, loss: 1.9743, grad_norm: 2.4974
+2025-12-11 04:09:00,588 - mmdet3d - INFO - Epoch [1][11900/23496]       lr: 2.000e-04, eta: 5:50:51, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9962, loss/object/layer_-1_loss_cls: 0.0956, loss/object/layer_-1_loss_bbox: 1.0859, stats/object/matched_ious: 0.3731, loss: 2.1777, grad_norm: 2.4851
+2025-12-11 04:10:31,583 - mmdet3d - INFO - Epoch [1][11950/23496]       lr: 2.000e-04, eta: 5:49:21, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0806, loss/object/layer_-1_loss_cls: 0.0942, loss/object/layer_-1_loss_bbox: 1.0749, stats/object/matched_ious: 0.3474, loss: 2.2497, grad_norm: 2.4911
+2025-12-11 04:12:02,076 - mmdet3d - INFO - Epoch [1][12000/23496]       lr: 2.000e-04, eta: 5:47:50, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9469, loss/object/layer_-1_loss_cls: 0.0802, loss/object/layer_-1_loss_bbox: 1.0113, stats/object/matched_ious: 0.3695, loss: 2.0384, grad_norm: 2.5114
+2025-12-11 04:13:33,396 - mmdet3d - INFO - Epoch [1][12050/23496]       lr: 2.000e-04, eta: 5:46:19, time: 1.826, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9249, loss/object/layer_-1_loss_cls: 0.0875, loss/object/layer_-1_loss_bbox: 1.0531, stats/object/matched_ious: 0.3732, loss: 2.0656, grad_norm: 2.3606
+2025-12-11 04:15:03,385 - mmdet3d - INFO - Epoch [1][12100/23496]       lr: 2.000e-04, eta: 5:44:48, time: 1.800, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9903, loss/object/layer_-1_loss_cls: 0.0937, loss/object/layer_-1_loss_bbox: 0.8988, stats/object/matched_ious: 0.3845, loss: 1.9828, grad_norm: 2.8453
+2025-12-11 04:16:34,349 - mmdet3d - INFO - Epoch [1][12150/23496]       lr: 2.000e-04, eta: 5:43:17, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0147, loss/object/layer_-1_loss_cls: 0.0882, loss/object/layer_-1_loss_bbox: 1.0700, stats/object/matched_ious: 0.3611, loss: 2.1729, grad_norm: 2.6898
+2025-12-11 04:18:05,015 - mmdet3d - INFO - Epoch [1][12200/23496]       lr: 2.000e-04, eta: 5:41:46, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0432, loss/object/layer_-1_loss_cls: 0.0938, loss/object/layer_-1_loss_bbox: 1.0528, stats/object/matched_ious: 0.3591, loss: 2.1898, grad_norm: 2.5091
+2025-12-11 04:19:35,979 - mmdet3d - INFO - Epoch [1][12250/23496]       lr: 2.000e-04, eta: 5:40:16, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0675, loss/object/layer_-1_loss_cls: 0.0985, loss/object/layer_-1_loss_bbox: 1.0281, stats/object/matched_ious: 0.3596, loss: 2.1940, grad_norm: 2.4348
+2025-12-11 04:21:07,206 - mmdet3d - INFO - Epoch [1][12300/23496]       lr: 2.000e-04, eta: 5:38:45, time: 1.825, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0182, loss/object/layer_-1_loss_cls: 0.0927, loss/object/layer_-1_loss_bbox: 1.0148, stats/object/matched_ious: 0.3855, loss: 2.1256, grad_norm: 2.4841
+2025-12-11 04:22:37,606 - mmdet3d - INFO - Epoch [1][12350/23496]       lr: 2.000e-04, eta: 5:37:14, time: 1.808, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 1.0177, loss/object/layer_-1_loss_cls: 0.0858, loss/object/layer_-1_loss_bbox: 0.9654, stats/object/matched_ious: 0.3707, loss: 2.0690, grad_norm: 2.4524
+2025-12-11 04:24:08,166 - mmdet3d - INFO - Epoch [1][12400/23496]       lr: 2.000e-04, eta: 5:35:43, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0320, loss/object/layer_-1_loss_cls: 0.0881, loss/object/layer_-1_loss_bbox: 0.9941, stats/object/matched_ious: 0.3745, loss: 2.1141, grad_norm: 2.5096
+2025-12-11 04:25:38,408 - mmdet3d - INFO - Epoch [1][12450/23496]       lr: 2.000e-04, eta: 5:34:12, time: 1.805, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9428, loss/object/layer_-1_loss_cls: 0.0842, loss/object/layer_-1_loss_bbox: 1.0179, stats/object/matched_ious: 0.3822, loss: 2.0449, grad_norm: 2.4753
+2025-12-11 04:27:09,179 - mmdet3d - INFO - Epoch [1][12500/23496]       lr: 2.000e-04, eta: 5:32:41, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9513, loss/object/layer_-1_loss_cls: 0.0877, loss/object/layer_-1_loss_bbox: 1.0236, stats/object/matched_ious: 0.3766, loss: 2.0627, grad_norm: 2.3448
+2025-12-11 04:28:40,162 - mmdet3d - INFO - Epoch [1][12550/23496]       lr: 2.000e-04, eta: 5:31:11, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0723, loss/object/layer_-1_loss_cls: 0.0993, loss/object/layer_-1_loss_bbox: 1.1419, stats/object/matched_ious: 0.3572, loss: 2.3135, grad_norm: 2.6589
+2025-12-11 04:30:10,741 - mmdet3d - INFO - Epoch [1][12600/23496]       lr: 2.000e-04, eta: 5:29:40, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0514, loss/object/layer_-1_loss_cls: 0.0906, loss/object/layer_-1_loss_bbox: 0.9929, stats/object/matched_ious: 0.3587, loss: 2.1350, grad_norm: 2.4036
+2025-12-11 04:31:41,447 - mmdet3d - INFO - Epoch [1][12650/23496]       lr: 2.000e-04, eta: 5:28:09, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9850, loss/object/layer_-1_loss_cls: 0.0927, loss/object/layer_-1_loss_bbox: 0.9889, stats/object/matched_ious: 0.3639, loss: 2.0666, grad_norm: 2.4667
+2025-12-11 04:33:12,578 - mmdet3d - INFO - Epoch [1][12700/23496]       lr: 2.000e-04, eta: 5:26:39, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9788, loss/object/layer_-1_loss_cls: 0.0968, loss/object/layer_-1_loss_bbox: 1.0691, stats/object/matched_ious: 0.3493, loss: 2.1447, grad_norm: 3.7585
+2025-12-11 04:34:42,394 - mmdet3d - INFO - Epoch [1][12750/23496]       lr: 2.000e-04, eta: 5:25:07, time: 1.796, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0045, loss/object/layer_-1_loss_cls: 0.0931, loss/object/layer_-1_loss_bbox: 0.9386, stats/object/matched_ious: 0.3704, loss: 2.0363, grad_norm: 2.5444
+2025-12-11 04:36:13,153 - mmdet3d - INFO - Epoch [1][12800/23496]       lr: 2.000e-04, eta: 5:23:36, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0010, loss/object/layer_-1_loss_cls: 0.0886, loss/object/layer_-1_loss_bbox: 1.0458, stats/object/matched_ious: 0.3660, loss: 2.1354, grad_norm: 2.5555
+2025-12-11 04:37:44,805 - mmdet3d - INFO - Epoch [1][12850/23496]       lr: 2.000e-04, eta: 5:22:06, time: 1.833, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9853, loss/object/layer_-1_loss_cls: 0.0920, loss/object/layer_-1_loss_bbox: 1.0388, stats/object/matched_ious: 0.3754, loss: 2.1161, grad_norm: 2.9224
+2025-12-11 04:39:14,807 - mmdet3d - INFO - Epoch [1][12900/23496]       lr: 2.000e-04, eta: 5:20:35, time: 1.800, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0482, loss/object/layer_-1_loss_cls: 0.0965, loss/object/layer_-1_loss_bbox: 1.0317, stats/object/matched_ious: 0.3726, loss: 2.1764, grad_norm: 2.6557
+2025-12-11 04:40:45,695 - mmdet3d - INFO - Epoch [1][12950/23496]       lr: 2.000e-04, eta: 5:19:04, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9624, loss/object/layer_-1_loss_cls: 0.0869, loss/object/layer_-1_loss_bbox: 0.9687, stats/object/matched_ious: 0.3833, loss: 2.0179, grad_norm: 2.3682
+2025-12-11 04:42:16,388 - mmdet3d - INFO - Epoch [1][13000/23496]       lr: 2.000e-04, eta: 5:17:33, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0714, loss/object/layer_-1_loss_cls: 0.0917, loss/object/layer_-1_loss_bbox: 1.0163, stats/object/matched_ious: 0.3511, loss: 2.1794, grad_norm: 2.5237
+2025-12-11 04:43:47,843 - mmdet3d - INFO - Epoch [1][13050/23496]       lr: 2.000e-04, eta: 5:16:03, time: 1.829, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9742, loss/object/layer_-1_loss_cls: 0.0920, loss/object/layer_-1_loss_bbox: 0.9508, stats/object/matched_ious: 0.3946, loss: 2.0170, grad_norm: 2.3120
+2025-12-11 04:45:18,334 - mmdet3d - INFO - Epoch [1][13100/23496]       lr: 2.000e-04, eta: 5:14:32, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9455, loss/object/layer_-1_loss_cls: 0.0903, loss/object/layer_-1_loss_bbox: 0.9021, stats/object/matched_ious: 0.3997, loss: 1.9380, grad_norm: 2.5177
+2025-12-11 04:46:48,762 - mmdet3d - INFO - Epoch [1][13150/23496]       lr: 2.000e-04, eta: 5:13:01, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9752, loss/object/layer_-1_loss_cls: 0.0884, loss/object/layer_-1_loss_bbox: 1.0108, stats/object/matched_ious: 0.3792, loss: 2.0744, grad_norm: 2.4270
+2025-12-11 04:48:19,677 - mmdet3d - INFO - Epoch [1][13200/23496]       lr: 2.000e-04, eta: 5:11:30, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9687, loss/object/layer_-1_loss_cls: 0.0883, loss/object/layer_-1_loss_bbox: 1.0166, stats/object/matched_ious: 0.3890, loss: 2.0735, grad_norm: 2.4667
+2025-12-11 04:49:50,765 - mmdet3d - INFO - Epoch [1][13250/23496]       lr: 2.000e-04, eta: 5:10:00, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9367, loss/object/layer_-1_loss_cls: 0.0848, loss/object/layer_-1_loss_bbox: 0.9042, stats/object/matched_ious: 0.3885, loss: 1.9258, grad_norm: 2.2684
+2025-12-11 04:51:21,288 - mmdet3d - INFO - Epoch [1][13300/23496]       lr: 2.000e-04, eta: 5:08:29, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9987, loss/object/layer_-1_loss_cls: 0.0884, loss/object/layer_-1_loss_bbox: 0.9710, stats/object/matched_ious: 0.3706, loss: 2.0581, grad_norm: 2.3550
+2025-12-11 04:52:52,230 - mmdet3d - INFO - Epoch [1][13350/23496]       lr: 2.000e-04, eta: 5:06:58, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0384, loss/object/layer_-1_loss_cls: 0.0902, loss/object/layer_-1_loss_bbox: 1.1044, stats/object/matched_ious: 0.3542, loss: 2.2330, grad_norm: 3.1380
+2025-12-11 04:54:23,115 - mmdet3d - INFO - Epoch [1][13400/23496]       lr: 2.000e-04, eta: 5:05:28, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0005, loss/object/layer_-1_loss_cls: 0.0855, loss/object/layer_-1_loss_bbox: 1.0521, stats/object/matched_ious: 0.3754, loss: 2.1382, grad_norm: 2.4855
+2025-12-11 04:55:53,796 - mmdet3d - INFO - Epoch [1][13450/23496]       lr: 2.000e-04, eta: 5:03:57, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0097, loss/object/layer_-1_loss_cls: 0.0897, loss/object/layer_-1_loss_bbox: 0.9493, stats/object/matched_ious: 0.3641, loss: 2.0487, grad_norm: 2.7215
+2025-12-11 04:57:24,340 - mmdet3d - INFO - Epoch [1][13500/23496]       lr: 2.000e-04, eta: 5:02:26, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0223, loss/object/layer_-1_loss_cls: 0.0890, loss/object/layer_-1_loss_bbox: 1.0232, stats/object/matched_ious: 0.3670, loss: 2.1346, grad_norm: 2.4752
+2025-12-11 04:58:55,264 - mmdet3d - INFO - Epoch [1][13550/23496]       lr: 2.000e-04, eta: 5:00:55, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0052, loss/object/layer_-1_loss_cls: 0.0891, loss/object/layer_-1_loss_bbox: 1.0435, stats/object/matched_ious: 0.3611, loss: 2.1377, grad_norm: 2.3776
+2025-12-11 05:00:26,169 - mmdet3d - INFO - Epoch [1][13600/23496]       lr: 2.000e-04, eta: 4:59:24, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0249, loss/object/layer_-1_loss_cls: 0.0928, loss/object/layer_-1_loss_bbox: 0.9694, stats/object/matched_ious: 0.3665, loss: 2.0871, grad_norm: 2.4678
+2025-12-11 05:01:57,367 - mmdet3d - INFO - Epoch [1][13650/23496]       lr: 2.000e-04, eta: 4:57:54, time: 1.824, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9829, loss/object/layer_-1_loss_cls: 0.0869, loss/object/layer_-1_loss_bbox: 0.8916, stats/object/matched_ious: 0.3825, loss: 1.9613, grad_norm: 2.5013
+2025-12-11 05:03:27,720 - mmdet3d - INFO - Epoch [1][13700/23496]       lr: 2.000e-04, eta: 4:56:23, time: 1.807, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0287, loss/object/layer_-1_loss_cls: 0.0896, loss/object/layer_-1_loss_bbox: 0.9630, stats/object/matched_ious: 0.3698, loss: 2.0813, grad_norm: 2.5243
+2025-12-11 05:04:57,664 - mmdet3d - INFO - Epoch [1][13750/23496]       lr: 2.000e-04, eta: 4:54:52, time: 1.799, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9574, loss/object/layer_-1_loss_cls: 0.0853, loss/object/layer_-1_loss_bbox: 0.9602, stats/object/matched_ious: 0.3829, loss: 2.0029, grad_norm: 2.4142
+2025-12-11 05:06:29,010 - mmdet3d - INFO - Epoch [1][13800/23496]       lr: 2.000e-04, eta: 4:53:21, time: 1.827, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9896, loss/object/layer_-1_loss_cls: 0.0893, loss/object/layer_-1_loss_bbox: 0.9753, stats/object/matched_ious: 0.3767, loss: 2.0541, grad_norm: 2.4868
+2025-12-11 05:07:59,635 - mmdet3d - INFO - Epoch [1][13850/23496]       lr: 2.000e-04, eta: 4:51:50, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9871, loss/object/layer_-1_loss_cls: 0.0875, loss/object/layer_-1_loss_bbox: 1.0047, stats/object/matched_ious: 0.3829, loss: 2.0794, grad_norm: 2.3834
+2025-12-11 05:09:30,953 - mmdet3d - INFO - Epoch [1][13900/23496]       lr: 2.000e-04, eta: 4:50:20, time: 1.826, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9791, loss/object/layer_-1_loss_cls: 0.0911, loss/object/layer_-1_loss_bbox: 0.9521, stats/object/matched_ious: 0.3909, loss: 2.0223, grad_norm: 2.4180
+2025-12-11 05:11:01,203 - mmdet3d - INFO - Epoch [1][13950/23496]       lr: 2.000e-04, eta: 4:48:49, time: 1.805, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0109, loss/object/layer_-1_loss_cls: 0.0915, loss/object/layer_-1_loss_bbox: 1.0236, stats/object/matched_ious: 0.3749, loss: 2.1259, grad_norm: 2.4182
+2025-12-11 05:12:32,283 - mmdet3d - INFO - Epoch [1][14000/23496]       lr: 2.000e-04, eta: 4:47:18, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9210, loss/object/layer_-1_loss_cls: 0.0814, loss/object/layer_-1_loss_bbox: 0.9157, stats/object/matched_ious: 0.3862, loss: 1.9181, grad_norm: 2.3049
+2025-12-11 05:14:03,205 - mmdet3d - INFO - Epoch [1][14050/23496]       lr: 2.000e-04, eta: 4:45:48, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9218, loss/object/layer_-1_loss_cls: 0.0814, loss/object/layer_-1_loss_bbox: 0.8961, stats/object/matched_ious: 0.3822, loss: 1.8994, grad_norm: 2.3886
+2025-12-11 05:15:34,457 - mmdet3d - INFO - Epoch [1][14100/23496]       lr: 2.000e-04, eta: 4:44:17, time: 1.825, data_time: 0.007, memory: 5813, loss/object/loss_heatmap: 0.9987, loss/object/layer_-1_loss_cls: 0.0904, loss/object/layer_-1_loss_bbox: 0.9796, stats/object/matched_ious: 0.3767, loss: 2.0687, grad_norm: 2.4484
+2025-12-11 05:17:05,116 - mmdet3d - INFO - Epoch [1][14150/23496]       lr: 2.000e-04, eta: 4:42:46, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9546, loss/object/layer_-1_loss_cls: 0.0883, loss/object/layer_-1_loss_bbox: 0.9099, stats/object/matched_ious: 0.3892, loss: 1.9527, grad_norm: 2.3643
+2025-12-11 05:18:36,027 - mmdet3d - INFO - Epoch [1][14200/23496]       lr: 2.000e-04, eta: 4:41:16, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9571, loss/object/layer_-1_loss_cls: 0.0913, loss/object/layer_-1_loss_bbox: 0.8716, stats/object/matched_ious: 0.3848, loss: 1.9200, grad_norm: 2.3747
+2025-12-11 05:20:07,149 - mmdet3d - INFO - Epoch [1][14250/23496]       lr: 2.000e-04, eta: 4:39:45, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0085, loss/object/layer_-1_loss_cls: 0.0940, loss/object/layer_-1_loss_bbox: 0.9319, stats/object/matched_ious: 0.3747, loss: 2.0344, grad_norm: 2.4302
+2025-12-11 05:21:38,496 - mmdet3d - INFO - Epoch [1][14300/23496]       lr: 2.000e-04, eta: 4:38:15, time: 1.827, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9522, loss/object/layer_-1_loss_cls: 0.0885, loss/object/layer_-1_loss_bbox: 0.9256, stats/object/matched_ious: 0.3686, loss: 1.9663, grad_norm: 2.2279
+2025-12-11 05:23:09,308 - mmdet3d - INFO - Epoch [1][14350/23496]       lr: 2.000e-04, eta: 4:36:44, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9708, loss/object/layer_-1_loss_cls: 0.0876, loss/object/layer_-1_loss_bbox: 1.0155, stats/object/matched_ious: 0.3792, loss: 2.0740, grad_norm: 2.4327
+2025-12-11 05:24:40,030 - mmdet3d - INFO - Epoch [1][14400/23496]       lr: 2.000e-04, eta: 4:35:13, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9650, loss/object/layer_-1_loss_cls: 0.0888, loss/object/layer_-1_loss_bbox: 0.9744, stats/object/matched_ious: 0.3861, loss: 2.0282, grad_norm: 2.3245
+2025-12-11 05:26:11,189 - mmdet3d - INFO - Epoch [1][14450/23496]       lr: 2.000e-04, eta: 4:33:43, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9999, loss/object/layer_-1_loss_cls: 0.0818, loss/object/layer_-1_loss_bbox: 1.0679, stats/object/matched_ious: 0.3651, loss: 2.1495, grad_norm: 2.2995
+2025-12-11 05:27:41,976 - mmdet3d - INFO - Epoch [1][14500/23496]       lr: 2.000e-04, eta: 4:32:12, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0082, loss/object/layer_-1_loss_cls: 0.0907, loss/object/layer_-1_loss_bbox: 1.0454, stats/object/matched_ious: 0.3603, loss: 2.1443, grad_norm: 2.7054
+2025-12-11 05:29:13,406 - mmdet3d - INFO - Epoch [1][14550/23496]       lr: 2.000e-04, eta: 4:30:41, time: 1.829, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9416, loss/object/layer_-1_loss_cls: 0.0978, loss/object/layer_-1_loss_bbox: 0.9728, stats/object/matched_ious: 0.3857, loss: 2.0122, grad_norm: 2.5305
+2025-12-11 05:30:44,153 - mmdet3d - INFO - Epoch [1][14600/23496]       lr: 2.000e-04, eta: 4:29:11, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0329, loss/object/layer_-1_loss_cls: 0.0956, loss/object/layer_-1_loss_bbox: 0.9898, stats/object/matched_ious: 0.3688, loss: 2.1183, grad_norm: 2.4588
+2025-12-11 05:32:15,205 - mmdet3d - INFO - Epoch [1][14650/23496]       lr: 2.000e-04, eta: 4:27:40, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9793, loss/object/layer_-1_loss_cls: 0.0925, loss/object/layer_-1_loss_bbox: 0.9205, stats/object/matched_ious: 0.3888, loss: 1.9924, grad_norm: 2.3273
+2025-12-11 05:33:45,593 - mmdet3d - INFO - Epoch [1][14700/23496]       lr: 2.000e-04, eta: 4:26:09, time: 1.808, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0385, loss/object/layer_-1_loss_cls: 0.0928, loss/object/layer_-1_loss_bbox: 0.9912, stats/object/matched_ious: 0.3714, loss: 2.1225, grad_norm: 2.3651
+2025-12-11 05:35:16,446 - mmdet3d - INFO - Epoch [1][14750/23496]       lr: 2.000e-04, eta: 4:24:38, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9909, loss/object/layer_-1_loss_cls: 0.0872, loss/object/layer_-1_loss_bbox: 0.9717, stats/object/matched_ious: 0.3740, loss: 2.0498, grad_norm: 2.3207
+2025-12-11 05:36:46,984 - mmdet3d - INFO - Epoch [1][14800/23496]       lr: 2.000e-04, eta: 4:23:07, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0048, loss/object/layer_-1_loss_cls: 0.0922, loss/object/layer_-1_loss_bbox: 0.9670, stats/object/matched_ious: 0.3821, loss: 2.0640, grad_norm: 2.5826
+2025-12-11 05:38:17,946 - mmdet3d - INFO - Epoch [1][14850/23496]       lr: 2.000e-04, eta: 4:21:37, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9664, loss/object/layer_-1_loss_cls: 0.0875, loss/object/layer_-1_loss_bbox: 1.0126, stats/object/matched_ious: 0.3907, loss: 2.0665, grad_norm: 2.2125
+2025-12-11 05:39:48,803 - mmdet3d - INFO - Epoch [1][14900/23496]       lr: 2.000e-04, eta: 4:20:06, time: 1.817, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 1.0396, loss/object/layer_-1_loss_cls: 0.0852, loss/object/layer_-1_loss_bbox: 1.0300, stats/object/matched_ious: 0.3718, loss: 2.1548, grad_norm: 2.3527
+2025-12-11 05:41:19,877 - mmdet3d - INFO - Epoch [1][14950/23496]       lr: 2.000e-04, eta: 4:18:35, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0638, loss/object/layer_-1_loss_cls: 0.0881, loss/object/layer_-1_loss_bbox: 1.0584, stats/object/matched_ious: 0.3601, loss: 2.2103, grad_norm: 2.3716
+2025-12-11 05:42:50,730 - mmdet3d - INFO - Epoch [1][15000/23496]       lr: 2.000e-04, eta: 4:17:05, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9196, loss/object/layer_-1_loss_cls: 0.0846, loss/object/layer_-1_loss_bbox: 0.9701, stats/object/matched_ious: 0.3979, loss: 1.9743, grad_norm: 2.2634
+2025-12-11 05:44:21,846 - mmdet3d - INFO - Epoch [1][15050/23496]       lr: 2.000e-04, eta: 4:15:34, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9199, loss/object/layer_-1_loss_cls: 0.0860, loss/object/layer_-1_loss_bbox: 0.9387, stats/object/matched_ious: 0.3948, loss: 1.9445, grad_norm: 2.3556
+2025-12-11 05:45:52,375 - mmdet3d - INFO - Epoch [1][15100/23496]       lr: 2.000e-04, eta: 4:14:03, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0134, loss/object/layer_-1_loss_cls: 0.0873, loss/object/layer_-1_loss_bbox: 0.9618, stats/object/matched_ious: 0.3864, loss: 2.0625, grad_norm: 2.7739
+2025-12-11 05:47:23,013 - mmdet3d - INFO - Epoch [1][15150/23496]       lr: 2.000e-04, eta: 4:12:32, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9265, loss/object/layer_-1_loss_cls: 0.0869, loss/object/layer_-1_loss_bbox: 1.0122, stats/object/matched_ious: 0.4010, loss: 2.0255, grad_norm: 2.3809
+2025-12-11 05:48:53,613 - mmdet3d - INFO - Epoch [1][15200/23496]       lr: 2.000e-04, eta: 4:11:01, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9895, loss/object/layer_-1_loss_cls: 0.0844, loss/object/layer_-1_loss_bbox: 0.9343, stats/object/matched_ious: 0.3806, loss: 2.0082, grad_norm: 2.3210
+2025-12-11 05:50:24,401 - mmdet3d - INFO - Epoch [1][15250/23496]       lr: 2.000e-04, eta: 4:09:31, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9103, loss/object/layer_-1_loss_cls: 0.0859, loss/object/layer_-1_loss_bbox: 0.9175, stats/object/matched_ious: 0.3848, loss: 1.9137, grad_norm: 2.4247
+2025-12-11 05:51:55,001 - mmdet3d - INFO - Epoch [1][15300/23496]       lr: 2.000e-04, eta: 4:08:00, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0156, loss/object/layer_-1_loss_cls: 0.1014, loss/object/layer_-1_loss_bbox: 1.1156, stats/object/matched_ious: 0.3465, loss: 2.2326, grad_norm: 3.9076
+2025-12-11 05:53:25,848 - mmdet3d - INFO - Epoch [1][15350/23496]       lr: 2.000e-04, eta: 4:06:29, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0314, loss/object/layer_-1_loss_cls: 0.0893, loss/object/layer_-1_loss_bbox: 0.9688, stats/object/matched_ious: 0.3720, loss: 2.0895, grad_norm: 2.4890
+2025-12-11 05:54:56,509 - mmdet3d - INFO - Epoch [1][15400/23496]       lr: 2.000e-04, eta: 4:04:58, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9870, loss/object/layer_-1_loss_cls: 0.0888, loss/object/layer_-1_loss_bbox: 0.9972, stats/object/matched_ious: 0.3707, loss: 2.0729, grad_norm: 2.4453
+2025-12-11 05:56:27,013 - mmdet3d - INFO - Epoch [1][15450/23496]       lr: 2.000e-04, eta: 4:03:27, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9337, loss/object/layer_-1_loss_cls: 0.0862, loss/object/layer_-1_loss_bbox: 1.0047, stats/object/matched_ious: 0.3757, loss: 2.0246, grad_norm: 2.4081
+2025-12-11 05:57:57,679 - mmdet3d - INFO - Epoch [1][15500/23496]       lr: 2.000e-04, eta: 4:01:56, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9439, loss/object/layer_-1_loss_cls: 0.0836, loss/object/layer_-1_loss_bbox: 0.9355, stats/object/matched_ious: 0.3773, loss: 1.9629, grad_norm: 2.2605
+2025-12-11 05:59:27,522 - mmdet3d - INFO - Epoch [1][15550/23496]       lr: 2.000e-04, eta: 4:00:25, time: 1.797, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9859, loss/object/layer_-1_loss_cls: 0.0898, loss/object/layer_-1_loss_bbox: 1.0848, stats/object/matched_ious: 0.3648, loss: 2.1606, grad_norm: 2.7946
+2025-12-11 06:00:58,068 - mmdet3d - INFO - Epoch [1][15600/23496]       lr: 2.000e-04, eta: 3:58:54, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0264, loss/object/layer_-1_loss_cls: 0.0887, loss/object/layer_-1_loss_bbox: 0.9352, stats/object/matched_ious: 0.3740, loss: 2.0503, grad_norm: 2.4183
+2025-12-11 06:02:28,553 - mmdet3d - INFO - Epoch [1][15650/23496]       lr: 2.000e-04, eta: 3:57:23, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9426, loss/object/layer_-1_loss_cls: 0.0851, loss/object/layer_-1_loss_bbox: 0.9687, stats/object/matched_ious: 0.4020, loss: 1.9964, grad_norm: 2.4373
+2025-12-11 06:03:59,584 - mmdet3d - INFO - Epoch [1][15700/23496]       lr: 2.000e-04, eta: 3:55:53, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9762, loss/object/layer_-1_loss_cls: 0.0949, loss/object/layer_-1_loss_bbox: 1.0601, stats/object/matched_ious: 0.3834, loss: 2.1311, grad_norm: 2.3572
+2025-12-11 06:05:30,015 - mmdet3d - INFO - Epoch [1][15750/23496]       lr: 2.000e-04, eta: 3:54:22, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0037, loss/object/layer_-1_loss_cls: 0.0918, loss/object/layer_-1_loss_bbox: 1.0180, stats/object/matched_ious: 0.3678, loss: 2.1135, grad_norm: 2.5450
+2025-12-11 06:07:00,662 - mmdet3d - INFO - Epoch [1][15800/23496]       lr: 2.000e-04, eta: 3:52:51, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0160, loss/object/layer_-1_loss_cls: 0.0913, loss/object/layer_-1_loss_bbox: 1.0386, stats/object/matched_ious: 0.3607, loss: 2.1459, grad_norm: 2.4678
+2025-12-11 06:08:31,358 - mmdet3d - INFO - Epoch [1][15850/23496]       lr: 2.000e-04, eta: 3:51:20, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9335, loss/object/layer_-1_loss_cls: 0.0875, loss/object/layer_-1_loss_bbox: 0.9619, stats/object/matched_ious: 0.3952, loss: 1.9828, grad_norm: 2.2622
+2025-12-11 06:10:03,228 - mmdet3d - INFO - Epoch [1][15900/23496]       lr: 2.000e-04, eta: 3:49:50, time: 1.837, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9409, loss/object/layer_-1_loss_cls: 0.0880, loss/object/layer_-1_loss_bbox: 0.9883, stats/object/matched_ious: 0.3879, loss: 2.0173, grad_norm: 2.2524
+2025-12-11 06:11:33,825 - mmdet3d - INFO - Epoch [1][15950/23496]       lr: 2.000e-04, eta: 3:48:19, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9598, loss/object/layer_-1_loss_cls: 0.0873, loss/object/layer_-1_loss_bbox: 0.9497, stats/object/matched_ious: 0.3723, loss: 1.9969, grad_norm: 2.3750
+2025-12-11 06:13:05,253 - mmdet3d - INFO - Epoch [1][16000/23496]       lr: 2.000e-04, eta: 3:46:49, time: 1.829, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9892, loss/object/layer_-1_loss_cls: 0.0892, loss/object/layer_-1_loss_bbox: 0.9609, stats/object/matched_ious: 0.3854, loss: 2.0393, grad_norm: 2.2876
+2025-12-11 06:14:36,285 - mmdet3d - INFO - Epoch [1][16050/23496]       lr: 2.000e-04, eta: 3:45:18, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9649, loss/object/layer_-1_loss_cls: 0.0883, loss/object/layer_-1_loss_bbox: 0.8757, stats/object/matched_ious: 0.3838, loss: 1.9289, grad_norm: 2.3370
+2025-12-11 06:16:06,977 - mmdet3d - INFO - Epoch [1][16100/23496]       lr: 2.000e-04, eta: 3:43:47, time: 1.814, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 0.9719, loss/object/layer_-1_loss_cls: 0.0806, loss/object/layer_-1_loss_bbox: 0.9776, stats/object/matched_ious: 0.3876, loss: 2.0302, grad_norm: 2.1932
+2025-12-11 06:17:37,397 - mmdet3d - INFO - Epoch [1][16150/23496]       lr: 2.000e-04, eta: 3:42:16, time: 1.808, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9702, loss/object/layer_-1_loss_cls: 0.0883, loss/object/layer_-1_loss_bbox: 0.9627, stats/object/matched_ious: 0.3867, loss: 2.0213, grad_norm: 2.3821
+2025-12-11 06:19:08,080 - mmdet3d - INFO - Epoch [1][16200/23496]       lr: 2.000e-04, eta: 3:40:45, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9871, loss/object/layer_-1_loss_cls: 0.0838, loss/object/layer_-1_loss_bbox: 0.9863, stats/object/matched_ious: 0.3754, loss: 2.0572, grad_norm: 2.5091
+2025-12-11 06:20:38,624 - mmdet3d - INFO - Epoch [1][16250/23496]       lr: 2.000e-04, eta: 3:39:14, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9561, loss/object/layer_-1_loss_cls: 0.0853, loss/object/layer_-1_loss_bbox: 0.9199, stats/object/matched_ious: 0.3801, loss: 1.9613, grad_norm: 2.4577
+2025-12-11 06:22:09,447 - mmdet3d - INFO - Epoch [1][16300/23496]       lr: 2.000e-04, eta: 3:37:44, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0097, loss/object/layer_-1_loss_cls: 0.0879, loss/object/layer_-1_loss_bbox: 0.9636, stats/object/matched_ious: 0.3749, loss: 2.0612, grad_norm: 2.3811
+2025-12-11 06:23:39,968 - mmdet3d - INFO - Epoch [1][16350/23496]       lr: 2.000e-04, eta: 3:36:13, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0147, loss/object/layer_-1_loss_cls: 0.0848, loss/object/layer_-1_loss_bbox: 0.9984, stats/object/matched_ious: 0.3779, loss: 2.0978, grad_norm: 2.4165
+2025-12-11 06:25:10,666 - mmdet3d - INFO - Epoch [1][16400/23496]       lr: 2.000e-04, eta: 3:34:42, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0116, loss/object/layer_-1_loss_cls: 0.0895, loss/object/layer_-1_loss_bbox: 1.0986, stats/object/matched_ious: 0.3703, loss: 2.1997, grad_norm: 2.3323
+2025-12-11 06:26:41,512 - mmdet3d - INFO - Epoch [1][16450/23496]       lr: 2.000e-04, eta: 3:33:11, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9377, loss/object/layer_-1_loss_cls: 0.0867, loss/object/layer_-1_loss_bbox: 0.9469, stats/object/matched_ious: 0.3968, loss: 1.9713, grad_norm: 2.2724
+2025-12-11 06:28:12,648 - mmdet3d - INFO - Epoch [1][16500/23496]       lr: 2.000e-04, eta: 3:31:41, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9187, loss/object/layer_-1_loss_cls: 0.0827, loss/object/layer_-1_loss_bbox: 0.9868, stats/object/matched_ious: 0.3891, loss: 1.9882, grad_norm: 2.2046
+2025-12-11 06:29:43,624 - mmdet3d - INFO - Epoch [1][16550/23496]       lr: 2.000e-04, eta: 3:30:10, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0259, loss/object/layer_-1_loss_cls: 0.0859, loss/object/layer_-1_loss_bbox: 1.0493, stats/object/matched_ious: 0.3658, loss: 2.1612, grad_norm: 2.4877
+2025-12-11 06:31:14,029 - mmdet3d - INFO - Epoch [1][16600/23496]       lr: 2.000e-04, eta: 3:28:39, time: 1.808, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0148, loss/object/layer_-1_loss_cls: 0.0870, loss/object/layer_-1_loss_bbox: 1.0199, stats/object/matched_ious: 0.3719, loss: 2.1217, grad_norm: 2.8508
+2025-12-11 06:32:45,272 - mmdet3d - INFO - Epoch [1][16650/23496]       lr: 2.000e-04, eta: 3:27:08, time: 1.825, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.1098, loss/object/layer_-1_loss_cls: 0.0893, loss/object/layer_-1_loss_bbox: 1.1343, stats/object/matched_ious: 0.3326, loss: 2.3334, grad_norm: 2.5298
+2025-12-11 06:34:16,272 - mmdet3d - INFO - Epoch [1][16700/23496]       lr: 2.000e-04, eta: 3:25:38, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9638, loss/object/layer_-1_loss_cls: 0.0881, loss/object/layer_-1_loss_bbox: 0.9093, stats/object/matched_ious: 0.3695, loss: 1.9612, grad_norm: 2.4260
+2025-12-11 06:35:47,100 - mmdet3d - INFO - Epoch [1][16750/23496]       lr: 2.000e-04, eta: 3:24:07, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0073, loss/object/layer_-1_loss_cls: 0.0928, loss/object/layer_-1_loss_bbox: 1.0159, stats/object/matched_ious: 0.3638, loss: 2.1160, grad_norm: 2.3035
+2025-12-11 06:37:17,721 - mmdet3d - INFO - Epoch [1][16800/23496]       lr: 2.000e-04, eta: 3:22:36, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0121, loss/object/layer_-1_loss_cls: 0.0831, loss/object/layer_-1_loss_bbox: 0.9247, stats/object/matched_ious: 0.3871, loss: 2.0199, grad_norm: 2.3900
+2025-12-11 06:38:48,797 - mmdet3d - INFO - Epoch [1][16850/23496]       lr: 2.000e-04, eta: 3:21:06, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0108, loss/object/layer_-1_loss_cls: 0.0900, loss/object/layer_-1_loss_bbox: 0.9357, stats/object/matched_ious: 0.3885, loss: 2.0365, grad_norm: 2.5563
+2025-12-11 06:40:19,134 - mmdet3d - INFO - Epoch [1][16900/23496]       lr: 2.000e-04, eta: 3:19:35, time: 1.807, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0420, loss/object/layer_-1_loss_cls: 0.0896, loss/object/layer_-1_loss_bbox: 1.0868, stats/object/matched_ious: 0.3610, loss: 2.2185, grad_norm: 2.3658
+2025-12-11 06:41:50,226 - mmdet3d - INFO - Epoch [1][16950/23496]       lr: 2.000e-04, eta: 3:18:04, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9054, loss/object/layer_-1_loss_cls: 0.0859, loss/object/layer_-1_loss_bbox: 0.9095, stats/object/matched_ious: 0.3987, loss: 1.9007, grad_norm: 2.3933
+2025-12-11 06:43:21,236 - mmdet3d - INFO - Epoch [1][17000/23496]       lr: 2.000e-04, eta: 3:16:33, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0486, loss/object/layer_-1_loss_cls: 0.0940, loss/object/layer_-1_loss_bbox: 1.0425, stats/object/matched_ious: 0.3750, loss: 2.1851, grad_norm: 3.3807
+2025-12-11 06:44:52,530 - mmdet3d - INFO - Epoch [1][17050/23496]       lr: 2.000e-04, eta: 3:15:03, time: 1.826, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0178, loss/object/layer_-1_loss_cls: 0.0942, loss/object/layer_-1_loss_bbox: 0.9844, stats/object/matched_ious: 0.3820, loss: 2.0965, grad_norm: 2.5245
+2025-12-11 06:46:23,409 - mmdet3d - INFO - Epoch [1][17100/23496]       lr: 2.000e-04, eta: 3:13:32, time: 1.818, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 0.9677, loss/object/layer_-1_loss_cls: 0.0955, loss/object/layer_-1_loss_bbox: 1.0188, stats/object/matched_ious: 0.3800, loss: 2.0820, grad_norm: 2.4881
+2025-12-11 06:47:54,163 - mmdet3d - INFO - Epoch [1][17150/23496]       lr: 2.000e-04, eta: 3:12:01, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0251, loss/object/layer_-1_loss_cls: 0.0957, loss/object/layer_-1_loss_bbox: 1.0453, stats/object/matched_ious: 0.3564, loss: 2.1660, grad_norm: 3.3269
+2025-12-11 06:49:24,922 - mmdet3d - INFO - Epoch [1][17200/23496]       lr: 2.000e-04, eta: 3:10:30, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9679, loss/object/layer_-1_loss_cls: 0.0906, loss/object/layer_-1_loss_bbox: 0.9779, stats/object/matched_ious: 0.3919, loss: 2.0364, grad_norm: 2.2975
+2025-12-11 06:50:54,973 - mmdet3d - INFO - Epoch [1][17250/23496]       lr: 2.000e-04, eta: 3:08:59, time: 1.801, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9431, loss/object/layer_-1_loss_cls: 0.0872, loss/object/layer_-1_loss_bbox: 0.8816, stats/object/matched_ious: 0.4048, loss: 1.9120, grad_norm: 2.3979
+2025-12-11 06:52:25,808 - mmdet3d - INFO - Epoch [1][17300/23496]       lr: 2.000e-04, eta: 3:07:29, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0089, loss/object/layer_-1_loss_cls: 0.0903, loss/object/layer_-1_loss_bbox: 0.9288, stats/object/matched_ious: 0.3663, loss: 2.0279, grad_norm: 2.3512
+2025-12-11 06:53:56,687 - mmdet3d - INFO - Epoch [1][17350/23496]       lr: 2.000e-04, eta: 3:05:58, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9396, loss/object/layer_-1_loss_cls: 0.0844, loss/object/layer_-1_loss_bbox: 0.9271, stats/object/matched_ious: 0.4047, loss: 1.9511, grad_norm: 2.2119
+2025-12-11 06:55:27,369 - mmdet3d - INFO - Epoch [1][17400/23496]       lr: 2.000e-04, eta: 3:04:27, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9861, loss/object/layer_-1_loss_cls: 0.0871, loss/object/layer_-1_loss_bbox: 0.9313, stats/object/matched_ious: 0.3794, loss: 2.0045, grad_norm: 2.2646
+2025-12-11 06:56:58,008 - mmdet3d - INFO - Epoch [1][17450/23496]       lr: 2.000e-04, eta: 3:02:56, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 1.0300, loss/object/layer_-1_loss_cls: 0.0917, loss/object/layer_-1_loss_bbox: 1.0040, stats/object/matched_ious: 0.3803, loss: 2.1257, grad_norm: 2.6150
+2025-12-11 06:58:28,012 - mmdet3d - INFO - Epoch [1][17500/23496]       lr: 2.000e-04, eta: 3:01:25, time: 1.800, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9673, loss/object/layer_-1_loss_cls: 0.0901, loss/object/layer_-1_loss_bbox: 1.0149, stats/object/matched_ious: 0.4045, loss: 2.0723, grad_norm: 2.2790
+2025-12-11 06:59:59,200 - mmdet3d - INFO - Epoch [1][17550/23496]       lr: 2.000e-04, eta: 2:59:55, time: 1.824, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9150, loss/object/layer_-1_loss_cls: 0.0900, loss/object/layer_-1_loss_bbox: 1.0246, stats/object/matched_ious: 0.3888, loss: 2.0295, grad_norm: 2.2128
+2025-12-11 07:01:29,926 - mmdet3d - INFO - Epoch [1][17600/23496]       lr: 2.000e-04, eta: 2:58:24, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9639, loss/object/layer_-1_loss_cls: 0.0830, loss/object/layer_-1_loss_bbox: 1.0046, stats/object/matched_ious: 0.3768, loss: 2.0515, grad_norm: 2.2550
+2025-12-11 07:03:00,418 - mmdet3d - INFO - Epoch [1][17650/23496]       lr: 2.000e-04, eta: 2:56:53, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9739, loss/object/layer_-1_loss_cls: 0.0834, loss/object/layer_-1_loss_bbox: 0.9531, stats/object/matched_ious: 0.3753, loss: 2.0104, grad_norm: 2.2481
+2025-12-11 07:04:30,256 - mmdet3d - INFO - Epoch [1][17700/23496]       lr: 2.000e-04, eta: 2:55:22, time: 1.797, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9305, loss/object/layer_-1_loss_cls: 0.0847, loss/object/layer_-1_loss_bbox: 1.0008, stats/object/matched_ious: 0.3918, loss: 2.0161, grad_norm: 2.2694
+2025-12-11 07:06:00,718 - mmdet3d - INFO - Epoch [1][17750/23496]       lr: 2.000e-04, eta: 2:53:51, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9172, loss/object/layer_-1_loss_cls: 0.0816, loss/object/layer_-1_loss_bbox: 0.9089, stats/object/matched_ious: 0.3943, loss: 1.9078, grad_norm: 2.2731
+2025-12-11 07:07:31,255 - mmdet3d - INFO - Epoch [1][17800/23496]       lr: 2.000e-04, eta: 2:52:20, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8762, loss/object/layer_-1_loss_cls: 0.0842, loss/object/layer_-1_loss_bbox: 0.8936, stats/object/matched_ious: 0.4058, loss: 1.8540, grad_norm: 2.2582
+2025-12-11 07:09:01,606 - mmdet3d - INFO - Epoch [1][17850/23496]       lr: 2.000e-04, eta: 2:50:49, time: 1.807, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9199, loss/object/layer_-1_loss_cls: 0.0826, loss/object/layer_-1_loss_bbox: 0.9383, stats/object/matched_ious: 0.3995, loss: 1.9407, grad_norm: 2.3711
+2025-12-11 07:10:31,926 - mmdet3d - INFO - Epoch [1][17900/23496]       lr: 2.000e-04, eta: 2:49:18, time: 1.806, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9910, loss/object/layer_-1_loss_cls: 0.0877, loss/object/layer_-1_loss_bbox: 0.9360, stats/object/matched_ious: 0.3839, loss: 2.0148, grad_norm: 2.2552
+2025-12-11 07:12:03,664 - mmdet3d - INFO - Epoch [1][17950/23496]       lr: 2.000e-04, eta: 2:47:48, time: 1.835, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9568, loss/object/layer_-1_loss_cls: 0.0868, loss/object/layer_-1_loss_bbox: 0.9463, stats/object/matched_ious: 0.3935, loss: 1.9899, grad_norm: 2.1461
+2025-12-11 07:13:34,554 - mmdet3d - INFO - Epoch [1][18000/23496]       lr: 2.000e-04, eta: 2:46:17, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9128, loss/object/layer_-1_loss_cls: 0.0839, loss/object/layer_-1_loss_bbox: 0.8951, stats/object/matched_ious: 0.4073, loss: 1.8918, grad_norm: 2.3561
+2025-12-11 07:15:05,613 - mmdet3d - INFO - Epoch [1][18050/23496]       lr: 2.000e-04, eta: 2:44:46, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9888, loss/object/layer_-1_loss_cls: 0.0891, loss/object/layer_-1_loss_bbox: 0.9754, stats/object/matched_ious: 0.3772, loss: 2.0533, grad_norm: 2.2983
+2025-12-11 07:16:36,411 - mmdet3d - INFO - Epoch [1][18100/23496]       lr: 2.000e-04, eta: 2:43:16, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9567, loss/object/layer_-1_loss_cls: 0.0840, loss/object/layer_-1_loss_bbox: 0.9279, stats/object/matched_ious: 0.3855, loss: 1.9686, grad_norm: 2.2157
+2025-12-11 07:18:07,175 - mmdet3d - INFO - Epoch [1][18150/23496]       lr: 2.000e-04, eta: 2:41:45, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9112, loss/object/layer_-1_loss_cls: 0.0813, loss/object/layer_-1_loss_bbox: 0.9308, stats/object/matched_ious: 0.4191, loss: 1.9232, grad_norm: 2.1670
+2025-12-11 07:19:38,091 - mmdet3d - INFO - Epoch [1][18200/23496]       lr: 2.000e-04, eta: 2:40:14, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9306, loss/object/layer_-1_loss_cls: 0.0915, loss/object/layer_-1_loss_bbox: 0.9114, stats/object/matched_ious: 0.4023, loss: 1.9335, grad_norm: 2.3676
+2025-12-11 07:21:08,580 - mmdet3d - INFO - Epoch [1][18250/23496]       lr: 2.000e-04, eta: 2:38:43, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9921, loss/object/layer_-1_loss_cls: 0.0929, loss/object/layer_-1_loss_bbox: 1.1244, stats/object/matched_ious: 0.3668, loss: 2.2093, grad_norm: 2.4779
+2025-12-11 07:22:39,524 - mmdet3d - INFO - Epoch [1][18300/23496]       lr: 2.000e-04, eta: 2:37:13, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9174, loss/object/layer_-1_loss_cls: 0.0826, loss/object/layer_-1_loss_bbox: 0.8296, stats/object/matched_ious: 0.4046, loss: 1.8296, grad_norm: 2.2517
+2025-12-11 07:24:09,917 - mmdet3d - INFO - Epoch [1][18350/23496]       lr: 2.000e-04, eta: 2:35:42, time: 1.808, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8980, loss/object/layer_-1_loss_cls: 0.0828, loss/object/layer_-1_loss_bbox: 0.8869, stats/object/matched_ious: 0.4007, loss: 1.8676, grad_norm: 2.2644
+2025-12-11 07:25:40,905 - mmdet3d - INFO - Epoch [1][18400/23496]       lr: 2.000e-04, eta: 2:34:11, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9853, loss/object/layer_-1_loss_cls: 0.0830, loss/object/layer_-1_loss_bbox: 1.0150, stats/object/matched_ious: 0.3882, loss: 2.0833, grad_norm: 2.5074
+2025-12-11 07:27:11,643 - mmdet3d - INFO - Epoch [1][18450/23496]       lr: 2.000e-04, eta: 2:32:40, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9262, loss/object/layer_-1_loss_cls: 0.0862, loss/object/layer_-1_loss_bbox: 0.9227, stats/object/matched_ious: 0.3884, loss: 1.9351, grad_norm: 3.1050
+2025-12-11 07:28:42,256 - mmdet3d - INFO - Epoch [1][18500/23496]       lr: 2.000e-04, eta: 2:31:09, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9918, loss/object/layer_-1_loss_cls: 0.0956, loss/object/layer_-1_loss_bbox: 0.9329, stats/object/matched_ious: 0.3871, loss: 2.0203, grad_norm: 3.1023
+2025-12-11 07:30:13,188 - mmdet3d - INFO - Epoch [1][18550/23496]       lr: 2.000e-04, eta: 2:29:39, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9681, loss/object/layer_-1_loss_cls: 0.0897, loss/object/layer_-1_loss_bbox: 0.9894, stats/object/matched_ious: 0.3752, loss: 2.0472, grad_norm: 2.3670
+2025-12-11 07:31:43,868 - mmdet3d - INFO - Epoch [1][18600/23496]       lr: 2.000e-04, eta: 2:28:08, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9666, loss/object/layer_-1_loss_cls: 0.0889, loss/object/layer_-1_loss_bbox: 0.8988, stats/object/matched_ious: 0.3887, loss: 1.9542, grad_norm: 2.2143
+2025-12-11 07:33:14,703 - mmdet3d - INFO - Epoch [1][18650/23496]       lr: 2.000e-04, eta: 2:26:37, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9926, loss/object/layer_-1_loss_cls: 0.0844, loss/object/layer_-1_loss_bbox: 0.9633, stats/object/matched_ious: 0.3612, loss: 2.0402, grad_norm: 2.3163
+2025-12-11 07:34:45,259 - mmdet3d - INFO - Epoch [1][18700/23496]       lr: 2.000e-04, eta: 2:25:06, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9931, loss/object/layer_-1_loss_cls: 0.0872, loss/object/layer_-1_loss_bbox: 1.0358, stats/object/matched_ious: 0.3791, loss: 2.1162, grad_norm: 2.3009
+2025-12-11 07:36:16,977 - mmdet3d - INFO - Epoch [1][18750/23496]       lr: 2.000e-04, eta: 2:23:36, time: 1.834, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9904, loss/object/layer_-1_loss_cls: 0.0940, loss/object/layer_-1_loss_bbox: 1.0615, stats/object/matched_ious: 0.3570, loss: 2.1459, grad_norm: 2.4478
+2025-12-11 07:37:47,818 - mmdet3d - INFO - Epoch [1][18800/23496]       lr: 2.000e-04, eta: 2:22:05, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9299, loss/object/layer_-1_loss_cls: 0.0800, loss/object/layer_-1_loss_bbox: 0.9045, stats/object/matched_ious: 0.3859, loss: 1.9144, grad_norm: 2.2850
+2025-12-11 07:39:18,352 - mmdet3d - INFO - Epoch [1][18850/23496]       lr: 2.000e-04, eta: 2:20:34, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9237, loss/object/layer_-1_loss_cls: 0.0880, loss/object/layer_-1_loss_bbox: 0.9304, stats/object/matched_ious: 0.3876, loss: 1.9422, grad_norm: 2.2757
+2025-12-11 07:40:49,239 - mmdet3d - INFO - Epoch [1][18900/23496]       lr: 2.000e-04, eta: 2:19:03, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9274, loss/object/layer_-1_loss_cls: 0.0881, loss/object/layer_-1_loss_bbox: 0.8899, stats/object/matched_ious: 0.4054, loss: 1.9054, grad_norm: 2.5701
+2025-12-11 07:42:20,520 - mmdet3d - INFO - Epoch [1][18950/23496]       lr: 2.000e-04, eta: 2:17:33, time: 1.826, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8958, loss/object/layer_-1_loss_cls: 0.0798, loss/object/layer_-1_loss_bbox: 0.9334, stats/object/matched_ious: 0.3936, loss: 1.9090, grad_norm: 2.3705
+2025-12-11 07:43:51,441 - mmdet3d - INFO - Epoch [1][19000/23496]       lr: 2.000e-04, eta: 2:16:02, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9474, loss/object/layer_-1_loss_cls: 0.0851, loss/object/layer_-1_loss_bbox: 0.9228, stats/object/matched_ious: 0.3852, loss: 1.9553, grad_norm: 2.2403
+2025-12-11 07:45:22,254 - mmdet3d - INFO - Epoch [1][19050/23496]       lr: 2.000e-04, eta: 2:14:31, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9582, loss/object/layer_-1_loss_cls: 0.0845, loss/object/layer_-1_loss_bbox: 0.9106, stats/object/matched_ious: 0.3915, loss: 1.9532, grad_norm: 2.3214
+2025-12-11 07:46:52,740 - mmdet3d - INFO - Epoch [1][19100/23496]       lr: 2.000e-04, eta: 2:13:00, time: 1.810, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9895, loss/object/layer_-1_loss_cls: 0.0906, loss/object/layer_-1_loss_bbox: 1.0336, stats/object/matched_ious: 0.3806, loss: 2.1137, grad_norm: 2.4604
+2025-12-11 07:48:23,287 - mmdet3d - INFO - Epoch [1][19150/23496]       lr: 2.000e-04, eta: 2:11:30, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9409, loss/object/layer_-1_loss_cls: 0.0821, loss/object/layer_-1_loss_bbox: 0.9956, stats/object/matched_ious: 0.3915, loss: 2.0186, grad_norm: 2.3079
+2025-12-11 07:49:54,096 - mmdet3d - INFO - Epoch [1][19200/23496]       lr: 2.000e-04, eta: 2:09:59, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9410, loss/object/layer_-1_loss_cls: 0.0852, loss/object/layer_-1_loss_bbox: 0.9418, stats/object/matched_ious: 0.3914, loss: 1.9679, grad_norm: 2.2138
+2025-12-11 07:51:24,767 - mmdet3d - INFO - Epoch [1][19250/23496]       lr: 2.000e-04, eta: 2:08:28, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9809, loss/object/layer_-1_loss_cls: 0.0853, loss/object/layer_-1_loss_bbox: 0.9738, stats/object/matched_ious: 0.3901, loss: 2.0400, grad_norm: 2.2511
+2025-12-11 07:52:56,372 - mmdet3d - INFO - Epoch [1][19300/23496]       lr: 2.000e-04, eta: 2:06:57, time: 1.832, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9121, loss/object/layer_-1_loss_cls: 0.0804, loss/object/layer_-1_loss_bbox: 0.8467, stats/object/matched_ious: 0.4037, loss: 1.8392, grad_norm: 2.1373
+2025-12-11 07:54:27,581 - mmdet3d - INFO - Epoch [1][19350/23496]       lr: 2.000e-04, eta: 2:05:27, time: 1.824, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9685, loss/object/layer_-1_loss_cls: 0.0842, loss/object/layer_-1_loss_bbox: 0.8977, stats/object/matched_ious: 0.3884, loss: 1.9504, grad_norm: 2.3331
+2025-12-11 07:55:58,236 - mmdet3d - INFO - Epoch [1][19400/23496]       lr: 2.000e-04, eta: 2:03:56, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9610, loss/object/layer_-1_loss_cls: 0.0835, loss/object/layer_-1_loss_bbox: 1.0168, stats/object/matched_ious: 0.3777, loss: 2.0613, grad_norm: 2.3387
+2025-12-11 07:57:29,263 - mmdet3d - INFO - Epoch [1][19450/23496]       lr: 2.000e-04, eta: 2:02:25, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9444, loss/object/layer_-1_loss_cls: 0.0836, loss/object/layer_-1_loss_bbox: 0.9755, stats/object/matched_ious: 0.3969, loss: 2.0035, grad_norm: 2.2461
+2025-12-11 07:59:00,165 - mmdet3d - INFO - Epoch [1][19500/23496]       lr: 2.000e-04, eta: 2:00:54, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9654, loss/object/layer_-1_loss_cls: 0.0906, loss/object/layer_-1_loss_bbox: 0.9325, stats/object/matched_ious: 0.3853, loss: 1.9885, grad_norm: 2.2050
+2025-12-11 08:00:30,997 - mmdet3d - INFO - Epoch [1][19550/23496]       lr: 2.000e-04, eta: 1:59:24, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8851, loss/object/layer_-1_loss_cls: 0.0887, loss/object/layer_-1_loss_bbox: 0.8331, stats/object/matched_ious: 0.4226, loss: 1.8069, grad_norm: 2.2956
+2025-12-11 08:02:01,929 - mmdet3d - INFO - Epoch [1][19600/23496]       lr: 2.000e-04, eta: 1:57:53, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9808, loss/object/layer_-1_loss_cls: 0.0874, loss/object/layer_-1_loss_bbox: 0.9596, stats/object/matched_ious: 0.3695, loss: 2.0278, grad_norm: 2.3745
+2025-12-11 08:03:32,819 - mmdet3d - INFO - Epoch [1][19650/23496]       lr: 2.000e-04, eta: 1:56:22, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9691, loss/object/layer_-1_loss_cls: 0.0843, loss/object/layer_-1_loss_bbox: 0.9577, stats/object/matched_ious: 0.3827, loss: 2.0111, grad_norm: 2.4647
+2025-12-11 08:05:03,571 - mmdet3d - INFO - Epoch [1][19700/23496]       lr: 2.000e-04, eta: 1:54:51, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9537, loss/object/layer_-1_loss_cls: 0.0836, loss/object/layer_-1_loss_bbox: 0.9335, stats/object/matched_ious: 0.3702, loss: 1.9709, grad_norm: 2.3514
+2025-12-11 08:06:34,194 - mmdet3d - INFO - Epoch [1][19750/23496]       lr: 2.000e-04, eta: 1:53:21, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9855, loss/object/layer_-1_loss_cls: 0.0918, loss/object/layer_-1_loss_bbox: 0.9461, stats/object/matched_ious: 0.3972, loss: 2.0235, grad_norm: 2.4591
+2025-12-11 08:08:05,113 - mmdet3d - INFO - Epoch [1][19800/23496]       lr: 2.000e-04, eta: 1:51:50, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9023, loss/object/layer_-1_loss_cls: 0.0847, loss/object/layer_-1_loss_bbox: 0.8916, stats/object/matched_ious: 0.4069, loss: 1.8786, grad_norm: 2.1944
+2025-12-11 08:09:35,728 - mmdet3d - INFO - Epoch [1][19850/23496]       lr: 2.000e-04, eta: 1:50:19, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9797, loss/object/layer_-1_loss_cls: 0.0875, loss/object/layer_-1_loss_bbox: 0.9703, stats/object/matched_ious: 0.3811, loss: 2.0375, grad_norm: 2.2239
+2025-12-11 08:11:06,438 - mmdet3d - INFO - Epoch [1][19900/23496]       lr: 2.000e-04, eta: 1:48:48, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9671, loss/object/layer_-1_loss_cls: 0.0785, loss/object/layer_-1_loss_bbox: 0.9793, stats/object/matched_ious: 0.3806, loss: 2.0249, grad_norm: 3.4206
+2025-12-11 08:12:37,120 - mmdet3d - INFO - Epoch [1][19950/23496]       lr: 2.000e-04, eta: 1:47:17, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9518, loss/object/layer_-1_loss_cls: 0.0907, loss/object/layer_-1_loss_bbox: 0.9809, stats/object/matched_ious: 0.3760, loss: 2.0235, grad_norm: 2.5674
+2025-12-11 08:14:08,002 - mmdet3d - INFO - Epoch [1][20000/23496]       lr: 2.000e-04, eta: 1:45:47, time: 1.818, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9623, loss/object/layer_-1_loss_cls: 0.0836, loss/object/layer_-1_loss_bbox: 0.9591, stats/object/matched_ious: 0.3839, loss: 2.0049, grad_norm: 2.6185
+2025-12-11 08:15:38,150 - mmdet3d - INFO - Epoch [1][20050/23496]       lr: 2.000e-04, eta: 1:44:16, time: 1.803, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9776, loss/object/layer_-1_loss_cls: 0.0839, loss/object/layer_-1_loss_bbox: 0.9316, stats/object/matched_ious: 0.3825, loss: 1.9931, grad_norm: 2.4238
+2025-12-11 08:17:08,956 - mmdet3d - INFO - Epoch [1][20100/23496]       lr: 2.000e-04, eta: 1:42:45, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9173, loss/object/layer_-1_loss_cls: 0.0826, loss/object/layer_-1_loss_bbox: 0.8330, stats/object/matched_ious: 0.3932, loss: 1.8329, grad_norm: 2.3287
+2025-12-11 08:18:39,748 - mmdet3d - INFO - Epoch [1][20150/23496]       lr: 2.000e-04, eta: 1:41:14, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9529, loss/object/layer_-1_loss_cls: 0.0819, loss/object/layer_-1_loss_bbox: 0.9636, stats/object/matched_ious: 0.3816, loss: 1.9984, grad_norm: 2.2141
+2025-12-11 08:20:10,441 - mmdet3d - INFO - Epoch [1][20200/23496]       lr: 2.000e-04, eta: 1:39:43, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9266, loss/object/layer_-1_loss_cls: 0.0817, loss/object/layer_-1_loss_bbox: 0.8693, stats/object/matched_ious: 0.3984, loss: 1.8777, grad_norm: 2.2446
+2025-12-11 08:21:41,391 - mmdet3d - INFO - Epoch [1][20250/23496]       lr: 2.000e-04, eta: 1:38:13, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9621, loss/object/layer_-1_loss_cls: 0.0835, loss/object/layer_-1_loss_bbox: 0.9481, stats/object/matched_ious: 0.3988, loss: 1.9938, grad_norm: 2.2468
+2025-12-11 08:23:12,362 - mmdet3d - INFO - Epoch [1][20300/23496]       lr: 2.000e-04, eta: 1:36:42, time: 1.819, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 0.9822, loss/object/layer_-1_loss_cls: 0.0822, loss/object/layer_-1_loss_bbox: 1.0443, stats/object/matched_ious: 0.3731, loss: 2.1087, grad_norm: 2.2039
+2025-12-11 08:24:43,410 - mmdet3d - INFO - Epoch [1][20350/23496]       lr: 2.000e-04, eta: 1:35:11, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9905, loss/object/layer_-1_loss_cls: 0.0831, loss/object/layer_-1_loss_bbox: 0.9709, stats/object/matched_ious: 0.3744, loss: 2.0445, grad_norm: 2.5549
+2025-12-11 08:26:14,443 - mmdet3d - INFO - Epoch [1][20400/23496]       lr: 2.000e-04, eta: 1:33:40, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9340, loss/object/layer_-1_loss_cls: 0.0884, loss/object/layer_-1_loss_bbox: 1.1073, stats/object/matched_ious: 0.3949, loss: 2.1297, grad_norm: 2.0967
+2025-12-11 08:27:45,551 - mmdet3d - INFO - Epoch [1][20450/23496]       lr: 2.000e-04, eta: 1:32:10, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9594, loss/object/layer_-1_loss_cls: 0.0861, loss/object/layer_-1_loss_bbox: 0.9049, stats/object/matched_ious: 0.3821, loss: 1.9504, grad_norm: 2.2249
+2025-12-11 08:29:16,896 - mmdet3d - INFO - Epoch [1][20500/23496]       lr: 2.000e-04, eta: 1:30:39, time: 1.827, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9153, loss/object/layer_-1_loss_cls: 0.0825, loss/object/layer_-1_loss_bbox: 0.9113, stats/object/matched_ious: 0.3891, loss: 1.9091, grad_norm: 2.1920
+2025-12-11 08:30:47,707 - mmdet3d - INFO - Epoch [1][20550/23496]       lr: 2.000e-04, eta: 1:29:08, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9384, loss/object/layer_-1_loss_cls: 0.0856, loss/object/layer_-1_loss_bbox: 0.9136, stats/object/matched_ious: 0.3908, loss: 1.9376, grad_norm: 2.2525
+2025-12-11 08:32:18,531 - mmdet3d - INFO - Epoch [1][20600/23496]       lr: 2.000e-04, eta: 1:27:37, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9567, loss/object/layer_-1_loss_cls: 0.0788, loss/object/layer_-1_loss_bbox: 0.9468, stats/object/matched_ious: 0.3865, loss: 1.9823, grad_norm: 2.0763
+2025-12-11 08:33:49,293 - mmdet3d - INFO - Epoch [1][20650/23496]       lr: 2.000e-04, eta: 1:26:07, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9441, loss/object/layer_-1_loss_cls: 0.0836, loss/object/layer_-1_loss_bbox: 0.9840, stats/object/matched_ious: 0.3838, loss: 2.0118, grad_norm: 2.2755
+2025-12-11 08:35:19,734 - mmdet3d - INFO - Epoch [1][20700/23496]       lr: 2.000e-04, eta: 1:24:36, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9549, loss/object/layer_-1_loss_cls: 0.0847, loss/object/layer_-1_loss_bbox: 0.8957, stats/object/matched_ious: 0.3910, loss: 1.9354, grad_norm: 2.3405
+2025-12-11 08:36:50,802 - mmdet3d - INFO - Epoch [1][20750/23496]       lr: 2.000e-04, eta: 1:23:05, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9541, loss/object/layer_-1_loss_cls: 0.0906, loss/object/layer_-1_loss_bbox: 0.9619, stats/object/matched_ious: 0.3891, loss: 2.0066, grad_norm: 2.2727
+2025-12-11 08:38:21,625 - mmdet3d - INFO - Epoch [1][20800/23496]       lr: 2.000e-04, eta: 1:21:34, time: 1.816, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9833, loss/object/layer_-1_loss_cls: 0.0874, loss/object/layer_-1_loss_bbox: 0.9963, stats/object/matched_ious: 0.3863, loss: 2.0671, grad_norm: 2.2183
+2025-12-11 08:39:52,150 - mmdet3d - INFO - Epoch [1][20850/23496]       lr: 2.000e-04, eta: 1:20:04, time: 1.811, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9370, loss/object/layer_-1_loss_cls: 0.0831, loss/object/layer_-1_loss_bbox: 0.9109, stats/object/matched_ious: 0.3842, loss: 1.9311, grad_norm: 2.2347
+2025-12-11 08:41:23,000 - mmdet3d - INFO - Epoch [1][20900/23496]       lr: 2.000e-04, eta: 1:18:33, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9546, loss/object/layer_-1_loss_cls: 0.0897, loss/object/layer_-1_loss_bbox: 1.0228, stats/object/matched_ious: 0.3926, loss: 2.0671, grad_norm: 2.3991
+2025-12-11 08:42:53,524 - mmdet3d - INFO - Epoch [1][20950/23496]       lr: 2.000e-04, eta: 1:17:02, time: 1.810, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 0.8793, loss/object/layer_-1_loss_cls: 0.0780, loss/object/layer_-1_loss_bbox: 0.8100, stats/object/matched_ious: 0.4055, loss: 1.7673, grad_norm: 2.1689
+2025-12-11 08:44:24,194 - mmdet3d - INFO - Epoch [1][21000/23496]       lr: 2.000e-04, eta: 1:15:31, time: 1.813, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 0.9502, loss/object/layer_-1_loss_cls: 0.0855, loss/object/layer_-1_loss_bbox: 0.9337, stats/object/matched_ious: 0.3981, loss: 1.9694, grad_norm: 2.4171
+2025-12-11 08:45:54,819 - mmdet3d - INFO - Epoch [1][21050/23496]       lr: 2.000e-04, eta: 1:14:00, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9760, loss/object/layer_-1_loss_cls: 0.0833, loss/object/layer_-1_loss_bbox: 0.9918, stats/object/matched_ious: 0.3761, loss: 2.0511, grad_norm: 2.1662
+2025-12-11 08:47:26,079 - mmdet3d - INFO - Epoch [1][21100/23496]       lr: 2.000e-04, eta: 1:12:30, time: 1.825, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8679, loss/object/layer_-1_loss_cls: 0.0800, loss/object/layer_-1_loss_bbox: 0.8624, stats/object/matched_ious: 0.4150, loss: 1.8103, grad_norm: 2.1516
+2025-12-11 08:48:56,768 - mmdet3d - INFO - Epoch [1][21150/23496]       lr: 2.000e-04, eta: 1:10:59, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9960, loss/object/layer_-1_loss_cls: 0.0842, loss/object/layer_-1_loss_bbox: 1.0125, stats/object/matched_ious: 0.3742, loss: 2.0927, grad_norm: 2.3120
+2025-12-11 08:50:28,192 - mmdet3d - INFO - Epoch [1][21200/23496]       lr: 2.000e-04, eta: 1:09:28, time: 1.828, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9722, loss/object/layer_-1_loss_cls: 0.0801, loss/object/layer_-1_loss_bbox: 0.9999, stats/object/matched_ious: 0.3849, loss: 2.0522, grad_norm: 2.1391
+2025-12-11 08:51:58,895 - mmdet3d - INFO - Epoch [1][21250/23496]       lr: 2.000e-04, eta: 1:07:57, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9335, loss/object/layer_-1_loss_cls: 0.0856, loss/object/layer_-1_loss_bbox: 0.9598, stats/object/matched_ious: 0.3911, loss: 1.9789, grad_norm: 2.2278
+2025-12-11 08:53:29,007 - mmdet3d - INFO - Epoch [1][21300/23496]       lr: 2.000e-04, eta: 1:06:27, time: 1.802, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9481, loss/object/layer_-1_loss_cls: 0.0861, loss/object/layer_-1_loss_bbox: 0.9362, stats/object/matched_ious: 0.3851, loss: 1.9704, grad_norm: 2.4136
+2025-12-11 08:54:59,237 - mmdet3d - INFO - Epoch [1][21350/23496]       lr: 2.000e-04, eta: 1:04:56, time: 1.805, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9246, loss/object/layer_-1_loss_cls: 0.0859, loss/object/layer_-1_loss_bbox: 0.9788, stats/object/matched_ious: 0.3947, loss: 1.9893, grad_norm: 2.2702
+2025-12-11 08:56:30,242 - mmdet3d - INFO - Epoch [1][21400/23496]       lr: 2.000e-04, eta: 1:03:25, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8963, loss/object/layer_-1_loss_cls: 0.0820, loss/object/layer_-1_loss_bbox: 0.8581, stats/object/matched_ious: 0.4011, loss: 1.8364, grad_norm: 2.1733
+2025-12-11 08:58:00,496 - mmdet3d - INFO - Epoch [1][21450/23496]       lr: 2.000e-04, eta: 1:01:54, time: 1.805, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8971, loss/object/layer_-1_loss_cls: 0.0808, loss/object/layer_-1_loss_bbox: 0.8946, stats/object/matched_ious: 0.4086, loss: 1.8725, grad_norm: 2.3397
+2025-12-11 08:59:31,567 - mmdet3d - INFO - Epoch [1][21500/23496]       lr: 2.000e-04, eta: 1:00:23, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9959, loss/object/layer_-1_loss_cls: 0.0838, loss/object/layer_-1_loss_bbox: 0.9987, stats/object/matched_ious: 0.3754, loss: 2.0785, grad_norm: 2.4139
+2025-12-11 09:01:02,235 - mmdet3d - INFO - Epoch [1][21550/23496]       lr: 2.000e-04, eta: 0:58:53, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9669, loss/object/layer_-1_loss_cls: 0.0846, loss/object/layer_-1_loss_bbox: 0.8823, stats/object/matched_ious: 0.3814, loss: 1.9337, grad_norm: 2.4054
+2025-12-11 09:02:32,997 - mmdet3d - INFO - Epoch [1][21600/23496]       lr: 2.000e-04, eta: 0:57:22, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9427, loss/object/layer_-1_loss_cls: 0.0871, loss/object/layer_-1_loss_bbox: 0.9375, stats/object/matched_ious: 0.3921, loss: 1.9672, grad_norm: 2.4201
+2025-12-11 09:04:04,262 - mmdet3d - INFO - Epoch [1][21650/23496]       lr: 2.000e-04, eta: 0:55:51, time: 1.825, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9115, loss/object/layer_-1_loss_cls: 0.0873, loss/object/layer_-1_loss_bbox: 0.8090, stats/object/matched_ious: 0.4141, loss: 1.8079, grad_norm: 2.2161
+2025-12-11 09:05:35,437 - mmdet3d - INFO - Epoch [1][21700/23496]       lr: 2.000e-04, eta: 0:54:20, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8964, loss/object/layer_-1_loss_cls: 0.0770, loss/object/layer_-1_loss_bbox: 0.9152, stats/object/matched_ious: 0.4047, loss: 1.8886, grad_norm: 2.4048
+2025-12-11 09:07:06,117 - mmdet3d - INFO - Epoch [1][21750/23496]       lr: 2.000e-04, eta: 0:52:50, time: 1.814, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9830, loss/object/layer_-1_loss_cls: 0.0864, loss/object/layer_-1_loss_bbox: 1.0059, stats/object/matched_ious: 0.3911, loss: 2.0753, grad_norm: 2.2299
+2025-12-11 09:08:37,204 - mmdet3d - INFO - Epoch [1][21800/23496]       lr: 2.000e-04, eta: 0:51:19, time: 1.822, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8991, loss/object/layer_-1_loss_cls: 0.0841, loss/object/layer_-1_loss_bbox: 0.9149, stats/object/matched_ious: 0.4021, loss: 1.8981, grad_norm: 2.2700
+2025-12-11 09:10:07,950 - mmdet3d - INFO - Epoch [1][21850/23496]       lr: 2.000e-04, eta: 0:49:48, time: 1.815, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9029, loss/object/layer_-1_loss_cls: 0.0832, loss/object/layer_-1_loss_bbox: 0.8735, stats/object/matched_ious: 0.4024, loss: 1.8596, grad_norm: 2.3468
+2025-12-11 09:11:38,409 - mmdet3d - INFO - Epoch [1][21900/23496]       lr: 2.000e-04, eta: 0:48:17, time: 1.809, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9026, loss/object/layer_-1_loss_cls: 0.0772, loss/object/layer_-1_loss_bbox: 0.8382, stats/object/matched_ious: 0.4101, loss: 1.8180, grad_norm: 2.1911
+2025-12-11 09:13:09,449 - mmdet3d - INFO - Epoch [1][21950/23496]       lr: 2.000e-04, eta: 0:46:46, time: 1.821, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.8902, loss/object/layer_-1_loss_cls: 0.0823, loss/object/layer_-1_loss_bbox: 0.8385, stats/object/matched_ious: 0.4054, loss: 1.8109, grad_norm: 2.1968
+2025-12-11 09:14:40,093 - mmdet3d - INFO - Epoch [1][22000/23496]       lr: 2.000e-04, eta: 0:45:16, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9309, loss/object/layer_-1_loss_cls: 0.0873, loss/object/layer_-1_loss_bbox: 0.8386, stats/object/matched_ious: 0.4061, loss: 1.8568, grad_norm: 2.3526
+2025-12-11 09:16:10,357 - mmdet3d - INFO - Epoch [1][22050/23496]       lr: 2.000e-04, eta: 0:43:45, time: 1.805, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9132, loss/object/layer_-1_loss_cls: 0.0883, loss/object/layer_-1_loss_bbox: 0.9367, stats/object/matched_ious: 0.3984, loss: 1.9382, grad_norm: 2.2437
+2025-12-11 09:17:40,660 - mmdet3d - INFO - Epoch [1][22100/23496]       lr: 2.000e-04, eta: 0:42:14, time: 1.806, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9256, loss/object/layer_-1_loss_cls: 0.0826, loss/object/layer_-1_loss_bbox: 0.9031, stats/object/matched_ious: 0.4013, loss: 1.9113, grad_norm: 2.1957
+2025-12-11 09:19:11,320 - mmdet3d - INFO - Epoch [1][22150/23496]       lr: 2.000e-04, eta: 0:40:43, time: 1.813, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9809, loss/object/layer_-1_loss_cls: 0.0853, loss/object/layer_-1_loss_bbox: 0.9512, stats/object/matched_ious: 0.3796, loss: 2.0174, grad_norm: 2.2455
+2025-12-11 09:20:42,454 - mmdet3d - INFO - Epoch [1][22200/23496]       lr: 2.000e-04, eta: 0:39:12, time: 1.823, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9138, loss/object/layer_-1_loss_cls: 0.0793, loss/object/layer_-1_loss_bbox: 0.8809, stats/object/matched_ious: 0.3889, loss: 1.8740, grad_norm: 2.1548
+2025-12-11 09:22:13,288 - mmdet3d - INFO - Epoch [1][22250/23496]       lr: 2.000e-04, eta: 0:37:42, time: 1.817, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9305, loss/object/layer_-1_loss_cls: 0.0827, loss/object/layer_-1_loss_bbox: 0.9031, stats/object/matched_ious: 0.4033, loss: 1.9163, grad_norm: 2.1680
+2025-12-11 09:23:43,909 - mmdet3d - INFO - Epoch [1][22300/23496]       lr: 2.000e-04, eta: 0:36:11, time: 1.812, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9975, loss/object/layer_-1_loss_cls: 0.0879, loss/object/layer_-1_loss_bbox: 1.0005, stats/object/matched_ious: 0.3871, loss: 2.0859, grad_norm: 3.2172
+2025-12-11 09:25:14,877 - mmdet3d - INFO - Epoch [1][22350/23496]       lr: 2.000e-04, eta: 0:34:40, time: 1.819, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9309, loss/object/layer_-1_loss_cls: 0.0866, loss/object/layer_-1_loss_bbox: 0.9780, stats/object/matched_ious: 0.3995, loss: 1.9955, grad_norm: 3.0428
+2025-12-11 09:26:45,570 - mmdet3d - INFO - Epoch [1][22400/23496]       lr: 2.000e-04, eta: 0:33:09, time: 1.814, data_time: 0.005, memory: 5813, loss/object/loss_heatmap: 1.0340, loss/object/layer_-1_loss_cls: 0.0936, loss/object/layer_-1_loss_bbox: 1.1067, stats/object/matched_ious: 0.3544, loss: 2.2344, grad_norm: 2.6002
+2025-12-11 09:28:16,587 - mmdet3d - INFO - Epoch [1][22450/23496]       lr: 2.000e-04, eta: 0:31:39, time: 1.820, data_time: 0.006, memory: 5813, loss/object/loss_heatmap: 0.9735, loss/object/layer_-1_loss_cls: 0.0900, loss/object/layer_-1_loss_bbox: 0.9194, stats/object/matched_ious: 0.3883, loss: 1.9830, grad_norm: 2.2454
+mingyuan@rss-ai-dev-suz-kjc-gpu01-a100:/data2/xmy/01_project/bevfusion_mit_xmy_1205$
+日志解读与分析
+这份日志是基于 MMDetection3D 框架训练 BEVFusion 模型的过程记录，以下从核心信息、训练趋势、关键指标和优化建议四方面解读：
+一、基础训练信息
+项⽬	详情
+训练框架	mmdet3d（MMDetection3D，三维目标检测开源框架）
+训练配置	workflow: [('train', 1)]（仅训练，无验证），max epochs=1（测试 / 调试阶段）
+模型保存路径	/data2/xmy/01_project/bevfusion_mit_xmy_1205/runs/v8.1-1210-01
+硬件显存占用	稳定在 5765~5813 MB（无显存泄漏，显存使用合理）
+弃用警告	PyTorch 的 __floordiv__（//）弃用，需替换为 torch.div(..., rounding_mode='trunc')
+二、训练核心趋势（收敛性分析）
+训练迭代从 50 步到 16950 步（共 23496 步 /epoch），核心指标呈现健康收敛趋势：
+指标	初始值（50 步）	后期值（16000 + 步）	趋势	解读
+学习率（lr）	7.973e-05	2.000e-04（稳定）	先升后稳	采用 warmup 策略，lr 暖启动后保持 2e-4（BEVFusion 常用 lr，合理）
+总 loss	9.3885	~1.9-2.3	持续下降	模型有效拟合数据，无收敛停滞
+热力图损失（loss_heatmap）	3.3393	~0.9-1.1	持续下降	目标热力图预测精度提升
+分类损失（layer_-1_loss_cls）	0.4063	~0.08-0.10	持续下降	目标分类精度提升
+框回归损失（layer_-1_loss_bbox）	5.6429	~0.9-1.1	持续下降	目标框坐标回归精度提升
+匹配 IOU（matched_ious）	0.0812	~0.35-0.40	持续上升	预测框与真实框重叠度提升，检测效果变好
+梯度范数（grad_norm）	79.4980	~2-4	快速下降后稳定	梯度无爆炸 / 消失，优化器稳定
+单迭代耗时（time）	~1.8s	~1.8s	稳定	模型计算效率稳定
+数据加载耗时（data_time）	0.062s	~0.005s	快速下降	数据加载瓶颈已解决（如缓存 / 预加载生效）
+三、关键结论
+训练收敛性：所有损失项持续下降、匹配 IOU 上升，模型在 1 个 epoch 内快速收敛，无异常（如梯度爆炸、loss 震荡）；
+效率：单迭代耗时～1.8s，数据加载耗时 <0.01s，训练瓶颈在模型前向 / 反向计算（而非数据加载）；
+显存：显存占用稳定，无泄漏，硬件资源利用合理；
+阶段说明：仅训练 1 个 epoch 属于测试 / 调试阶段，实际 BEVFusion 训练需 20~80 个 epoch 才能达到最优精度。
+四、优化 / 修复建议
+修复弃用警告：
+修改 transfusion.py 中 273 行和 535 行的 // 操作：
+python
+运行
+# 原代码
+top_proposals_class = top_proposals // heatmap.shape[-1]
+grid_size[:2] // self.train_cfg["out_size_factor"]
+
+# 替换为（保持原行为，用 trunc 模式）
+top_proposals_class = torch.div(top_proposals, heatmap.shape[-1], rounding_mode='trunc')
+grid_size[:2] = torch.div(grid_size[:2], self.train_cfg["out_size_factor"], rounding_mode='trunc')
+正式训练调优：
+增加 epoch 数（如 20~80），并配置学习率衰减策略（如 step / 余弦退火）；
+加入验证流程（workflow 增加 ('val', 1)），监控验证集 mAP 避免过拟合；
+若需提速：可开启混合精度训练（AMP），进一步降低单迭代耗时；
+梯度范数优化：
+前期梯度范数较高（79），可在优化器中加入梯度裁剪（torch.nn.utils.clip_grad_norm_），避免梯度波动。
+五、异常排查（无异常，仅参考）
+若后续训练出现问题，需重点关注：
+loss 突然上升：检查学习率、数据加载、梯度爆炸；
+显存暴涨：检查 batch size、模型权重初始化、中间变量未释放；
+数据_time 过高：优化数据加载（如使用 DataLoader 的 pin_memory=True、num_workers 调大）。
+一般模型训练看的收敛loss是哪个？ 使用什么工具进行的可视化分析？帮忙写一个
+一、模型训练中核心关注的收敛 Loss 类型
+模型训练时判断收敛的核心是训练损失（Train Loss） 和验证损失（Validation Loss），二者结合才能准确判断收敛状态：
+Loss 类型	含义	收敛判断要点
+训练损失（Train Loss）	模型在训练集上的损失值，反映对训练数据的拟合能力	持续下降→趋于平稳（说明模型对训练数据拟合充分）
+验证损失（Val Loss）	模型在独立验证集上的损失值，反映泛化能力（核心判断收敛的依据）	先随 Train Loss 下降→趋于平稳（理想收敛）；若 Val Loss 上升，说明过拟合
+补充：不同任务的 Loss 计算方式不同（如分类用交叉熵、回归用 MSE），但收敛看的是 Loss 的趋势（而非绝对值），只要趋势符合 “Train Loss 平稳 + Val Loss 平稳”，即认为模型收敛。
+二、Loss 可视化常用工具
+工具	特点	适用场景
+Matplotlib	Python 基础绘图库，轻量、灵活、易上手	快速可视化、本地调试
+Seaborn	基于 Matplotlib，样式更美观，支持统计可视化	论文 / 报告级别的美观图表
+TensorBoard	TensorFlow/PyTorch 官方工具，支持实时动态监控、多指标对比	大型训练任务、实时监控
+Weights & Biases (wandb)	云端可视化工具，支持协作、实验对比、超参数调优	团队协作、大规模实验管理
+Plotly	交互式可视化库，支持鼠标悬停查看数值、缩放	需交互分析的场景
+下面以最常用的 Matplotlib（基础可视化）和TensorBoard（实时监控）为例，编写完整的 Loss 可视化代码。
+三、完整代码示例（PyTorch 环境）
+1. 基础版：Matplotlib 可视化训练 / 验证 Loss
+python
+运行
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import matplotlib.pyplot as plt
+import numpy as np
+
+# ===================== 1. 模拟简单模型和数据 =====================
+# 定义简单线性模型（模拟回归任务）
+class SimpleModel(nn.Module):
+    def __init__(self):
+        super(SimpleModel, self).__init__()
+        self.linear = nn.Linear(1, 1)
+    
+    def forward(self, x):
+        return self.linear(x)
+
+# 生成模拟数据：y = 2x + 1 + 噪声（回归任务）
+np.random.seed(42)
+x_train = np.random.uniform(-10, 10, 1000).reshape(-1, 1)
+y_train = 2 * x_train + 1 + np.random.normal(0, 1, x_train.shape)
+x_val = np.random.uniform(-10, 10, 200).reshape(-1, 1)
+y_val = 2 * x_val + 1 + np.random.normal(0, 1, x_val.shape)
+
+# 转换为Tensor
+x_train_tensor = torch.tensor(x_train, dtype=torch.float32)
+y_train_tensor = torch.tensor(y_train, dtype=torch.float32)
+x_val_tensor = torch.tensor(x_val, dtype=torch.float32)
+y_val_tensor = torch.tensor(y_val, dtype=torch.float32)
+
+# ===================== 2. 训练过程（记录Loss） =====================
+model = SimpleModel()
+criterion = nn.MSELoss()  # 回归任务用MSE Loss
+optimizer = optim.SGD(model.parameters(), lr=0.01)
+
+# 初始化Loss记录列表
+train_loss_list = []
+val_loss_list = []
+epochs = 100  # 训练轮数
+
+for epoch in range(epochs):
+    # 训练阶段
+    model.train()
+    optimizer.zero_grad()
+    y_pred_train = model(x_train_tensor)
+    train_loss = criterion(y_pred_train, y_train_tensor)
+    train_loss.backward()
+    optimizer.step()
+    
+    # 验证阶段（无梯度计算）
+    model.eval()
+    with torch.no_grad():
+        y_pred_val = model(x_val_tensor)
+        val_loss = criterion(y_pred_val, y_val_tensor)
+    
+    # 记录Loss
+    train_loss_list.append(train_loss.item())
+    val_loss_list.append(val_loss.item())
+    
+    # 打印每10轮的Loss
+    if (epoch + 1) % 10 == 0:
+        print(f"Epoch [{epoch+1}/{epochs}], Train Loss: {train_loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
+
+# ===================== 3. Matplotlib可视化Loss曲线 =====================
+plt.rcParams['font.sans-serif'] = ['SimHei']  # 解决中文显示问题
+plt.rcParams['axes.unicode_minus'] = False    # 解决负号显示问题
+
+# 创建画布
+plt.figure(figsize=(10, 6))
+
+# 绘制Loss曲线
+plt.plot(range(1, epochs+1), train_loss_list, label='训练损失 (Train Loss)', color='blue', linewidth=2)
+plt.plot(range(1, epochs+1), val_loss_list, label='验证损失 (Val Loss)', color='red', linewidth=2, linestyle='--')
+
+# 添加图表元素
+plt.title('模型训练/验证Loss收敛曲线', fontsize=14)
+plt.xlabel('训练轮数 (Epoch)', fontsize=12)
+plt.ylabel('损失值 (Loss)', fontsize=12)
+plt.legend(fontsize=12)
+plt.grid(True, alpha=0.3)  # 添加网格，增强可读性
+plt.tight_layout()  # 自动调整布局
+
+# 保存图片（可选）
+plt.savefig('loss_convergence.png', dpi=300, bbox_inches='tight')
+
+# 显示图片
+plt.show()
+
+# ===================== 4. 收敛判断 =====================
+final_train_loss = train_loss_list[-1]
+final_val_loss = val_loss_list[-1]
+loss_steady = abs(final_val_loss - train_loss_list[-5]) < 0.01  # 最后5轮Loss波动<0.01
+
+print(f"\n训练完成：")
+print(f"最终训练Loss: {final_train_loss:.4f}, 最终验证Loss: {final_val_loss:.4f}")
+if loss_steady and final_val_loss < 1.0:  # 示例阈值，根据任务调整
+    print("模型已收敛！")
+else:
+    print("模型未完全收敛（可增加训练轮数/调整学习率）")
+2. 进阶版：TensorBoard 实时监控 Loss
+TensorBoard 支持实时查看 Loss 曲线、模型参数分布等，适合长期训练任务：
+python
+运行
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
+import numpy as np
+
+# ===================== 1. 初始化TensorBoard Writer =====================
+# 日志保存路径（会自动创建）
+writer = SummaryWriter(log_dir='./tensorboard_logs')
+
+# ===================== 2. 复用上面的模型和数据 =====================
+model = SimpleModel()
+criterion = nn.MSELoss()
+optimizer = optim.SGD(model.parameters(), lr=0.01)
+
+epochs = 100
+for epoch in range(epochs):
+    # 训练阶段
+    model.train()
+    optimizer.zero_grad()
+    y_pred_train = model(x_train_tensor)
+    train_loss = criterion(y_pred_train, y_train_tensor)
+    train_loss.backward()
+    optimizer.step()
+    
+    # 验证阶段
+    model.eval()
+    with torch.no_grad():
+        y_pred_val = model(x_val_tensor)
+        val_loss = criterion(y_pred_val, y_val_tensor)
+    
+    # ===================== 3. 写入TensorBoard日志 =====================
+    # 记录训练Loss（标量）
+    writer.add_scalar('Loss/Train', train_loss.item(), epoch)
+    # 记录验证Loss（标量）
+    writer.add_scalar('Loss/Validation', val_loss.item(), epoch)
+    # 可选：记录模型参数分布（每10轮）
+    if (epoch + 1) % 10 == 0:
+        for name, param in model.named_parameters():
+            writer.add_histogram(name, param, epoch)
+    
+    if (epoch + 1) % 10 == 0:
+        print(f"Epoch [{epoch+1}/{epochs}], Train Loss: {train_loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
+
+# 关闭Writer
+writer.close()
+
+# ===================== 4. 启动TensorBoard =====================
+# 终端执行以下命令，然后打开浏览器访问 http://localhost:6006
+# tensorboard --logdir=./tensorboard_logs
+四、关键说明
+Loss 曲线解读：
+若 Train Loss 持续下降，Val Loss 先降后平稳 → 模型收敛（理想状态）；
+若 Train Loss 低，Val Loss 高 → 过拟合（需正则化 / 减少模型复杂度）；
+若 Train Loss 和 Val Loss 都高 → 欠拟合（需增加模型复杂度 / 延长训练）。
+TensorBoard 使用技巧：
+支持同时对比多个实验（不同日志目录）；
+可监控学习率、准确率、梯度分布等其他指标；
+远程训练时，可通过--host 0.0.0.0开放端口，局域网访问。
+工具选择建议：
+快速调试：优先用 Matplotlib；
+大规模训练 / 实时监控：用 TensorBoard；
+团队协作 / 实验管理：用 Weights & Biases。
+tools/train.py: import debug_init_v2_xmy  # 必须最先导入！xmy
+
+import argparse
+import copy
+import os
+import random
+import time
+
+import numpy as np
+import torch
+from mmcv import Config
+from torchpack import distributed as dist
+from torchpack.environ import auto_set_run_dir, set_run_dir
+from torchpack.utils.config import configs
+
+from mmdet3d.apis import train_model
+from mmdet3d.datasets import build_dataset
+from mmdet3d.models import build_model
+from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
+
+
+def main():
+    dist.init()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config", metavar="FILE", help="config file")
+    parser.add_argument("--run-dir", metavar="DIR", help="run directory")
+    args, opts = parser.parse_known_args()
+
+    configs.load(args.config, recursive=True)
+    configs.update(opts)
+
+    cfg = Config(recursive_eval(configs), filename=args.config)
+
+    torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
+    torch.cuda.set_device(dist.local_rank())
+
+    if args.run_dir is None:
+        args.run_dir = auto_set_run_dir()
+    else:
+        set_run_dir(args.run_dir)
+    cfg.run_dir = args.run_dir
+
+    # dump config
+    cfg.dump(os.path.join(cfg.run_dir, "configs.yaml"))
+
+    # init the logger before other steps
+    timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+    log_file = os.path.join(cfg.run_dir, f"{timestamp}.log")
+    logger = get_root_logger(log_file=log_file)
+
+    # log some basic info
+    logger.info(f"Config:\n{cfg.pretty_text}")
+
+    # set random seeds
+    if cfg.seed is not None:
+        logger.info(
+            f"Set random seed to {cfg.seed}, "
+            f"deterministic mode: {cfg.deterministic}"
+        )
+        random.seed(cfg.seed)
+        np.random.seed(cfg.seed)
+        torch.manual_seed(cfg.seed)
+        if cfg.deterministic:
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
+    print(f"🔵[xmy]>>> tools/train.py::  ==>  datasets = [build_dataset(cfg.data.train)]")
+    datasets = [build_dataset(cfg.data.train)]
+
+    print(f"🔵[xmy]>>> tools/train.py::  ==>  model = build_model(cfg.model) ")
+    model = build_model(cfg.model)
+
+    print(f"🔵[xmy]>>> tools/train.py::  ==>  model.init_weights() ")
+    model.init_weights()
+    if cfg.get("sync_bn", None):
+        if not isinstance(cfg["sync_bn"], dict):
+            cfg["sync_bn"] = dict(exclude=[])
+        model = convert_sync_batchnorm(model, exclude=cfg["sync_bn"]["exclude"])
+
+    logger.info(f"Model:\n{model}")
+    print(f"🔵[xmy]>>> tools/train.py::  ==>  train_model(model, datasets, cfg, distributed=True, validate=True,  timestamp=timestamp,) ")
+    train_model(
+        model,
+        datasets,
+        cfg,
+        distributed=True,
+        validate=True,
+        timestamp=timestamp,
+    )
+    print(f"🔵[xmy]>>> tools/train.py::  train_model() End =============================================== ")
+
+
+
+if __name__ == "__main__":
+    main()
+使用的mmdet3d框架，是不是自带？
+MMDetection3D（mmdet3d）框架本身集成了训练过程中 Loss / 指标的记录和可视化能力（依赖其底层的 MMEngine/MMCV 框架），但并非 “开箱即用的可视化图表”，而是通过配置即可启用 TensorBoard/WandB 等主流可视化工具，且训练过程中 Loss 的日志记录是默认自带的。
+下面结合你提供的 tools/train.py 代码，详细拆解：
+一、mmdet3d 自带的核心能力（无需从零开发）
+你的代码中调用了 mmdet3d.apis.train_model，这个核心函数内部基于 MMEngine 的 Runner 机制实现了：
+Loss / 指标的日志记录（默认自带）
+训练 / 验证过程中的 Loss（如分类 Loss、回归 Loss、总 Loss）、3D 检测指标（如 mAP）会自动输出到控制台 + 日志文件（就是你代码中 timestamp.log 文件），这是 mmdet3d 内置的能力，无需额外代码。
+日志文件里会按 epoch/batch 记录详细的 Loss 数值，比如：
+plaintext
+2025-12-11 10:00:00,123 - mmdet3d - INFO - Epoch [1/100]  iter: 100  lr: 0.0010  loss: 2.345  loss_cls: 1.234  loss_bbox: 1.111  time: 0.020  data_time: 0.005
+2025-12-11 10:00:10,456 - mmdet3d - INFO - Epoch [1/100]  val_loss: 2.123  val_mAP_0.5: 0.65
+可视化工具集成（需配置启用）mmdet3d 继承了 MMEngine 的可视化能力，支持 TensorBoard/WandB/MLflow 等，无需自己写 SummaryWriter 这类代码，只需在配置文件中开启即可，这是框架 “自带” 的集成能力。
+二、如何启用 mmdet3d 自带的可视化（以 TensorBoard 为例）
+你只需在训练配置文件（即 train.py 传入的 config 文件）中添加 / 修改以下配置，就能自动将 Loss / 指标同步到 TensorBoard：
+python
+运行
+# 配置文件中添加可视化相关配置
+visualizer = dict(
+    type='Det3DVisualizer',  # mmdet3d 专用可视化器
+    vis_backends=[
+        dict(type='LocalVisBackend'),  # 本地日志
+        dict(type='TensorboardVisBackend'),  # 启用 TensorBoard 后端
+        # 可选：启用 WandB 后端（需安装 wandb）
+        # dict(type='WandbVisBackend', init_kwargs=dict(project='mmdet3d_exp'))
+    ],
+    name='visualizer')
+
+# 配置日志处理器（控制 Loss 记录频率）
+log_processor = dict(
+    type='LogProcessor',
+    window_size=50,  # 滑动窗口平均
+    by_epoch=True,
+    custom_cfg=[
+        dict(data_src='loss', log_name='loss', method='mean'),
+        dict(data_src='loss_cls', log_name='loss_cls', method='mean'),

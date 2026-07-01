@@ -1,0 +1,8 @@
+Point Cloud Projection Configuration: 
+Timestamp: 1753701446899737835
+Total points projected: 200000
+Color map: hot
+Max points: 50000
+Point size: 3
+Alpha: 0.8
+Image size: (1920, 1080)

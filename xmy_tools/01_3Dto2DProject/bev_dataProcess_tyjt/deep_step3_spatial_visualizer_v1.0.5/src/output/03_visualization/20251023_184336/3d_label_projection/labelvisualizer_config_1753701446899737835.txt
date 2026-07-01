@@ -1,0 +1,5 @@
+3D Label Projection Configuration: 
+Timestamp: 1753701446899737835
+Total labels: 57
+Total projected boxes: 119
+Image size: (1920, 1080)

@@ -61,9 +61,18 @@ from nuscenes.eval.detection.algo import accumulate, calc_ap, calc_tp
 from nuscenes.eval.detection.constants import TP_METRICS
 from mmdet3d.datasets.nuscenes_dataset import output_to_nusc_box, lidar_nusc_box_to_global
 
+# ========== [xmy][v2.3.5]新增导入，kitti评测 ==========
+# import sys
+# KITTI_EVAL_PATH = '/mnt/bevfusion_mit_xmy/kitti-object-eval-python'
+# if KITTI_EVAL_PATH not in sys.path:
+#     sys.path.insert(0, KITTI_EVAL_PATH)
+# from eval import get_official_eval_result   # 根据实际函数名调整
+import time          # 添加这一行
+
+
 Debug = True
 
-print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[mmdet3d/datasets/tyjt_dataset_v2.py] >>> [Debug Mode = {Debug}] ")
+print(f"\n>>>[xmy]🟡[TYJTDatasetV2]🟡[mmdet3d/datasets/tyjt_dataset_v2.py] >>> [Debug Mode = {Debug}] ")
 
 
 class TYJTEval(DetectionEval):
@@ -94,11 +103,13 @@ class TYJTEval(DetectionEval):
         self.gt_boxes = self._load_tyjt_gt(gt_infos, verbose)
 
         # 手动过滤预测框（基于 class_range）
-        print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [Running: 对预测框(pred_boxes), 进行范围滤波]; self.cfg.class_range = {self.cfg.class_range}")
+        print(f"\n>>>[xmy]🟡[TYJTDatasetV2]🟡[mmdet3d/datasets/tyjt_dataset_v2.py] >>> [nusc/TYJTEval-评测器 对Gt/pred 的范围滤波]: \n    self.cfg.class_range =  {self.cfg.class_range}] ")
+
+        print(f"\n>>>[xmy]🟡[TYJTDatasetV2]🟡[tyjt_dataset_v2.py] >>> [Running: 对预测框(pred_boxes), 进行范围滤波]; self.cfg.class_range = {self.cfg.class_range}")
         self.pred_boxes = self._filter_boxes_by_range(self.pred_boxes, self.cfg.class_range, verbose)
 
         # 手动过滤 GT 框（基于 class_range）
-        print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> [Running: 对Gt框(gt_boxes), 进行范围滤波]; self.cfg.class_range = {self.cfg.class_range}")
+        print(f"\n>>>[xmy]🟡[TYJTDatasetV2]🟡[tyjt_dataset_v2.py] >>> [Running: 对Gt框(gt_boxes), 进行范围滤波]; self.cfg.class_range = {self.cfg.class_range}")
         self.gt_boxes = self._filter_boxes_by_range(self.gt_boxes, self.cfg.class_range, verbose)
 
         # 样本 token 列表（从 GT 获取）
@@ -131,7 +142,7 @@ class TYJTEval(DetectionEval):
             total_before += len(boxes)
             total_after += len(kept)
         if verbose:
-            print(f"\n>>>[xmy]🔵[TYJTDatasetV2]🔵[tyjt_dataset_v2.py] >>> 过滤范围后: 框数从 {total_before} 减少到 {total_after} ")
+            print(f"\n>>>[xmy]🟡[TYJTDatasetV2]🟡[tyjt_dataset_v2.py] >>> 过滤范围后: 框数从 {total_before} 减少到 {total_after} ")
         return filtered
 
     def _load_tyjt_gt(self, infos: list, verbose: bool) -> EvalBoxes:
@@ -489,6 +500,7 @@ class TYJTDatasetV2(Custom3DDataset):
             gt_names=mapped_names,              # 源数据Gt是全部加载：List：类别名称字符串列表，长度 N，用于数据库生成等辅助功能（原始长度）
             gt_names_3d=mapped_names,           # 源数据Gt是全部加载：List：类别名称字符串列表，长度 N，供 DefaultFormatBundle3D 动态生成标签索引（原始长度）
         )
+    
     def get_cat_ids(self, idx):
         info = self.data_infos[idx]
         if self.use_valid_flag and 'valid_flag' in info:
@@ -504,7 +516,7 @@ class TYJTDatasetV2(Custom3DDataset):
                 cat_ids.append(self.CLASSES.index(target))
         return cat_ids
 
-    # [xmy][v2.3] 使用 TYJTEval 替代适配器
+    # [xmy][v2.3] nusc评测，使用 TYJTEval 替代适配器
     def _format_bbox(self, results, jsonfile_prefix):
         """将模型输出转换为 nuScenes 评估所需的 JSON 文件"""
         nusc_annos = {}
@@ -556,6 +568,22 @@ class TYJTDatasetV2(Custom3DDataset):
             output_dir=output_dir,
             verbose=True,
         )
+        # # 打印 nuScenes 原始框（仅第一个样本）
+        # print("\n========== 所有样本的 GT 和预测框（用于检查潜在匹配） ==========")
+        # for sample_token in tyjt_eval.gt_boxes.boxes.keys():
+        #     gt_boxes = tyjt_eval.gt_boxes.boxes[sample_token]
+        #     pred_boxes = tyjt_eval.pred_boxes.boxes.get(sample_token, [])
+        #     print(f"Sample {sample_token}: GT 框数={len(gt_boxes)}, Pred 框数={len(pred_boxes)}")
+        #     if len(gt_boxes) > 0:
+        #         print("  GT 框:")
+        #         for gt in gt_boxes:
+        #             print(f"    {gt.detection_name}: center={gt.translation}, size={gt.size}, yaw={Quaternion(gt.rotation).yaw_pitch_roll[0]:.3f}")
+        #     if len(pred_boxes) > 0:
+        #         print("  Pred 框（前5个）:")
+        #         for pred in pred_boxes[:5]:
+        #             print(f"    {pred.detection_name}: center={pred.translation}, size={pred.size}, yaw={Quaternion(pred.rotation).yaw_pitch_roll[0]:.3f}, score={pred.detection_score:.4f}")
+        # print("====================================================\n")
+
         metrics_summary = tyjt_eval.main(render_curves=False)   # 返回 metrics.serialize()
 
         # 整理为字典（格式与 NuScenesDataset 一致）
@@ -589,24 +617,296 @@ class TYJTDatasetV2(Custom3DDataset):
         result_files = self._format_bbox(results, jsonfile_prefix)
         return result_files, tmp_dir
 
+    # ========== [v2.3.5][适配kitti评测] 新增 KITTI 评测分支  ==========
     def evaluate(self, results, metric='bbox', jsonfile_prefix=None, result_names=['pts_bbox'], **kwargs):
-        """评估入口"""
+        # v2.3.3 中 metric 是没有用的，因为只支持 nusc-bbox 评测
+        # v2.3.5 中 metric 是可用的，支持nusc-bbox 和 kitti
+        # if Debug:
+        #     print("\n=== 模型预测结果格式验证 ===")
+        #     print(f"results 长度: {len(results)}")
+        #     first = results[0]
+        #     print(f"第一个样本的键: {first.keys()}")
+        #     if 'boxes_3d' in first:
+        #         box = first['boxes_3d']
+        #         print(f"boxes_3d 类型: {type(box)}, shape: {box.shape if hasattr(box, 'shape') else 'N/A'}")
+        #         print(f"第一个框的数值 (前7维): {box[0][:7].cpu().numpy() if hasattr(box, 'cpu') else box[0][:7]}")
+        #     if 'scores_3d' in first:
+        #         print(f"scores_3d 前5个: {first['scores_3d'][:5].cpu().numpy() if hasattr(first['scores_3d'], 'cpu') else first['scores_3d'][:5]}")
+        #     if 'labels_3d' in first:
+        #         print(f"labels_3d 前5个: {first['labels_3d'][:5].cpu().numpy() if hasattr(first['labels_3d'], 'cpu') else first['labels_3d'][:5]}")
+        #     # exit()
         metrics = {}
-        if "masks_bev" in results[0]:
-            metrics.update(self.evaluate_map(results))
-        if "boxes_3d" in results[0]:
-            result_files, tmp_dir = self.format_results(results, jsonfile_prefix)
-            if isinstance(result_files, dict):
-                for name in result_names:
-                    print(f"Evaluating bboxes of {name}")
-                    ret_dict = self._evaluate_single(result_files[name])
-                metrics.update(ret_dict)
-            elif isinstance(result_files, str):
-                metrics.update(self._evaluate_single(result_files))
-            if tmp_dir is not None:
-                pass
+        if isinstance(metric, str):
+            metric = [metric]
+        # 原有的 nuScenes 评估（bbox）
+        if ('bbox' in metric) or ('nuscenes' in metric)  or ('nusc' in metric):
+            # ... 保持原有代码不变 ...
+            if "masks_bev" in results[0]:
+                metrics.update(self.evaluate_map(results))
+            if "boxes_3d" in results[0]:
+                result_files, tmp_dir = self.format_results(results, jsonfile_prefix)
+                if isinstance(result_files, dict):
+                    for name in result_names:
+                        ret_dict = self._evaluate_single(result_files[name])
+                        metrics.update(ret_dict)
+                elif isinstance(result_files, str):
+                    metrics.update(self._evaluate_single(result_files))
+                if tmp_dir is not None:
+                    pass
+        # 新增 KITTI 评估分支
+        if 'kitti' in metric:
+            if "boxes_3d" in results[0]:
+                kitti_metrics = self._evaluate_kitti(results)
+                metrics.update(kitti_metrics)
         return metrics
-
+    
     def evaluate_map(self, results):
         warnings.warn('evaluate_map not implemented.')
         return {}
+
+
+    # ========== [v2.3.5][适配kitti评测] 新增 KITTI 评估相关方法 ==========
+    def _map_to_kitti_class(self, tyjt_class):
+        """将 TYJT 训练类别（10类）或原始类别映射到 KITTI 评估类别： 官方只支持 Car\Pedestrian\Cyclist 三类 """
+        mapping = {
+            'car': 'Car',
+            'truck': 'DontCare',
+            'van': 'DontCare',
+            'bus': 'DontCare',
+            'construction_vehicle': 'DontCare',
+            'trailer': 'DontCare',
+            'pedestrian': 'DontCare',
+            'cyclist': 'DontCare',
+            'bicycle': 'DontCare',
+            'motorcycle': 'DontCare',
+            'tricyclist': 'DontCare',
+            # 以下为原始类别（如果直接使用原始 name）
+            'construction_truck': 'DontCare',
+            'robot': 'DontCare',
+            'trolley': 'DontCare',
+            'cone': 'DontCare',
+            'barrier': 'DontCare',
+            'other': 'DontCare',
+        }
+        # 注意：self.CLASSES 是训练用 10 类，输入 tyjt_class 可能是原始名称或训练类别名
+        if tyjt_class in self.CLASSES:
+            # 训练类别已映射，直接查找
+            target = tyjt_class
+        else:
+            # 可能是原始类别，先通过 CATEGORY_MAPPING 映射到训练类别
+            target = self.CATEGORY_MAPPING.get(tyjt_class, tyjt_class)
+        return mapping.get(target, 'DontCare')
+    
+    def _format_kitti_gt(self):
+        """
+        将 TYJT 数据集的原始 GT 标注转换为 KITTI 评估工具所需的格式。
+
+        输入来源: 
+            - 由 tools/tyjt_converter.py 中的 build_sample_info 函数 进行组包（版本 v9.4.8 及以后，尺寸顺序已修正）
+            - 由 TYJTDatasetV2 的 __init__() 通过 pickle.load(f) 加载 self.data_infos
+            - 每个 info 包含：
+                - gt_boxes: numpy.ndarray, shape (N, 7)
+                    含义：[cx, cy, cz, w, l, h, yaw]   ✅ 已修正：宽度(w)、长度(l)、高度(h)
+                    - cx, cy, cz: 3D 框的几何中心（米），坐标系：路口/自车系，X前 Y左 Z上
+                    - w: 宽度（Y轴方向，左右），l: 长度（X轴方向，前后），h: 高度（Z轴方向，上下）
+                    - yaw: 绕 Z 轴的偏航角（弧度），逆时针为正，0 表示朝 X 正向
+                - gt_names: numpy.ndarray, shape (N,)，原始类别字符串（如 'car', 'truck'）
+
+        输出格式：列表 gt_annos，每个元素对应一个样本，是一个字典，包含以下字段（与 KITTI 官方一致）：
+            {
+                'name': np.ndarray(str),          # 映射后的 KITTI 类别：'Car', 'Pedestrian', 'Cyclist' 或 'DontCare'（跳过）
+                'truncated': np.ndarray(float32), # 截断程度，固定 0.0
+                'occluded': np.ndarray(int32),    # 遮挡程度，固定 0
+                'alpha': np.ndarray(float32),     # 观察角，简化为 rotation_y
+                'bbox': np.ndarray(float32),      # 2D 边界框，占位 [0,0,0,0]
+                'dimensions': np.ndarray(float32), # [h, w, l] 高度、宽度、长度（米）
+                'location': np.ndarray(float32),   # [cx, cy, cz] 几何中心（米），与 KITTI 的底部中心要求不同，
+                                                # 但与预测框保持一致即可保证 IoU 正确。
+                'rotation_y': np.ndarray(float32), # 绕 Y 轴的朝向角（弧度），范围 [-π, π]
+            }
+
+        转换细节：
+            1. 类别映射：通过 _map_to_kitti_class 将原始类别转为 KITTI 三类之一，无效类别返回 'DontCare' 并跳过。
+            2. 尺寸顺序：原始 [w, l, h] -> KITTI [h, w, l]。
+            3. 位置：直接保留几何中心 (cx, cy, cz)，不做底部中心转换（与预测框一致）。
+            4. 旋转角：将原始 yaw（绕 Z 轴）转换为 KITTI 的 rotation_y（绕 Y 轴）。
+            公式: ry = - (yaw + π/2) ，然后归一化到 [-π, π)。
+            5. 其他字段（truncated, occluded, alpha, bbox）按 KITTI 要求填充占位值。
+        """
+        gt_annos = []
+        for info in self.data_infos:
+            gt_boxes = info['gt_boxes']      # (N,7) [cx,cy,cz,w,l,h,yaw]  ✅ 修正后顺序
+            gt_names = info['gt_names']      # (N,)
+            names, truncated, occluded, alpha = [], [], [], []
+            bbox, dimensions, location, rotation_y = [], [], [], []
+            for i, box in enumerate(gt_boxes):
+                kitti_cls = self._map_to_kitti_class(gt_names[i])
+                if kitti_cls == 'DontCare':
+                    continue
+                # ===== 支持 tyjt_converter.py 版本 v9.4.8 (0424) 及以后 =====
+                # 解析顺序：[cx, cy, cz, w, l, h, yaw]
+                x, y, z, w, l, h, yaw = box[:7]
+                # ===== 兼容旧版本 v9.4.7 及以前（已废弃，保留注释）=====
+                # x, y, z, l, w, h, yaw = box[:7]  # 老版本错误顺序
+
+                # KITTI 尺寸顺序 [h, w, l]
+                dimensions.append([h, w, l])
+
+                # 位置：保持几何中心
+                location.append([x, y, z])
+                # 旋转角转换
+                ry = - (yaw + np.pi / 2.0)
+                ry = (ry + np.pi) % (2 * np.pi) - np.pi
+                rotation_y.append(ry)
+                alpha.append(ry)
+                names.append(kitti_cls)
+                truncated.append(0.0)
+                occluded.append(0)
+                bbox.append([0.0, 0.0, 0.0, 0.0])
+            gt_annos.append({
+                'name': np.array(names, dtype=str),
+                'truncated': np.array(truncated, dtype=np.float32),
+                'occluded': np.array(occluded, dtype=np.int32),
+                'alpha': np.array(alpha, dtype=np.float32),
+                'bbox': np.array(bbox, dtype=np.float32).reshape(-1,4) if bbox else np.zeros((0,4), dtype=np.float32),
+                'dimensions': np.array(dimensions, dtype=np.float32).reshape(-1,3) if dimensions else np.zeros((0,3), dtype=np.float32),
+                'location': np.array(location, dtype=np.float32).reshape(-1,3) if location else np.zeros((0,3), dtype=np.float32),
+                'rotation_y': np.array(rotation_y, dtype=np.float32),
+            })
+        return gt_annos
+
+    def _format_kitti_pred(self, results):
+        """生成按样本分组的预测标注列表（数组形式，含 score），适配 KITTI 格式。
+        
+        输入：results 列表，每个元素包含：
+            - boxes_3d: LiDARInstance3DBoxes，内部 tensor 格式为 [cx, cy, cz, w, l, h, yaw]（底部中心）
+            - scores_3d: torch.Tensor
+            - labels_3d: torch.Tensor
+        输出：与 _format_kitti_gt 相同格式的字典，增加 'score' 字段。
+        """
+        pred_annos = []
+        for det in results:
+            boxes = det['boxes_3d'].tensor.cpu().numpy()   # (N,7) [cx, cy, cz, w, l, h, yaw]（底部中心）
+            scores = det['scores_3d'].cpu().numpy()
+            labels = det['labels_3d'].cpu().numpy()
+            names, truncated, occluded, alpha = [], [], [], []
+            bbox, dimensions, location, rotation_y, score_list = [], [], [], [], []
+            for i in range(len(boxes)):
+                kitti_cls = self._map_to_kitti_class(self.CLASSES[labels[i]])
+                if kitti_cls == 'DontCare':
+                    continue
+                box = boxes[i]
+                x, y, z, w, l, h, yaw = box[:7]   # z 是底部中心
+                # ===== 支持 tyjt_converter.py 版本 v9.4.8 (0424) 及以后 =====
+                # 尺寸转换：原始 [w, l, h] -> KITTI [h, w, l]
+                dimensions.append([h, w, l])
+                # ===== 兼容旧版本 v9.4.7 及以前（已废弃，保留注释）=====
+                # dimensions.append([h, l, w])    # 老版本临时交换
+
+                # 位置：将底部中心转换为几何中心（与 GT 处理对齐）
+                cz = z + h / 2.0
+                location.append([x, y, cz])
+                # 旋转角转换
+                ry = - (yaw + np.pi / 2.0)
+                ry = (ry + np.pi) % (2 * np.pi) - np.pi
+                rotation_y.append(ry)
+                alpha.append(ry)
+                names.append(kitti_cls)
+                truncated.append(0.0)
+                occluded.append(0)
+                bbox.append([0.0, 0.0, 0.0, 0.0])
+                score_list.append(float(scores[i]))
+            pred_annos.append({
+                'name': np.array(names, dtype=str),
+                'truncated': np.array(truncated, dtype=np.float32),
+                'occluded': np.array(occluded, dtype=np.int32),
+                'alpha': np.array(alpha, dtype=np.float32),
+                'bbox': np.array(bbox, dtype=np.float32).reshape(-1,4) if bbox else np.zeros((0,4), dtype=np.float32),
+                'dimensions': np.array(dimensions, dtype=np.float32).reshape(-1,3) if dimensions else np.zeros((0,3), dtype=np.float32),
+                'location': np.array(location, dtype=np.float32).reshape(-1,3) if location else np.zeros((0,3), dtype=np.float32),
+                'rotation_y': np.array(rotation_y, dtype=np.float32),
+                'score': np.array(score_list, dtype=np.float32),
+            })
+        return pred_annos
+
+    def _filter_kitti_annos_by_range(self, annos_list, class_range, default_dist=50.0):
+        """过滤 KITTI 格式的标注列表，移除超出 class_range 的框"""
+        filtered = []
+        for idx, anno in enumerate(annos_list):
+            # 防御：确保 anno 是字典且包含 'name' 键
+            if not isinstance(anno, dict) or 'name' not in anno:
+                print(f"⚠️ 警告：第 {idx} 个元素不是有效字典，已跳过。类型: {type(anno)}")
+                continue  # 跳过该样本（或根据需求保留）
+
+            names = anno['name']
+            locs = anno['location']
+            if len(names) == 0:
+                filtered.append(anno)
+                continue
+
+            # 计算 xy 平面中心距离
+            dists = np.linalg.norm(locs[:, :2], axis=1)
+            keep = [i for i, name in enumerate(names) if dists[i] <= class_range.get(name, default_dist)]
+
+            if not keep:
+                # 无保留框：创建空数组（注意：v[[]] 对于字符串数组安全）
+                filtered.append({k: v[[]] for k, v in anno.items()})
+            else:
+                keep_arr = np.array(keep)
+                filtered.append({k: v[keep_arr] for k, v in anno.items()})
+        return filtered
+        
+    def _evaluate_kitti(self, results):
+        import sys
+        sys.path.insert(0, '/mnt/bevfusion_mit_xmy/kitti-object-eval-python')
+        from eval import get_official_eval_result
+
+        gt_annos = self._format_kitti_gt()
+        pred_annos = self._format_kitti_pred(results)
+        ## kitti开启 范围过滤
+        nusc_class_range = self.eval_detection_configs.class_range  
+        kitti_class_range = {k.capitalize(): v for k, v in nusc_class_range.items()}
+        # class_range = {'Car': 50.0, 'Pedestrian': 30.0, 'Cyclist': 30.0}  # 与 nuScenes cfg 中的 class_range 一致
+        print(f"\n>>>[xmy]🟡[TYJTDatasetV2]🟡[mmdet3d/datasets/tyjt_dataset_v2.py] >>> [Kitti-评测器 对Gt/pred 的范围滤波]: \n    kitti_class_range =  {kitti_class_range}] ")
+
+        # gt_annos = self._filter_kitti_annos_by_range(gt_annos, kitti_class_range)
+        # pred_annos = self._filter_kitti_annos_by_range(pred_annos, kitti_class_range)
+        # # ========== 验证数据格式 ==========
+        # print("\n=== KITTI 数据格式验证 ===")
+        # print(f"样本数 (gt_annos): {len(gt_annos)}")
+        # if len(gt_annos) > 0:
+        #     first = gt_annos[0]
+        #     print(f"GT 第一个样本的键: {first.keys()}")
+        #     for key in ['name', 'alpha', 'bbox', 'dimensions', 'location', 'rotation_y']:
+        #         if key in first:
+        #             print(f"  {key}: type={type(first[key])}, shape={getattr(first[key], 'shape', 'N/A')}")
+        #         else:
+        #             print(f"  {key}: 缺失")
+        # print(f"预测样本数: {len(pred_annos)}")
+        # if len(pred_annos) > 0:
+        #     print(f"预测第一个样本的键: {pred_annos[0].keys()}")
+        #     if 'score' in pred_annos[0]:
+        #         print(f"  score: shape={pred_annos[0]['score'].shape}")
+
+        # ========== 验证返回值类型 ==========
+        try:
+            # result = get_official_eval_result(gt_annos, pred_annos, ['Car', 'Pedestrian', 'Cyclist'])
+            result = get_official_eval_result(
+                gt_annos, pred_annos, ['Car', 'Pedestrian', 'Cyclist'],
+                z_axis=2,       # 因为 location 顺序是 [x,y,z]，高度索引 2
+                z_center=0.5    # 因为我们已经将坐标转换为几何中心（cz = z + h/2）
+            )
+            time.sleep(2)          # 等待 2 秒后打印
+            print(f"\n返回值类型: {type(result)}")
+            if isinstance(result, str):
+                print("返回值是字符串（符合预期）")
+                # 打印前 500 字符
+                print("内容预览:\n", result[:500])
+            else:
+                print("返回值不是字符串，需检查评估函数")
+        except Exception as e:
+            print(f"\n评估过程出错: {e}")
+            import traceback
+            traceback.print_exc()
+        return {}
+

@@ -1,0 +1,107 @@
+{
+  "format_version": "1.0",
+  "description": "BEVFusion PKL格式规范 - 基于NuScenes数据集",
+  "top_level_structure": {
+    "infos": "List[Dict] - 样本列表",
+    "metadata": "Dict - 元数据信息"
+  },
+  "sample_structure": {
+    "required_fields": {
+      "token": "str - 样本唯一标识",
+      "timestamp": "int - 时间戳",
+      "scene_token": "str - 场景标识",
+      "lidar_path": "str - LiDAR数据路径",
+      "sweeps": "List - 历史帧信息",
+      "cams": "Dict - 相机数据",
+      "ann_info": "Dict - 标注信息"
+    },
+    "camera_structure": {
+      "required_fields": {
+        "data_path": "str - 图像文件路径",
+        "cam_intrinsic": "np.ndarray (3,3) float32 - 相机内参",
+        "sensor2lidar_rotation": "np.ndarray (3,3) float32 - 传感器到LiDAR旋转",
+        "sensor2lidar_translation": "np.ndarray (3,) float32 - 传感器到LiDAR平移"
+      },
+      "optional_fields": {
+        "sensor2ego_rotation": "list (3x3) - 传感器到ego旋转",
+        "sensor2ego_translation": "list (3,) - 传感器到ego平移",
+        "ego2global_rotation": "list (3x3) - ego到全局旋转",
+        "ego2global_translation": "list (3,) - ego到全局平移"
+      }
+    },
+    "annotation_structure": {
+      "required_fields": {
+        "gt_bboxes_3d": "np.ndarray (N,7) float32 - 3D边界框 [x,y,z,l,w,h,yaw]",
+        "gt_labels_3d": "np.ndarray (N,) int64 - 类别标签索引",
+        "valid_flag": "np.ndarray (N,) bool - 有效标志"
+      },
+      "optional_fields": {
+        "gt_velocity": "np.ndarray (N,2) float32 - 速度信息",
+        "num_lidar_pts": "np.ndarray (N,) int64 - LiDAR点数",
+        "num_radar_pts": "np.ndarray (N,) int64 - 雷达点数"
+      }
+    },
+    "coordinate_fields": {
+      "lidar2ego_rotation": "list - 长度: 4",
+      "lidar2ego_translation": "list - 长度: 3",
+      "ego2global_rotation": "list - 长度: 4",
+      "ego2global_translation": "list - 长度: 3"
+    }
+  },
+  "data_types": {
+    "numpy_arrays": [
+      "cam_intrinsic: (3,3) float32",
+      "sensor2lidar_rotation: (3,3) float32",
+      "sensor2lidar_translation: (3,) float32",
+      "gt_bboxes_3d: (N,7) float32",
+      "gt_labels_3d: (N,) int64",
+      "valid_flag: (N,) bool",
+      "gt_velocity: (N,2) float32",
+      "num_lidar_pts: (N,) int64",
+      "num_radar_pts: (N,) int64"
+    ],
+    "lists": [
+      "sensor2ego_rotation: 3x3",
+      "sensor2ego_translation: 3 elements",
+      "ego2global_rotation: 3x3",
+      "ego2global_translation: 3 elements",
+      "lidar2ego_rotation: 3x3",
+      "lidar2ego_translation: 3 elements",
+      "ego2global_rotation: 3x3",
+      "ego2global_translation: 3 elements"
+    ],
+    "strings": [
+      "token",
+      "scene_token",
+      "lidar_path",
+      "data_path"
+    ],
+    "integers": [
+      "timestamp"
+    ]
+  },
+  "tyjt_adaptation_notes": {
+    "critical_notes": [
+      "必须包含 valid_flag 字段在 ann_info 中",
+      "所有numpy数组必须使用正确的dtype",
+      "相机数量为4个，需要正确映射",
+      "标注框格式为 [x,y,z,l,w,h,yaw]",
+      "类别索引从0开始，必须连续"
+    ],
+    "camera_mapping": {
+      "SC_1A_CamR": "CAM_FRONT_RIGHT",
+      "SC_1B_CamR": "CAM_FRONT",
+      "SC_1C_CamR": "CAM_BACK",
+      "SC_1D_CamR": "CAM_FRONT_LEFT"
+    },
+    "class_names": [
+      "car",
+      "truck",
+      "bus",
+      "pedestrian",
+      "bicycle",
+      "motorcycle",
+      "traffic_cone"
+    ]
+  }
+}
