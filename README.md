@@ -221,3 +221,22 @@ If BEVFusion is useful or relevant to your research, please kindly recognize our
   year={2023}
 }
 ```
+
+---
+---
+
+## BEVFusion-尺寸适配
+
+### 1. 尺寸变更--resize&ROI后的视野变化
+
+#### a. TYJT训练第1版nusc尺寸，nusc的resize比例&数据增强抖动范围
+
+![demo](doc/1.png)
+
+#### b. TYJT训练第2版nusc尺寸，只修改resize比例
+
+![demo](doc/2.png)
+
+#### c. TYJT训练第3版，不再使用nusc尺寸，改成tyjt自己的尺寸
+
+![demo](doc/3.png)
