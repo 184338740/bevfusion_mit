@@ -225,9 +225,9 @@ If BEVFusion is useful or relevant to your research, please kindly recognize our
 ---
 ---
 
-## BEVFusion-尺寸适配
+## BEVFusion-补充：
 
-### 1. 尺寸变更--resize&ROI后的视野变化
+### 1. 尺寸变更适配--resize&ROI后的视野变化
 
 #### a. TYJT训练第1版nusc尺寸，nusc的resize比例&数据增强抖动范围
 
@@ -240,3 +240,79 @@ If BEVFusion is useful or relevant to your research, please kindly recognize our
 #### c. TYJT训练第3版，不再使用nusc尺寸，改成tyjt自己的尺寸
 
 ![demo](doc/3.png)
+
+
+### 2. 自定义算子（bev_pool_avg_density_xmy）编译
+
+#### a. 代码文件结构（可以自己修改名字）
+
+```bibtex
+bevfusion_mit_xmy/mmdet3d/ops/bev_pool_sum_count_xmy
+
+.
+├── __init__.py
+├── setup.py                                                   # install文件
+├── bev_pool_sum_count_xmy.py
+├── bev_pool_sum_count_xmy_ext.cpython-38-x86_64-linux-gnu.so  # 编译后的.so目标文件
+└── src
+    ├── bev_pool_sum_count_xmy_cpu.cpp
+    └── bev_pool_sum_count_xmy_cuda.cu
+```
+
+#### b. 代码
+
+见： bevfusion_mit_xmy/mmdet3d/ops/bev_pool_sum_count_xmy/
+
+#### c. 编译文件
+
+path: bevfusion_mit_xmy/mmdet3d/ops/bev_pool_sum_count_xmy/setup.py
+
+```bibtex
+from setuptools import setup
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+
+setup(
+    name='bev_pool_sum_count_xmy',
+    ext_modules=[
+        CUDAExtension(
+            name='bev_pool_sum_count_xmy_ext',
+            sources=[
+                'src/bev_pool_sum_count_xmy_cpu.cpp',
+                'src/bev_pool_sum_count_xmy_cuda.cu'
+            ],
+            extra_compile_args={
+                'cxx': ['-O3'],
+                'nvcc': [
+                    '-O3',
+                    # 多架构同时编译
+                    '-gencode=arch=compute_70,code=sm_70',   # V100
+                    '-gencode=arch=compute_80,code=sm_80',   # A100
+                    '-gencode=arch=compute_86,code=sm_86',   # Dell-4060
+                    # 禁用半精度相关运算
+                    # '-D__CUDA_NO_HALF_OPERATORS__',
+                    # '-D__CUDA_NO_HALF_CONVERSIONS__',
+                    # '-D__CUDA_NO_HALF2_OPERATORS__',
+                ]
+            }
+        )
+    ],
+    cmdclass={'build_ext': BuildExtension}
+)
+```
+
+### d. __init__.py
+
+bevfusion_mit_xmy/mmdet3d/ops/bev_pool_sum_count_xmy/init.py
+
+```bibtex
+from .bev_pool_sum_count_xmy import bev_pool_sum_count_xmy
+```
+
+### d. 调用
+
+```bibtex
+
+# python
+from mmdet3d.ops.bev_pool_sum_count_xmy import bev_pool_sum_count_xmy
+print(bev_pool_sum_count_xmy)
+```
